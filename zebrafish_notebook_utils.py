@@ -612,6 +612,7 @@ def load_image_condition_tensor(
     output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
     normalize_global_drift: bool = True,
     loess_frac: float = 0.25,
+    use_cache: bool = True,
 ) -> torch.Tensor:
     if condition_dir is None:
         if condition_df is None:
@@ -641,6 +642,7 @@ def load_image_condition_tensor(
         output_size=output_size,
         normalize_global_drift=normalize_global_drift,
         loess_frac=loess_frac,
+        use_cache=use_cache,
     )
 
 

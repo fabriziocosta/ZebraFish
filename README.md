@@ -64,7 +64,9 @@ This module is intended to grow with future preprocessing. It currently handles:
 - stacking all files inside an `image_condition_dir` into one torch tensor
 - deterministic downsampling across `T`, `Z`, `Y`, and `X`
 - time downsampling before file reads
+- z downsampling during per-file load when possible
 - optional post-load intensity-drift normalization using a LOESS-style smoother on the per-timepoint global mean
+- repo-local tensor caching in `.tensor_cache/`
 
 Downsampling uses explicit target sizes via `output_size=(T, Z, Y, X)`.
 
@@ -84,6 +86,14 @@ By default, `load_image_condition_tensor()` also applies a global intensity-drif
 - subtracts the smoothed drift while preserving the overall mean level
 
 This correction can be disabled with `normalize_global_drift=False`.
+
+Loaded tensors are cached in:
+
+- [`.tensor_cache/`](/home/fabrizio/code/ZebraFish/.tensor_cache)
+
+The cache key includes the selected files, file mtimes and sizes, `output_size`, and normalization settings. The cache directory is ignored by git.
+
+Caching is enabled by default and can be disabled with `use_cache=False`.
 
 Key public helpers include:
 

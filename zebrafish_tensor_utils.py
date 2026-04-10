@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 import re
 
 import numpy as np
 import torch
-from tifffile import TiffFile
+from tifffile import TiffFile, memmap as tiff_memmap
+
+
+CACHE_VERSION = 1
+TENSOR_CACHE_DIR = Path(__file__).resolve().parent / ".tensor_cache"
 
 
 def _squeeze_array_and_axes(arr: np.ndarray, axes: str) -> tuple[np.ndarray, str]:
@@ -23,12 +29,28 @@ def _squeeze_array_and_axes(arr: np.ndarray, axes: str) -> tuple[np.ndarray, str
     return arr, axes
 
 
-def load_tiff_as_tzyx(path: str | Path) -> torch.Tensor:
+def load_tiff_as_tzyx(
+    path: str | Path,
+    output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+) -> torch.Tensor:
     path = Path(path)
     with TiffFile(path) as tif:
         series = tif.series[0]
-        arr = np.asarray(series.asarray())
         axes = getattr(series, "axes", "")
+        try:
+            arr = np.asarray(tiff_memmap(path, series=0, mode="r"))
+        except Exception:
+            arr = np.asarray(series.asarray())
+
+    if output_size is not None:
+        z_keep = output_size[1]
+        if z_keep is not None:
+            if "Z" in axes:
+                z_axis = axes.index("Z")
+                z_indices = select_evenly_spaced_indices(int(arr.shape[z_axis]), int(z_keep))
+                arr = np.take(arr, z_indices, axis=z_axis)
+            elif int(z_keep) != 1:
+                raise ValueError(f"Requested Z={z_keep} from {path}, but source axes are {axes!r}")
 
     arr, axes = _squeeze_array_and_axes(arr, axes)
     if arr.ndim == 2:
@@ -65,6 +87,44 @@ def list_timepoint_files(condition_dir: str | Path) -> list[Path]:
     if direct_files:
         return direct_files
     return sorted(condition_dir.rglob("*.tif*"), key=timepoint_sort_key)
+
+
+def build_tensor_cache_key(
+    condition_dir: str | Path,
+    timepoint_files: list[Path],
+    output_size: tuple[int | None, int | None, int | None, int | None] | None,
+    normalize_global_drift: bool,
+    loess_frac: float,
+) -> str:
+    payload = {
+        "version": CACHE_VERSION,
+        "condition_dir": str(Path(condition_dir).resolve()),
+        "output_size": output_size,
+        "normalize_global_drift": normalize_global_drift,
+        "loess_frac": loess_frac,
+        "files": [
+            {
+                "path": str(path.resolve()),
+                "mtime_ns": path.stat().st_mtime_ns,
+                "size": path.stat().st_size,
+            }
+            for path in timepoint_files
+        ],
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def load_cached_tensor(cache_key: str) -> torch.Tensor | None:
+    cache_path = TENSOR_CACHE_DIR / f"{cache_key}.pt"
+    if not cache_path.exists():
+        return None
+    return torch.load(cache_path, map_location="cpu")
+
+
+def save_cached_tensor(cache_key: str, tensor: torch.Tensor) -> None:
+    TENSOR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = TENSOR_CACHE_DIR / f"{cache_key}.pt"
+    torch.save(tensor.cpu(), cache_path)
 
 
 def select_evenly_spaced_indices(n_total: int, n_keep: int) -> list[int]:
@@ -182,6 +242,7 @@ def load_image_condition_tensor(
     output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
     normalize_global_drift: bool = True,
     loess_frac: float = 0.25,
+    use_cache: bool = True,
 ) -> torch.Tensor:
     condition_dir = Path(condition_dir)
     timepoint_files = list_timepoint_files(condition_dir)
@@ -194,7 +255,19 @@ def load_image_condition_tensor(
             time_indices = select_evenly_spaced_indices(len(timepoint_files), int(time_size))
             timepoint_files = [timepoint_files[index] for index in time_indices]
 
-    tensors = [load_tiff_as_tzyx(path) for path in timepoint_files]
+    cache_key = build_tensor_cache_key(
+        condition_dir=condition_dir,
+        timepoint_files=timepoint_files,
+        output_size=output_size,
+        normalize_global_drift=normalize_global_drift,
+        loess_frac=loess_frac,
+    )
+    if use_cache:
+        cached_tensor = load_cached_tensor(cache_key)
+        if cached_tensor is not None:
+            return cached_tensor
+
+    tensors = [load_tiff_as_tzyx(path, output_size=output_size) for path in timepoint_files]
     reference_shape = tensors[0].shape[1:]
     mismatched = [str(path) for path, tensor in zip(timepoint_files, tensors) if tensor.shape[1:] != reference_shape]
     if mismatched:
@@ -204,7 +277,9 @@ def load_image_condition_tensor(
 
     tensor = torch.cat(tensors, dim=0)
     if output_size is not None:
-        tensor = downsample_tzyx(tensor, output_size=(None, output_size[1], output_size[2], output_size[3]))
+        tensor = downsample_tzyx(tensor, output_size=(None, None, output_size[2], output_size[3]))
     if normalize_global_drift:
         tensor = normalize_global_intensity_drift(tensor, loess_frac=loess_frac)
+    if use_cache:
+        save_cached_tensor(cache_key, tensor)
     return tensor
