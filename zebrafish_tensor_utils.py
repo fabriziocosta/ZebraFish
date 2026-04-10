@@ -6,14 +6,18 @@ import math
 from pathlib import Path
 import re
 import shutil
+import warnings
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.colors import ListedColormap, to_rgba
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 from tifffile import TiffFile, memmap as tiff_memmap
 from sklearn.decomposition import PCA
+from sklearn.svm import SVC
 
 
 CACHE_VERSION = 2
@@ -562,7 +566,16 @@ def build_tensor_embedding_2d(
             min_dist=umap_min_dist,
             random_state=random_state,
         )
-        embedding = reducer.fit_transform(features)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=(
+                    "n_jobs value 1 overridden to 1 by setting random_state. "
+                    "Use no seed for parallelism."
+                ),
+                category=UserWarning,
+            )
+            embedding = reducer.fit_transform(features)
     else:
         raise ValueError(f"Unsupported embedding method {method!r}; use 'pca' or 'umap'")
 
@@ -595,29 +608,184 @@ def plot_tensor_embedding_2d(
     *,
     title: str | None = None,
     ax=None,
+    marker_column: str | None = "compound",
+    show_svm_background: bool = False,
+    svm_background_alpha: float = 0.14,
+    svm_background_resolution: int = 300,
+    svm_c: float = 1.0,
+    svm_gamma: str | float = "scale",
 ):
+    class_palette = [
+        "#A0C2E7",
+        "#F58518",
+        "#E45756",
+        "#36852D",
+        "#66EE8F",
+        "#B279A2",
+        "#E1B0FE",
+    ]
+    class_color_overrides = {
+        "Water": "#A0C2E7",
+        "GABAAR_Antagonist": "#F58518",
+        "GABAAR_NegativeAllostericModulator": "#E45756",
+        "NMDAR_Activation": "#36852D",
+        "NMDAR_Antagonist": "#66EE8F",
+    }
+    marker_cycle = ["o", "s", "^", "D", "P", "X", "v", "<", ">", "*", "h", "8"]
+
     if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(15.5, 10.5))
     else:
         fig = ax.figure
 
     unique_labels = embedding_df[["label", "label_name"]].drop_duplicates().sort_values("label")
-    cmap = plt.get_cmap("tab10", len(unique_labels))
-
-    for color_index, row in enumerate(unique_labels.itertuples(index=False)):
-        class_df = embedding_df[embedding_df["label"] == row.label]
-        ax.scatter(
-            class_df["embed_x"],
-            class_df["embed_y"],
-            s=28,
-            alpha=0.8,
-            color=cmap(color_index),
-            label=f"{row.label}: {row.label_name}",
+    color_map = {
+        int(row.label): class_color_overrides.get(
+            str(row.label_name), class_palette[color_index % len(class_palette)]
         )
+        for color_index, row in enumerate(unique_labels.itertuples(index=False))
+    }
+    ordered_labels = [int(row.label) for row in unique_labels.itertuples(index=False)]
+
+    if show_svm_background and len(ordered_labels) >= 2:
+        X = embedding_df[["embed_x", "embed_y"]].to_numpy(dtype=float)
+        y = embedding_df["label"].to_numpy(dtype=int)
+        label_to_index = {label: index for index, label in enumerate(ordered_labels)}
+        y_index = np.array([label_to_index[int(label)] for label in y], dtype=int)
+
+        classifier = SVC(kernel="rbf", C=svm_c, gamma=svm_gamma)
+        classifier.fit(X, y_index)
+
+        x_margin = 0.05 * max(float(X[:, 0].ptp()), 1e-6)
+        y_margin = 0.05 * max(float(X[:, 1].ptp()), 1e-6)
+        x_min, x_max = float(X[:, 0].min() - x_margin), float(X[:, 0].max() + x_margin)
+        y_min, y_max = float(X[:, 1].min() - y_margin), float(X[:, 1].max() + y_margin)
+
+        xx, yy = np.meshgrid(
+            np.linspace(x_min, x_max, int(svm_background_resolution)),
+            np.linspace(y_min, y_max, int(svm_background_resolution)),
+        )
+        grid = np.column_stack([xx.ravel(), yy.ravel()])
+        zz = classifier.predict(grid).reshape(xx.shape)
+
+        background_colors = [
+            to_rgba(color_map[label], alpha=svm_background_alpha) for label in ordered_labels
+        ]
+        ax.contourf(
+            xx,
+            yy,
+            zz,
+            levels=np.arange(len(ordered_labels) + 1) - 0.5,
+            cmap=ListedColormap(background_colors),
+            antialiased=True,
+            zorder=0,
+        )
+
+    marker_map = None
+    if marker_column is not None and marker_column in embedding_df.columns:
+        unique_markers = (
+            embedding_df[[marker_column]]
+            .drop_duplicates()
+            .sort_values(marker_column)
+            .reset_index(drop=True)[marker_column]
+            .tolist()
+        )
+        marker_map = {
+            marker_value: marker_cycle[marker_index % len(marker_cycle)]
+            for marker_index, marker_value in enumerate(unique_markers)
+        }
+
+    if marker_map is None:
+        for row in unique_labels.itertuples(index=False):
+            class_df = embedding_df[embedding_df["label"] == row.label]
+            ax.scatter(
+                class_df["embed_x"],
+                class_df["embed_y"],
+                s=64,
+                alpha=0.9,
+                color=color_map[int(row.label)],
+                marker="o",
+                edgecolors="white",
+                linewidths=0.7,
+                zorder=2,
+            )
+    else:
+        for row in embedding_df.itertuples(index=False):
+            ax.scatter(
+                row.embed_x,
+                row.embed_y,
+                s=96,
+                alpha=0.92,
+                color=color_map[int(row.label)],
+                marker=marker_map[getattr(row, marker_column)],
+                edgecolors="white",
+                linewidths=0.7,
+                zorder=2,
+            )
 
     ax.set_xlabel("Component 1")
     ax.set_ylabel("Component 2")
     ax.set_title(title or f"{embedding_df['method'].iloc[0].upper()} tensor embedding")
-    ax.legend(title="Class", bbox_to_anchor=(1.02, 1), loc="upper left")
-    fig.tight_layout()
+    ax.tick_params(labelsize=13)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
+    ax.title.set_size(21)
+    ax.grid(True, alpha=0.18, linewidth=0.8)
+    ax.set_box_aspect(1)
+
+    class_handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="none",
+            markerfacecolor=color_map[int(row.label)],
+            markeredgecolor="white",
+            markeredgewidth=0.8,
+            markersize=11,
+            label=f"{row.label}: {row.label_name}",
+        )
+        for row in unique_labels.itertuples(index=False)
+    ]
+    legend_x = 1.01
+    legend_width = 0.33
+
+    class_legend = ax.legend(
+        handles=class_handles,
+        title="Class",
+        loc="upper left",
+        bbox_to_anchor=(legend_x, 1.0, legend_width, 0.0),
+        borderaxespad=0.0,
+        frameon=True,
+        mode="expand",
+    )
+    ax.add_artist(class_legend)
+
+    if marker_map is not None:
+        marker_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker=marker_shape,
+                color="#4A4A4A",
+                markerfacecolor="#4A4A4A",
+                linestyle="None",
+                markersize=10,
+                label=str(marker_value),
+            )
+            for marker_value, marker_shape in marker_map.items()
+        ]
+        ax.legend(
+            handles=marker_handles,
+            title=marker_column.replace("_", " ").title(),
+            loc="upper left",
+            bbox_to_anchor=(legend_x, 0.46, legend_width, 0.0),
+            borderaxespad=0.0,
+            frameon=True,
+            ncol=1,
+            mode="expand",
+        )
+
+    fig.subplots_adjust(right=0.68)
+    fig.tight_layout(rect=(0, 0, 0.68, 1))
     return fig, ax

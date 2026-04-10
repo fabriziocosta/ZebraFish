@@ -8,7 +8,8 @@ The workflow is built around:
 - a mounted imaging directory tree under `/mnt/tyler`
 - shared utility code in [`zebrafish_notebook_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_notebook_utils.py)
 - dedicated tensor loading code in [`zebrafish_tensor_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_tensor_utils.py)
-- five notebooks for exploration and export
+- dedicated ML/training code in [`zebrafish_ml.py`](/home/fabrizio/code/ZebraFish/zebrafish_ml.py)
+- six notebooks for exploration, dataset preparation, and model training
 
 ## Inputs
 
@@ -130,6 +131,31 @@ Tensor-loading helpers include:
 - `build_moa_labeled_tensor_dataset()`
 - `build_tensor_embedding_2d()`
 - `plot_tensor_embedding_2d()`
+
+`plot_tensor_embedding_2d()` can now also overlay an optional low-alpha class-region background by fitting an RBF-kernel SVM directly on the 2D embedding coordinates. This is useful as a quick visual sanity check for projected class separation.
+
+## ML Module
+
+- [`zebrafish_ml.py`](/home/fabrizio/code/ZebraFish/zebrafish_ml.py)
+  Simple model-training utilities for tensor classification experiments.
+
+Current contents:
+
+- `Zebrafish3DCNNClassifier`
+  A scikit-style estimator built on a simple 3D CNN that treats time as channels and supports configurable convolution kernel sizes, strides, and pooling separately for `z` and `xy`.
+- `augment_training_tensors_with_rotations()`
+  Training-only XY rotation augmentation helper.
+- `plot_training_history()`
+  Plot train and validation loss by epoch.
+- `plot_confusion_matrices()`
+  Plot both absolute-count and row-fraction confusion matrices.
+
+Important leakage rule:
+
+- split train / validation / holdout on the unaugmented base tensors first
+- apply random rotation augmentation only to the training subset afterward
+
+This rule is enforced in notebook 6 and should be preserved in future model-training workflows.
 
 ## Generated CSV Files
 
@@ -288,7 +314,7 @@ Purpose:
 - select a list of mechanisms of action to include as classes
 - use water controls as class `0`
 - cap the number of compounds per mechanism and the number of tensors per compound
-- optionally augment examples with random XY rotations
+- optionally augment examples with random XY rotations for exploratory datasets and embeddings
 
 Current flow:
 
@@ -310,6 +336,34 @@ Dataset conventions:
 - cached tensor loading and cached selected-TIFF mirroring are used through the same loader path as notebook 4
 - PCA is available by default through scikit-learn
 - UMAP is also supported, but requires the optional `umap-learn` package in the active environment
+- `plot_tensor_embedding_2d(...)` can optionally show an RBF-SVM decision background on the 2D embedding
+
+For model training, do not use notebook 5 augmentation before splitting. Augment only after the split to avoid leakage between related rotated views of the same source tensor.
+
+### 6. Train 3D CNN Classifier
+
+- [`6_train_3d_cnn_classifier.ipynb`](/home/fabrizio/code/ZebraFish/6_train_3d_cnn_classifier.ipynb)
+
+Purpose:
+
+- train a simple 3D CNN classifier on the tensor dataset
+- treat time as channels and convolve across `z`, `y`, and `x`
+- split base tensors into train / validation / holdout before any augmentation
+- augment only the training subset with random XY rotations
+- monitor train and validation loss during training
+- evaluate the holdout split with classification metrics and confusion matrices
+- visualize learned pre-classifier embeddings in 2D
+
+Current flow:
+
+1. build the base dataset with `num_random_rotations=0`
+2. split into train, validation, and holdout subsets on the unaugmented tensors
+3. augment only the training subset with `augment_training_tensors_with_rotations(...)`
+4. fit `Zebrafish3DCNNClassifier(...)` with explicit validation data
+5. inspect train / validation loss with `plot_training_history(...)`
+6. inspect holdout confusion matrices with `plot_confusion_matrices(...)`
+7. project learned embeddings with `build_tensor_embedding_2d(...)`
+8. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
 
 ## Typical Workflow
 
@@ -318,10 +372,12 @@ Dataset conventions:
 3. Use notebook 2 to build or inspect run-folder mappings.
 4. Use notebook 3 to inspect condition-folder and concentration mappings.
 5. Use notebook 4 to load a condition directory into a tensor and visualize sampled timepoints.
-6. Use notebook 5 to prepare labeled tensor datasets for ML experiments.
+6. Use notebook 5 to prepare labeled tensor datasets and inspect class structure in 2D.
+7. Use notebook 6 to train and evaluate the simple 3D CNN baseline without augmentation leakage.
 
 ## Notes
 
 - The generated CSV files are snapshots of the derived mapping tables.
 - Notebook outputs may be stale until re-run.
 - The utility module expects the Python environment to provide the imaging and dataframe dependencies used by the notebooks, including `pandas`, `tifffile`, and `torch`.
+- Notebook 6 additionally expects `scikit-learn` and the PyTorch training stack already used by the tensor utilities.
