@@ -23,6 +23,7 @@ from sklearn.svm import SVC
 CACHE_VERSION = 2
 TENSOR_CACHE_DIR = Path(__file__).resolve().parent / ".tensor_cache"
 TIFF_CACHE_DIR = Path(__file__).resolve().parent / ".tiff_cache"
+DATASET_CACHE_DIR = Path(__file__).resolve().parent / ".dataset_cache"
 
 
 def _squeeze_array_and_axes(arr: np.ndarray, axes: str) -> tuple[np.ndarray, str]:
@@ -46,31 +47,58 @@ def load_tiff_as_tzyx(
 ) -> torch.Tensor:
     path = Path(path)
     use_local_pages = False
-    with TiffFile(path) as tif:
-        use_local_pages = len(tif.pages) > 1
-        if use_local_pages:
-            z_keep = output_size[1] if output_size is not None else None
-            z_indices = (
-                select_evenly_spaced_indices(len(tif.pages), int(z_keep))
-                if z_keep is not None
-                else list(range(len(tif.pages)))
-            )
-            page_arrays = []
-            for page_index in z_indices:
+    try:
+        with TiffFile(path) as tif:
+            use_local_pages = len(tif.pages) > 1
+            if use_local_pages:
+                z_keep = output_size[1] if output_size is not None else None
+                z_indices = (
+                    select_evenly_spaced_indices(len(tif.pages), int(z_keep))
+                    if z_keep is not None
+                    else list(range(len(tif.pages)))
+                )
+                page_arrays = []
+                for page_index in z_indices:
+                    memmap_exc: Exception | None = None
+                    page_exc: Exception | None = None
+                    try:
+                        page_arr = np.asarray(tiff_memmap(path, page=page_index, mode="r"))
+                    except Exception as exc:
+                        memmap_exc = exc
+                        try:
+                            page_arr = np.asarray(tif.pages[page_index].asarray())
+                        except Exception as exc2:
+                            page_exc = exc2
+                            try:
+                                page_arr = np.asarray(tif.asarray(key=page_index))
+                            except Exception as exc3:
+                                raise RuntimeError(
+                                    f"Failed to read TIFF page {page_index} from {path}. "
+                                    f"memmap error: {memmap_exc!r}; "
+                                    f"page.asarray error: {page_exc!r}; "
+                                    f"tif.asarray(key=...) error: {exc3!r}"
+                                ) from exc3
+                    page_arrays.append(page_arr)
+                arr = np.stack(page_arrays, axis=0)
+                axes = "ZYX"
+            else:
+                series = tif.series[0]
+                axes = getattr(series, "axes", "")
+                memmap_exc: Exception | None = None
                 try:
-                    page_arr = np.asarray(tiff_memmap(path, page=page_index, mode="r"))
-                except Exception:
-                    page_arr = np.asarray(tif.pages[page_index].asarray())
-                page_arrays.append(page_arr)
-            arr = np.stack(page_arrays, axis=0)
-            axes = "ZYX"
-        else:
-            series = tif.series[0]
-            axes = getattr(series, "axes", "")
-            try:
-                arr = np.asarray(tiff_memmap(path, series=0, mode="r"))
-            except Exception:
-                arr = np.asarray(series.asarray())
+                    arr = np.asarray(tiff_memmap(path, series=0, mode="r"))
+                except Exception as exc:
+                    memmap_exc = exc
+                    try:
+                        arr = np.asarray(series.asarray())
+                    except Exception as exc2:
+                        raise RuntimeError(
+                            f"Failed to read TIFF series 0 from {path}. "
+                            f"memmap error: {memmap_exc!r}; "
+                            f"series.asarray error: {exc2!r}"
+                        ) from exc2
+    except Exception as exc:
+        raise RuntimeError(f"Failed to open TIFF tensor from {path}") from exc
 
     if output_size is not None and not use_local_pages:
         z_keep = output_size[1]
@@ -183,6 +211,42 @@ def save_cached_tensor(cache_key: str, tensor: torch.Tensor) -> None:
     TENSOR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_path = TENSOR_CACHE_DIR / f"{cache_key}.pt"
     torch.save(tensor.cpu(), cache_path)
+
+
+def save_labeled_tensor_dataset(
+    dataset: dict[str, object],
+    path: str | Path,
+) -> Path:
+    dataset_path = Path(path)
+    if not dataset_path.is_absolute():
+        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+
+    metadata = dataset["metadata"]
+    if not isinstance(metadata, pd.DataFrame):
+        raise TypeError("dataset['metadata'] must be a pandas DataFrame")
+
+    payload = {
+        "tensors": dataset["tensors"].detach().cpu(),
+        "labels": dataset["labels"].detach().cpu(),
+        "metadata_records": metadata.to_dict(orient="records"),
+        "label_map": {int(key): str(value) for key, value in dict(dataset["label_map"]).items()},
+    }
+    torch.save(payload, dataset_path)
+    return dataset_path
+
+
+def load_labeled_tensor_dataset(path: str | Path) -> dict[str, object]:
+    dataset_path = Path(path)
+    if not dataset_path.is_absolute():
+        dataset_path = DATASET_CACHE_DIR / dataset_path
+    payload = torch.load(dataset_path, map_location="cpu")
+    return {
+        "tensors": payload["tensors"],
+        "labels": payload["labels"],
+        "metadata": pd.DataFrame(payload["metadata_records"]),
+        "label_map": {int(key): value for key, value in payload["label_map"].items()},
+    }
 
 
 def select_evenly_spaced_indices(n_total: int, n_keep: int) -> list[int]:
@@ -328,7 +392,14 @@ def load_image_condition_tensor(
 
     load_paths = ensure_cached_tiffs(timepoint_files) if use_tiff_cache else timepoint_files
 
-    tensors = [load_tiff_as_tzyx(path, output_size=output_size) for path in load_paths]
+    tensors = []
+    for path in load_paths:
+        try:
+            tensors.append(load_tiff_as_tzyx(path, output_size=output_size))
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to load TIFF timepoint {path} for condition directory {condition_dir}"
+            ) from exc
     reference_shape = tensors[0].shape[1:]
     mismatched = [str(path) for path, tensor in zip(load_paths, tensors) if tensor.shape[1:] != reference_shape]
     if mismatched:
@@ -391,6 +462,7 @@ def build_moa_labeled_tensor_dataset(
     use_cache: bool = True,
     use_tiff_cache: bool = True,
     random_seed: int = 0,
+    skip_failed_conditions: bool = True,
 ) -> dict[str, object]:
     if not selected_mechanisms:
         raise ValueError("selected_mechanisms must not be empty")
@@ -423,11 +495,13 @@ def build_moa_labeled_tensor_dataset(
         label_name: str,
         row: pd.Series,
         is_control: bool,
+        original_instance_id: int,
     ) -> None:
         tensors.append(base_tensor)
         labels.append(label)
         rows.append(
             {
+                "original_instance_id": original_instance_id,
                 "label": label,
                 "label_name": label_name,
                 "mechanism_of_action": row["mechanism_of_action"],
@@ -447,6 +521,7 @@ def build_moa_labeled_tensor_dataset(
             labels.append(label)
             rows.append(
                 {
+                    "original_instance_id": original_instance_id,
                     "label": label,
                     "label_name": label_name,
                     "mechanism_of_action": row["mechanism_of_action"],
@@ -460,6 +535,7 @@ def build_moa_labeled_tensor_dataset(
                 }
             )
 
+    original_instance_id = 0
     for mechanism_index, mechanism in enumerate(selected_mechanisms, start=1):
         mechanism_df = working_df[
             (working_df["mechanism_of_action"] == mechanism)
@@ -486,38 +562,65 @@ def build_moa_labeled_tensor_dataset(
             )
 
             for _, row in treatment_rows.iterrows():
-                tensor = load_image_condition_tensor(
-                    condition_dir=row["image_condition_dir"],
-                    output_size=output_size,
-                    normalize_global_drift=normalize_global_drift,
-                    loess_frac=loess_frac,
-                    use_cache=use_cache,
-                    use_tiff_cache=use_tiff_cache,
-                )
+                try:
+                    tensor = load_image_condition_tensor(
+                        condition_dir=row["image_condition_dir"],
+                        output_size=output_size,
+                        normalize_global_drift=normalize_global_drift,
+                        loess_frac=loess_frac,
+                        use_cache=use_cache,
+                        use_tiff_cache=use_tiff_cache,
+                    )
+                except Exception as exc:
+                    message = (
+                        "Failed to build treatment tensor dataset example "
+                        f"for mechanism={mechanism!r}, compound={row['compound']!r}, "
+                        f"concentration_band={row['concentration_band']!r}, "
+                        f"image_condition_dir={row['image_condition_dir']!r}"
+                    )
+                    if skip_failed_conditions:
+                        warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                        continue
+                    raise RuntimeError(message) from exc
                 add_example(
                     base_tensor=tensor,
                     label=mechanism_index,
                     label_name=mechanism,
                     row=row,
                     is_control=False,
+                    original_instance_id=original_instance_id,
                 )
+                original_instance_id += 1
 
             for _, row in control_rows.iterrows():
-                tensor = load_image_condition_tensor(
-                    condition_dir=row["image_condition_dir"],
-                    output_size=output_size,
-                    normalize_global_drift=normalize_global_drift,
-                    loess_frac=loess_frac,
-                    use_cache=use_cache,
-                    use_tiff_cache=use_tiff_cache,
-                )
+                try:
+                    tensor = load_image_condition_tensor(
+                        condition_dir=row["image_condition_dir"],
+                        output_size=output_size,
+                        normalize_global_drift=normalize_global_drift,
+                        loess_frac=loess_frac,
+                        use_cache=use_cache,
+                        use_tiff_cache=use_tiff_cache,
+                    )
+                except Exception as exc:
+                    message = (
+                        "Failed to build control tensor dataset example "
+                        f"for compound={row['compound']!r}, "
+                        f"image_condition_dir={row['image_condition_dir']!r}"
+                    )
+                    if skip_failed_conditions:
+                        warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                        continue
+                    raise RuntimeError(message) from exc
                 add_example(
                     base_tensor=tensor,
                     label=0,
                     label_name="Water",
                     row=row,
                     is_control=True,
+                    original_instance_id=original_instance_id,
                 )
+                original_instance_id += 1
 
     if not tensors:
         raise ValueError("No dataset examples were created with the provided filters")

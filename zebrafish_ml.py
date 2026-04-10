@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+import time
 from typing import Iterable, Sequence
 
 import matplotlib.pyplot as plt
@@ -35,6 +36,15 @@ def _expand_per_block(
     return [int(value)] * n_blocks
 
 
+def _format_eta(seconds: float) -> str:
+    remaining = max(int(round(seconds)), 0)
+    minutes, seconds = divmod(remaining, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
 def _ensure_tensor_5d(X: torch.Tensor | np.ndarray) -> torch.Tensor:
     if isinstance(X, np.ndarray):
         tensor = torch.from_numpy(X)
@@ -64,6 +74,26 @@ class _PreparedData:
     y_train: torch.Tensor
     X_val: torch.Tensor | None
     y_val: torch.Tensor | None
+
+
+@dataclass
+class TensorDatasetSplits:
+    metadata_all: pd.DataFrame
+    train_indices: np.ndarray
+    val_indices: np.ndarray
+    holdout_indices: np.ndarray
+    train_instance_ids: np.ndarray
+    val_instance_ids: np.ndarray
+    holdout_instance_ids: np.ndarray
+    X_train_base: torch.Tensor
+    y_train_base: torch.Tensor
+    metadata_train_base: pd.DataFrame
+    X_val: torch.Tensor
+    y_val: np.ndarray
+    metadata_val: pd.DataFrame
+    X_holdout: torch.Tensor
+    y_holdout: np.ndarray
+    metadata_holdout: pd.DataFrame
 
 
 class _TimeChannel3DCNN(nn.Module):
@@ -322,6 +352,7 @@ class Zebrafish3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
         history_rows: list[dict[str, float | int]] = []
         best_state = deepcopy(self.model_.state_dict())
         best_metric = float("inf")
+        training_start = time.perf_counter()
 
         for epoch in range(1, self.epochs + 1):
             self.model_.train()
@@ -370,13 +401,16 @@ class Zebrafish3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
 
             history_rows.append(row)
             if self.verbose:
+                elapsed = time.perf_counter() - training_start
+                avg_epoch_seconds = elapsed / epoch
+                eta = _format_eta(avg_epoch_seconds * (self.epochs - epoch))
                 if "val_loss" in row:
                     print(
-                        f"epoch={epoch:03d} train_loss={row['train_loss']:.4f} "
-                        f"val_loss={row['val_loss']:.4f}"
+                        f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} "
+                        f"val_loss={row['val_loss']:.4f} eta={eta}"
                     )
                 else:
-                    print(f"epoch={epoch:03d} train_loss={row['train_loss']:.4f}")
+                    print(f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} eta={eta}")
 
         self.model_.load_state_dict(best_state)
         self.model_.eval()
@@ -468,6 +502,95 @@ def augment_training_tensors_with_rotations(
 
     augmented_metadata = pd.DataFrame(augmented_rows) if augmented_rows is not None else None
     return torch.stack(augmented_tensors, dim=0), np.asarray(augmented_labels, dtype=int), augmented_metadata
+
+
+def split_labeled_tensor_dataset_by_instance(
+    dataset: dict[str, object],
+    *,
+    holdout_fraction: float,
+    validation_fraction_within_train: float,
+    random_state: int = 0,
+) -> TensorDatasetSplits:
+    """Split a persisted labeled tensor dataset by source instance id.
+
+    The split groups examples by ``original_instance_id`` to keep all rotated
+    variants of the same source tensor in the same partition and avoid leakage.
+    """
+    metadata_all = dataset["metadata"].reset_index(drop=True).copy()
+    if "original_instance_id" not in metadata_all.columns:
+        # Backward-compatible fallback for older dataset artifacts saved before original_instance_id existed.
+        metadata_all["original_instance_id"] = pd.factorize(
+            metadata_all[["label", "image_condition_dir", "is_control"]].astype(str).agg("|".join, axis=1)
+        )[0]
+
+    instance_df = (
+        metadata_all[["original_instance_id", "label"]]
+        .drop_duplicates(subset=["original_instance_id"])
+        .reset_index(drop=True)
+    )
+    instance_ids = instance_df["original_instance_id"].to_numpy()
+    instance_labels = instance_df["label"].to_numpy()
+
+    try:
+        train_val_instance_ids, holdout_instance_ids = train_test_split(
+            instance_ids,
+            test_size=holdout_fraction,
+            random_state=random_state,
+            stratify=instance_labels,
+        )
+    except ValueError:
+        train_val_instance_ids, holdout_instance_ids = train_test_split(
+            instance_ids,
+            test_size=holdout_fraction,
+            random_state=random_state,
+            stratify=None,
+        )
+
+    train_val_instance_df = instance_df[instance_df["original_instance_id"].isin(train_val_instance_ids)].reset_index(drop=True)
+    try:
+        train_instance_ids, val_instance_ids = train_test_split(
+            train_val_instance_df["original_instance_id"].to_numpy(),
+            test_size=validation_fraction_within_train,
+            random_state=random_state,
+            stratify=train_val_instance_df["label"].to_numpy(),
+        )
+    except ValueError:
+        train_instance_ids, val_instance_ids = train_test_split(
+            train_val_instance_df["original_instance_id"].to_numpy(),
+            test_size=validation_fraction_within_train,
+            random_state=random_state,
+            stratify=None,
+        )
+
+    train_indices = metadata_all.index[metadata_all["original_instance_id"].isin(train_instance_ids)].to_numpy(dtype=np.int64, copy=True)
+    val_indices = metadata_all.index[metadata_all["original_instance_id"].isin(val_instance_ids)].to_numpy(dtype=np.int64, copy=True)
+    holdout_indices = metadata_all.index[metadata_all["original_instance_id"].isin(holdout_instance_ids)].to_numpy(dtype=np.int64, copy=True)
+
+    tensors = dataset["tensors"]
+    labels = dataset["labels"]
+    if not isinstance(tensors, torch.Tensor):
+        raise TypeError("dataset['tensors'] must be a torch.Tensor")
+    if not isinstance(labels, torch.Tensor):
+        raise TypeError("dataset['labels'] must be a torch.Tensor")
+
+    return TensorDatasetSplits(
+        metadata_all=metadata_all,
+        train_indices=train_indices,
+        val_indices=val_indices,
+        holdout_indices=holdout_indices,
+        train_instance_ids=np.asarray(train_instance_ids),
+        val_instance_ids=np.asarray(val_instance_ids),
+        holdout_instance_ids=np.asarray(holdout_instance_ids),
+        X_train_base=tensors[train_indices],
+        y_train_base=labels[train_indices],
+        metadata_train_base=metadata_all.iloc[train_indices].reset_index(drop=True),
+        X_val=tensors[val_indices],
+        y_val=labels[val_indices].detach().cpu().numpy(),
+        metadata_val=metadata_all.iloc[val_indices].reset_index(drop=True),
+        X_holdout=tensors[holdout_indices],
+        y_holdout=labels[holdout_indices].detach().cpu().numpy(),
+        metadata_holdout=metadata_all.iloc[holdout_indices].reset_index(drop=True),
+    )
 
 
 def plot_training_history(

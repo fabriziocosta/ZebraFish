@@ -145,6 +145,8 @@ Current contents:
   A scikit-style estimator built on a simple 3D CNN that treats time as channels and supports configurable convolution kernel sizes, strides, and pooling separately for `z` and `xy`.
 - `augment_training_tensors_with_rotations()`
   Training-only XY rotation augmentation helper.
+- `split_labeled_tensor_dataset_by_instance()`
+  Leakage-safe train / validation / holdout splitter for persisted tensor datasets, grouping by `original_instance_id` and returning the sliced tensors, labels, metadata, and split ids needed by notebook 6.
 - `plot_training_history()`
   Plot train and validation loss by epoch.
 - `plot_confusion_matrices()`
@@ -153,9 +155,10 @@ Current contents:
 Important leakage rule:
 
 - split train / validation / holdout on the unaugmented base tensors first
+- keep all rotated views of the same source tensor in the same split by grouping on the original pre-rotation instance id
 - apply random rotation augmentation only to the training subset afterward
 
-This rule is enforced in notebook 6 and should be preserved in future model-training workflows.
+This rule is enforced by `split_labeled_tensor_dataset_by_instance()` in notebook 6 and should be preserved in future model-training workflows.
 
 ## Generated CSV Files
 
@@ -315,6 +318,7 @@ Purpose:
 - use water controls as class `0`
 - cap the number of compounds per mechanism and the number of tensors per compound
 - optionally augment examples with random XY rotations for exploratory datasets and embeddings
+- persist the prepared dataset artifact for reuse in notebook 6
 
 Current flow:
 
@@ -323,22 +327,25 @@ Current flow:
    `selected_mechanisms`, `selected_concentrations`, `max_compounds_per_action`, `max_tensors_per_compound`
 3. set tensor-loading and augmentation options:
    `output_size`, `num_random_rotations`, `rotation_range_degrees`
-4. build the dataset with `build_moa_labeled_tensor_dataset(...)`
-5. inspect tensor shapes, label tensor, label map, and metadata table
-6. optionally reduce the tensors to 2D with `build_tensor_embedding_2d(...)`
-7. visualize the class structure with `plot_tensor_embedding_2d(...)`
+4. set `dataset_artifact_path` for the saved tensor dataset artifact
+5. build the dataset with `build_moa_labeled_tensor_dataset(...)`
+6. save it with `save_labeled_tensor_dataset(...)`
+7. inspect tensor shapes, label tensor, label map, and metadata table
+8. optionally reduce the tensors to 2D with `build_tensor_embedding_2d(...)`
+9. visualize the class structure with `plot_tensor_embedding_2d(...)`
 
 Dataset conventions:
 
 - label `0` is always `Water`
 - each selected mechanism of action is assigned a distinct positive integer label
 - `selected_concentrations` controls which treatment concentration bands are included
+- metadata includes `original_instance_id`, which is stable across all random rotations derived from the same base tensor
 - cached tensor loading and cached selected-TIFF mirroring are used through the same loader path as notebook 4
 - PCA is available by default through scikit-learn
 - UMAP is also supported, but requires the optional `umap-learn` package in the active environment
 - `plot_tensor_embedding_2d(...)` can optionally show an RBF-SVM decision background on the 2D embedding
 
-For model training, do not use notebook 5 augmentation before splitting. Augment only after the split to avoid leakage between related rotated views of the same source tensor.
+For model training, use notebook 5 to persist the base dataset artifact, then let notebook 6 split by `original_instance_id` before applying any training-only augmentation. That keeps all rotated views of the same source tensor together and avoids leakage.
 
 ### 6. Train 3D CNN Classifier
 
@@ -348,7 +355,9 @@ Purpose:
 
 - train a simple 3D CNN classifier on the tensor dataset
 - treat time as channels and convolve across `z`, `y`, and `x`
+- load the persisted base dataset artifact from notebook 5
 - split base tensors into train / validation / holdout before any augmentation
+- split on `original_instance_id` so all rotated variants of the same source tensor stay together
 - augment only the training subset with random XY rotations
 - monitor train and validation loss during training
 - evaluate the holdout split with classification metrics and confusion matrices
@@ -356,14 +365,15 @@ Purpose:
 
 Current flow:
 
-1. build the base dataset with `num_random_rotations=0`
-2. split into train, validation, and holdout subsets on the unaugmented tensors
-3. augment only the training subset with `augment_training_tensors_with_rotations(...)`
-4. fit `Zebrafish3DCNNClassifier(...)` with explicit validation data
-5. inspect train / validation loss with `plot_training_history(...)`
-6. inspect holdout confusion matrices with `plot_confusion_matrices(...)`
-7. project learned embeddings with `build_tensor_embedding_2d(...)`
-8. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
+1. set `dataset_artifact_path` to the saved artifact produced by notebook 5
+2. load the base dataset with `load_labeled_tensor_dataset(...)`
+3. split into train, validation, and holdout subsets on unique `original_instance_id` groups with `split_labeled_tensor_dataset_by_instance(...)`
+4. augment only the training subset with `augment_training_tensors_with_rotations(...)`
+5. fit `Zebrafish3DCNNClassifier(...)` with explicit validation data
+6. inspect train / validation loss with `plot_training_history(...)`
+7. inspect holdout confusion matrices with `plot_confusion_matrices(...)`
+8. project learned embeddings with `build_tensor_embedding_2d(...)`
+9. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
 
 ## Typical Workflow
 
@@ -372,8 +382,8 @@ Current flow:
 3. Use notebook 2 to build or inspect run-folder mappings.
 4. Use notebook 3 to inspect condition-folder and concentration mappings.
 5. Use notebook 4 to load a condition directory into a tensor and visualize sampled timepoints.
-6. Use notebook 5 to prepare labeled tensor datasets and inspect class structure in 2D.
-7. Use notebook 6 to train and evaluate the simple 3D CNN baseline without augmentation leakage.
+6. Use notebook 5 to prepare and persist a labeled tensor dataset artifact, then inspect class structure in 2D.
+7. Use notebook 6 to load that artifact and train the simple 3D CNN baseline with leakage-safe splitting by `original_instance_id`.
 
 ## Notes
 
