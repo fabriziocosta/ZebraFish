@@ -17,6 +17,8 @@ DEFAULT_WORKBOOK = "compounds (MJW V2).xlsx"
 DEFAULT_SHEET = "REVISED TABLE 25 NOV 2019"
 DEFAULT_IMAGE_ROOT = "images"
 DEFAULT_MANIFEST = "/tmp/zebrafish_image_dirs.txt"
+DEFAULT_RUN_MAP_CSV = "compound_image_run_map.csv"
+DEFAULT_CONDITION_MAP_CSV = "compound_image_condition_map.csv"
 
 UNIT_PATTERNS = [
     (r"(\d+(?:[._]\d+)?)\s*(microM|microm|um|μm)", "uM"),
@@ -38,6 +40,14 @@ def load_raw_workbook(
     sheet_name: str = DEFAULT_SHEET,
 ) -> pd.DataFrame:
     return pd.read_excel(Path(workbook_path), sheet_name=sheet_name, header=None)
+
+
+def load_compound_image_run_map_csv(csv_path: str | Path = DEFAULT_RUN_MAP_CSV) -> pd.DataFrame:
+    return pd.read_csv(Path(csv_path))
+
+
+def load_compound_image_condition_map_csv(csv_path: str | Path = DEFAULT_CONDITION_MAP_CSV) -> pd.DataFrame:
+    return pd.read_csv(Path(csv_path))
 
 
 def load_compound_classification_raw(

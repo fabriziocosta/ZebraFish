@@ -582,6 +582,9 @@ def build_tensor_embedding_2d(
         metadata_reset = metadata.reset_index(drop=True).copy()
         if len(metadata_reset) != len(embedding_df):
             raise ValueError("metadata length must match number of tensors")
+        duplicate_columns = [column for column in metadata_reset.columns if column in embedding_df.columns]
+        if duplicate_columns:
+            metadata_reset = metadata_reset.drop(columns=duplicate_columns)
         embedding_df = pd.concat([embedding_df, metadata_reset], axis=1)
 
     return embedding_df
