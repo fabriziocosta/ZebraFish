@@ -1,0 +1,2 @@
+sudo mount -t cifs "//pyrite/tylermoger-fls" /mnt/tyler -o username=f.costa@exeter.ac.uk,vers=2.1,sec=ntlmssp,uid=$(id -u),gid=$(id -g)
+
