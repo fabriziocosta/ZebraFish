@@ -11,7 +11,7 @@ import torch
 from tifffile import TiffFile, memmap as tiff_memmap
 
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 TENSOR_CACHE_DIR = Path(__file__).resolve().parent / ".tensor_cache"
 TIFF_CACHE_DIR = Path(__file__).resolve().parent / ".tiff_cache"
 
@@ -36,15 +36,34 @@ def load_tiff_as_tzyx(
     output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
 ) -> torch.Tensor:
     path = Path(path)
+    use_local_pages = False
     with TiffFile(path) as tif:
-        series = tif.series[0]
-        axes = getattr(series, "axes", "")
-        try:
-            arr = np.asarray(tiff_memmap(path, series=0, mode="r"))
-        except Exception:
-            arr = np.asarray(series.asarray())
+        use_local_pages = len(tif.pages) > 1
+        if use_local_pages:
+            z_keep = output_size[1] if output_size is not None else None
+            z_indices = (
+                select_evenly_spaced_indices(len(tif.pages), int(z_keep))
+                if z_keep is not None
+                else list(range(len(tif.pages)))
+            )
+            page_arrays = []
+            for page_index in z_indices:
+                try:
+                    page_arr = np.asarray(tiff_memmap(path, page=page_index, mode="r"))
+                except Exception:
+                    page_arr = np.asarray(tif.pages[page_index].asarray())
+                page_arrays.append(page_arr)
+            arr = np.stack(page_arrays, axis=0)
+            axes = "ZYX"
+        else:
+            series = tif.series[0]
+            axes = getattr(series, "axes", "")
+            try:
+                arr = np.asarray(tiff_memmap(path, series=0, mode="r"))
+            except Exception:
+                arr = np.asarray(series.asarray())
 
-    if output_size is not None:
+    if output_size is not None and not use_local_pages:
         z_keep = output_size[1]
         if z_keep is not None:
             if "Z" in axes:
@@ -57,7 +76,7 @@ def load_tiff_as_tzyx(
     arr, axes = _squeeze_array_and_axes(arr, axes)
     if arr.ndim == 2:
         arr = arr[np.newaxis, np.newaxis, :, :]
-        axes = "ZYX"
+        axes = "TZYX"
 
     unsupported_axes = [axis for axis in axes if axis not in {"T", "Z", "Y", "X"}]
     if unsupported_axes:
