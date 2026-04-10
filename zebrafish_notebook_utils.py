@@ -23,6 +23,14 @@ UNIT_PATTERNS = [
 ]
 
 
+def configure_full_dataframe_display() -> None:
+    pd.set_option("display.max_rows", None)
+    pd.set_option("display.max_columns", None)
+    pd.set_option("display.max_colwidth", None)
+    pd.set_option("display.width", None)
+    pd.set_option("display.expand_frame_repr", False)
+
+
 def load_raw_workbook(
     workbook_path: str | Path = DEFAULT_WORKBOOK,
     sheet_name: str = DEFAULT_SHEET,
@@ -30,7 +38,7 @@ def load_raw_workbook(
     return pd.read_excel(Path(workbook_path), sheet_name=sheet_name, header=None)
 
 
-def load_compound_classification(
+def load_compound_classification_raw(
     workbook_path: str | Path = DEFAULT_WORKBOOK,
     sheet_name: str = DEFAULT_SHEET,
 ) -> pd.DataFrame:
@@ -54,6 +62,25 @@ def load_compound_classification(
     return df[["compound", "compound_class", "mechanism_of_action"]].reset_index(drop=True)
 
 
+def load_compound_classification(
+    workbook_path: str | Path = DEFAULT_WORKBOOK,
+    sheet_name: str = DEFAULT_SHEET,
+) -> pd.DataFrame:
+    raw_df = load_compound_classification_raw(workbook_path=workbook_path, sheet_name=sheet_name)
+    mechanism_alias_map = get_mechanism_of_action_alias_map()
+    missing_aliases = raw_df.loc[~raw_df["mechanism_of_action"].isin(mechanism_alias_map), "mechanism_of_action"].unique()
+    if len(missing_aliases):
+        raise KeyError(f"Missing mechanism_of_action mnemonic aliases for: {missing_aliases.tolist()}")
+
+    return (
+        raw_df.assign(
+            compound=lambda df: df["compound"].map(clean_compound_name),
+            mechanism_of_action=lambda df: df["mechanism_of_action"].map(mechanism_alias_map),
+        )[["compound", "compound_class", "mechanism_of_action"]]
+        .reset_index(drop=True)
+    )
+
+
 def load_exposure_map(
     workbook_path: str | Path = DEFAULT_WORKBOOK,
     sheet_name: str = DEFAULT_SHEET,
@@ -63,7 +90,7 @@ def load_exposure_map(
         columns={2: "compound", 3: "seizure_link_strength", 8: "exposure_conditions"}
     )
     df = df[df["seizure_link_strength"].astype("string").str.strip().isin(list("ABCDEF"))].copy()
-    df["compound"] = df["compound"].astype("string").str.strip()
+    df["compound"] = df["compound"].astype("string").str.strip().map(clean_compound_name)
     df["exposure_conditions"] = df["exposure_conditions"].astype("string").str.strip()
     return (
         df[["compound", "exposure_conditions"]]
@@ -107,6 +134,11 @@ def normalize_name(text: str) -> str:
     text = text.replace("-", " ")
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return " ".join(text.split())
+
+
+def clean_compound_name(text: str) -> str:
+    text = re.sub(r"\*+", "", text)
+    return " ".join(text.split()).strip()
 
 
 def folder_status(path: Path) -> str:
@@ -197,6 +229,114 @@ def get_compound_alias_map() -> dict[str, list[str]]:
     }
 
 
+def build_compound_standardization_map(
+    workbook_path: str | Path = DEFAULT_WORKBOOK,
+    sheet_name: str = DEFAULT_SHEET,
+) -> pd.DataFrame:
+    compound_df = load_compound_classification_raw(workbook_path=workbook_path, sheet_name=sheet_name)
+    alias_map = get_compound_alias_map()
+
+    rows = []
+    for compound_name in compound_df["compound"].drop_duplicates():
+        standardized_name = clean_compound_name(compound_name)
+        rows.append(
+            {
+                "compound_name": compound_name,
+                "standardized_compound_name": standardized_name,
+                "normalized_compound_name": normalize_name(compound_name),
+                "mapping_source": "canonical",
+            }
+        )
+        for alias in alias_map.get(compound_name, []):
+            if alias == compound_name:
+                continue
+            rows.append(
+                {
+                    "compound_name": alias,
+                    "standardized_compound_name": standardized_name,
+                    "normalized_compound_name": normalize_name(alias),
+                    "mapping_source": "alias",
+                }
+            )
+
+    return (
+        pd.DataFrame(rows)
+        .drop_duplicates(subset=["compound_name", "standardized_compound_name"])
+        .sort_values(["standardized_compound_name", "mapping_source", "compound_name"])
+        .reset_index(drop=True)
+    )
+
+
+def get_mechanism_of_action_alias_map() -> dict[str, str]:
+    return {
+        "GABAAR antagonism": "GABAAR_Antagonist",
+        "Reversible AChE inhibition": "AChE_Inhibitor_Reversible",
+        "P1 antagonism and PDE inhibition": "P1_Antagonist_PDE_Inhibitor",
+        "NMDAR activation": "NMDAR_Activation",
+        "mAChR agonism (non selective)": "mAChR_Agonist_NonSelective",
+        "δ-opioidR agonism": "DOR_Agonist",
+        "KAR activation": "KAR_Activation",
+        "Non-selective Kv blockade": "Kv_Blocker_NonSelective",
+        "mAChR and nAChR agonism": "mAChR_nAChR_Agonist",
+        "NA/DA reuptake inhibition": "NET_DAT_ReuptakeInhibitor",
+        "NMDAR antagonism": "NMDAR_Antagonist",
+        "GABAAR negative allosteric modulation": "GABAAR_NegativeAllostericModulator",
+        "GlyR antagonism": "GlyR_Antagonist",
+        "Kv7 (KCNQ) channel blockade": "Kv7_Blocker",
+        "M1 selective mACHR agonist": "M1_mAChR_Agonist_Selective",
+        "μ-opioidR agonism": "MOR_Agonist",
+        "μ-opioid R agonism": "MOR_Agonist",
+        "μ-δ-opioidR activation": "MOR_DOR_Activation",
+        "Reversible AChE inhibition (no BBB penetration)": "AChE_Inhibitor_Reversible_NoBBB",
+        "NA reuptake inhibitor (weak 5-HT), mAChR, a1/2R/H1R antagonism": "NET_ReuptakeInhibitor_Weak5HT_MultiReceptorAntagonist",
+        "NA/5-HT reuptake inhibitor,DAR/5-HTR/a1/2R/H1R antagonism": "NET_SERT_ReuptakeInhibitor_MultiReceptorAntagonist",
+        "NA/5-HT reuptake inhibitor,5-HTR/a1R/H1/2R/mAChR antagonism": "NET_SERT_ReuptakeInhibitor_MultiReceptorAntagonist",
+        "NA/5-HT reuptake inhibitor,5-HTR/a1R/DAR/H1/2R/mAChR antagonism": "NET_SERT_ReuptakeInhibitor_MultiReceptorAntagonist",
+        "NA/5-HT reuptake inhibitor, a1R/H1R/mAChR antagonism": "NET_SERT_ReuptakeInhibitor_MultiReceptorAntagonist",
+        "NA/5-HT reuptake inhibitor,5-HT2R/a1R/DAR/H1R/mAChR antagonism": "NET_SERT_ReuptakeInhibitor_MultiReceptorAntagonist",
+        "D1/2/3/4R/a1/2R/H1R/mACh1/2R/5-HT1/2R antagonism": "D1_D2_D3_D4R_MultiReceptorAntagonist",
+        "D1/2R/a1/2R/H1R/mAChR/5-HT2R antagonism": "D1_D2R_MultiReceptorAntagonist",
+        "D2R/a1R/H1R/mAChR/5-HT2R antagonism": "D2R_MultiReceptorAntagonist",
+        "D2R/a1/2R/H1R/mAChR/5-HT2R antagonism": "D2R_MultiReceptorAntagonist",
+        "DA/NA/5-HT reuptake inhibiton and Na2+ channel blockade": "DAT_NET_SERT_ReuptakeInhibitor_NaChannelBlocker",
+        "DA/NA/5-HT reuptake inhibiton": "DAT_NET_SERT_ReuptakeInhibitor",
+        "D1/2R/5-HT/aR agonism": "D1_D2R_5HTR_aR_Agonist",
+        "GABAAR positIve allosteric modulation": "GABAAR_PositiveAllostericModulator",
+        "PDE-4 inhibition": "PDE4_Inhibitor",
+        "a2R antagonism": "a2R_Antagonist",
+        "Antibiotic (sulfonamide-like)": "SulfonamideLike_Antibiotic",
+        "DNA cross linking chemotherapeutic": "DNA_CrossLinking_Chemotherapeutic",
+        "a2R agonism (in CNS)": "a2R_Agonist_CNS",
+        "Alkaloid antiprotozoal": "Alkaloid_Antiprotozoal",
+        "Cytochrome P450 inhibitor": "CYP450_Inhibitor",
+        "H1R antagonism": "H1R_Antagonist",
+        "Alkaloid antimalarial": "Alkaloid_Antimalarial",
+    }
+
+
+def build_mechanism_of_action_alias_map(
+    workbook_path: str | Path = DEFAULT_WORKBOOK,
+    sheet_name: str = DEFAULT_SHEET,
+) -> pd.DataFrame:
+    compound_df = load_compound_classification_raw(workbook_path=workbook_path, sheet_name=sheet_name)
+    alias_map = get_mechanism_of_action_alias_map()
+
+    mechanism_df = (
+        compound_df[["mechanism_of_action"]]
+        .drop_duplicates()
+        .assign(mechanism_of_action_mnemonic=lambda df: df["mechanism_of_action"].map(alias_map))
+        .sort_values("mechanism_of_action")
+        .reset_index(drop=True)
+    )
+
+    missing_aliases = mechanism_df["mechanism_of_action_mnemonic"].isna()
+    if missing_aliases.any():
+        missing_values = mechanism_df.loc[missing_aliases, "mechanism_of_action"].tolist()
+        raise KeyError(f"Missing mechanism_of_action mnemonic aliases for: {missing_values}")
+
+    return mechanism_df
+
+
 def select_candidate_image_dirs(
     all_dirs: Iterable[Path],
     image_root: str | Path = DEFAULT_IMAGE_ROOT,
@@ -233,14 +373,17 @@ def build_compound_image_run_map(
     manifest_path: str | Path = DEFAULT_MANIFEST,
 ) -> pd.DataFrame:
     compound_df = load_compound_classification(workbook_path=workbook_path, sheet_name=sheet_name)
+    compound_df_raw = load_compound_classification_raw(workbook_path=workbook_path, sheet_name=sheet_name)
+    compound_records = compound_df.assign(compound_raw=compound_df_raw["compound"])
     all_dirs = load_all_image_dirs(image_root=image_root, manifest_path=manifest_path)
     candidates = select_candidate_image_dirs(all_dirs, image_root=image_root)
     image_root = Path(image_root).resolve()
     alias_map = get_compound_alias_map()
 
     rows = []
-    for record in compound_df.to_dict("records"):
-        aliases = [normalize_name(alias) for alias in alias_map.get(record["compound"], [record["compound"]])]
+    for record in compound_records.to_dict("records"):
+        raw_compound = record["compound_raw"]
+        aliases = [normalize_name(alias) for alias in alias_map.get(raw_compound, [raw_compound])]
         for image_dir in candidates:
             normalized_dir_name = normalize_name(image_dir.name)
             if any(contains_alias(normalized_dir_name, alias) for alias in aliases):
