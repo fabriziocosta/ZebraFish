@@ -120,9 +120,68 @@ def downsample_tzyx(
     return result
 
 
+def loess_smooth_1d(values: np.ndarray, frac: float = 0.25) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    n = values.size
+    if n == 0:
+        return values.copy()
+    if n == 1:
+        return values.copy()
+    if not 0 < frac <= 1:
+        raise ValueError(f"frac must be in (0, 1], got {frac}")
+
+    x = np.arange(n, dtype=float)
+    span = max(3, int(np.ceil(frac * n)))
+    span = min(span, n)
+    smoothed = np.empty(n, dtype=float)
+
+    for i in range(n):
+        distances = np.abs(x - x[i])
+        bandwidth = np.partition(distances, span - 1)[span - 1]
+        if bandwidth == 0:
+            smoothed[i] = values[i]
+            continue
+
+        scaled = distances / bandwidth
+        weights = np.where(scaled < 1, (1 - scaled**3) ** 3, 0.0)
+        if not np.any(weights):
+            smoothed[i] = values[i]
+            continue
+
+        x_centered = x - x[i]
+        design = np.column_stack([np.ones(n, dtype=float), x_centered])
+        xtwx = design.T @ (weights[:, None] * design)
+        xtwy = design.T @ (weights * values)
+        beta = np.linalg.pinv(xtwx) @ xtwy
+        smoothed[i] = beta[0]
+
+    return smoothed
+
+
+def normalize_global_intensity_drift(
+    tensor: torch.Tensor,
+    loess_frac: float = 0.25,
+) -> torch.Tensor:
+    if tensor.ndim != 4:
+        raise ValueError(f"Expected tensor with shape T x Z x Y x X, got shape {tuple(tensor.shape)}")
+    if tensor.shape[0] < 2:
+        return tensor
+
+    reference_dtype = tensor.dtype
+    work_tensor = tensor.to(torch.float32)
+    global_mean = work_tensor.mean(dim=(1, 2, 3)).detach().cpu().numpy()
+    smooth_mean = loess_smooth_1d(global_mean, frac=loess_frac)
+    drift = smooth_mean - smooth_mean.mean()
+    drift_tensor = torch.tensor(drift, dtype=work_tensor.dtype, device=work_tensor.device).view(-1, 1, 1, 1)
+    normalized = work_tensor - drift_tensor
+    return normalized.to(reference_dtype) if torch.is_floating_point(tensor) else normalized
+
+
 def load_image_condition_tensor(
     condition_dir: str | Path,
     output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+    normalize_global_drift: bool = True,
+    loess_frac: float = 0.25,
 ) -> torch.Tensor:
     condition_dir = Path(condition_dir)
     timepoint_files = list_timepoint_files(condition_dir)
@@ -144,6 +203,8 @@ def load_image_condition_tensor(
         )
 
     tensor = torch.cat(tensors, dim=0)
-    if output_size is None:
-        return tensor
-    return downsample_tzyx(tensor, output_size=(None, output_size[1], output_size[2], output_size[3]))
+    if output_size is not None:
+        tensor = downsample_tzyx(tensor, output_size=(None, output_size[1], output_size[2], output_size[3]))
+    if normalize_global_drift:
+        tensor = normalize_global_intensity_drift(tensor, loess_frac=loess_frac)
+    return tensor

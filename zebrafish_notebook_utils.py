@@ -610,6 +610,8 @@ def load_image_condition_tensor(
     only_active: bool = True,
     selected_condition_index: int = 0,
     output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+    normalize_global_drift: bool = True,
+    loess_frac: float = 0.25,
 ) -> torch.Tensor:
     if condition_dir is None:
         if condition_df is None:
@@ -634,7 +636,12 @@ def load_image_condition_tensor(
             )
         condition_dir = condition_choices.iloc[selected_condition_index]["image_condition_dir"]
 
-    return _load_image_condition_tensor(condition_dir, output_size=output_size)
+    return _load_image_condition_tensor(
+        condition_dir,
+        output_size=output_size,
+        normalize_global_drift=normalize_global_drift,
+        loess_frac=loess_frac,
+    )
 
 
 def choose_sample_indices(n_total: int, n_samples: int = 10) -> list[int]:

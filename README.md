@@ -64,6 +64,7 @@ This module is intended to grow with future preprocessing. It currently handles:
 - stacking all files inside an `image_condition_dir` into one torch tensor
 - deterministic downsampling across `T`, `Z`, `Y`, and `X`
 - time downsampling before file reads
+- optional post-load intensity-drift normalization using a LOESS-style smoother on the per-timepoint global mean
 
 Downsampling uses explicit target sizes via `output_size=(T, Z, Y, X)`.
 
@@ -75,6 +76,14 @@ Examples:
   Load 3 timepoints: first, middle, and last.
 
 When a requested size is odd, the exact middle index is always included. When a requested size is `1`, the middle index is used.
+
+By default, `load_image_condition_tensor()` also applies a global intensity-drift correction:
+
+- it computes the global mean intensity for each loaded timepoint
+- fits a LOESS-style smooth trend across time
+- subtracts the smoothed drift while preserving the overall mean level
+
+This correction can be disabled with `normalize_global_drift=False`.
 
 Key public helpers include:
 
