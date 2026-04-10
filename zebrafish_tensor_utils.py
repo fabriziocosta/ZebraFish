@@ -656,8 +656,8 @@ def plot_tensor_embedding_2d(
         classifier = SVC(kernel="rbf", C=svm_c, gamma=svm_gamma)
         classifier.fit(X, y_index)
 
-        x_margin = 0.05 * max(float(X[:, 0].ptp()), 1e-6)
-        y_margin = 0.05 * max(float(X[:, 1].ptp()), 1e-6)
+        x_margin = 0.05 * max(float(np.ptp(X[:, 0])), 1e-6)
+        y_margin = 0.05 * max(float(np.ptp(X[:, 1])), 1e-6)
         x_min, x_max = float(X[:, 0].min() - x_margin), float(X[:, 0].max() + x_margin)
         y_min, y_max = float(X[:, 1].min() - y_margin), float(X[:, 1].max() + y_margin)
 
