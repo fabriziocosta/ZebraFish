@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import shutil
 
 import numpy as np
+import pandas as pd
 import torch
+import torch.nn.functional as F
 from tifffile import TiffFile, memmap as tiff_memmap
 
 
@@ -335,3 +338,187 @@ def load_image_condition_tensor(
     if use_cache:
         save_cached_tensor(cache_key, tensor)
     return tensor
+
+
+def rotate_tensor_xy(tensor: torch.Tensor, angle_degrees: float) -> torch.Tensor:
+    if tensor.ndim != 4:
+        raise ValueError(f"Expected tensor with shape T x Z x Y x X, got shape {tuple(tensor.shape)}")
+
+    work_tensor = tensor.to(torch.float32)
+    t, z, y, x = work_tensor.shape
+    batched = work_tensor.reshape(t * z, 1, y, x)
+
+    theta = math.radians(float(angle_degrees))
+    cos_theta = math.cos(theta)
+    sin_theta = math.sin(theta)
+    affine = torch.tensor(
+        [[cos_theta, -sin_theta, 0.0], [sin_theta, cos_theta, 0.0]],
+        dtype=batched.dtype,
+        device=batched.device,
+    ).unsqueeze(0).repeat(t * z, 1, 1)
+
+    grid = F.affine_grid(affine, batched.size(), align_corners=False)
+    rotated = F.grid_sample(
+        batched,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=False,
+    )
+    rotated = rotated.reshape(t, z, y, x)
+    return rotated.to(tensor.dtype) if torch.is_floating_point(tensor) else rotated
+
+
+def build_moa_labeled_tensor_dataset(
+    condition_df: pd.DataFrame,
+    selected_mechanisms: list[str],
+    selected_concentrations: list[str],
+    max_compounds_per_action: int,
+    max_tensors_per_compound: int,
+    output_size: tuple[int | None, int | None, int | None, int | None],
+    *,
+    only_active: bool = True,
+    num_random_rotations: int = 0,
+    rotation_range_degrees: float = 5.0,
+    normalize_global_drift: bool = True,
+    loess_frac: float = 0.25,
+    use_cache: bool = True,
+    use_tiff_cache: bool = True,
+    random_seed: int = 0,
+) -> dict[str, object]:
+    if not selected_mechanisms:
+        raise ValueError("selected_mechanisms must not be empty")
+    if not selected_concentrations:
+        raise ValueError("selected_concentrations must not be empty")
+    if max_compounds_per_action <= 0:
+        raise ValueError("max_compounds_per_action must be positive")
+    if max_tensors_per_compound <= 0:
+        raise ValueError("max_tensors_per_compound must be positive")
+    if num_random_rotations < 0:
+        raise ValueError("num_random_rotations must be non-negative")
+
+    rng = np.random.default_rng(random_seed)
+    working_df = condition_df.copy()
+    if only_active:
+        working_df = working_df[working_df["condition_folder_status"] == "active"].copy()
+
+    label_map = {0: "Water"}
+    for index, mechanism in enumerate(selected_mechanisms, start=1):
+        label_map[index] = mechanism
+
+    tensors: list[torch.Tensor] = []
+    labels: list[int] = []
+    rows: list[dict[str, object]] = []
+
+    def add_example(
+        *,
+        base_tensor: torch.Tensor,
+        label: int,
+        label_name: str,
+        row: pd.Series,
+        is_control: bool,
+    ) -> None:
+        tensors.append(base_tensor)
+        labels.append(label)
+        rows.append(
+            {
+                "label": label,
+                "label_name": label_name,
+                "mechanism_of_action": row["mechanism_of_action"],
+                "compound": row["compound"],
+                "concentration_band": row["concentration_band"],
+                "concentration_label": row["concentration_label"],
+                "image_condition_dir": row["image_condition_dir"],
+                "augmentation_index": 0,
+                "rotation_degrees": 0.0,
+                "is_control": is_control,
+            }
+        )
+
+        for augmentation_index in range(1, num_random_rotations + 1):
+            angle = float(rng.uniform(-rotation_range_degrees, rotation_range_degrees))
+            tensors.append(rotate_tensor_xy(base_tensor, angle))
+            labels.append(label)
+            rows.append(
+                {
+                    "label": label,
+                    "label_name": label_name,
+                    "mechanism_of_action": row["mechanism_of_action"],
+                    "compound": row["compound"],
+                    "concentration_band": row["concentration_band"],
+                    "concentration_label": row["concentration_label"],
+                    "image_condition_dir": row["image_condition_dir"],
+                    "augmentation_index": augmentation_index,
+                    "rotation_degrees": angle,
+                    "is_control": is_control,
+                }
+            )
+
+    for mechanism_index, mechanism in enumerate(selected_mechanisms, start=1):
+        mechanism_df = working_df[
+            (working_df["mechanism_of_action"] == mechanism)
+            & (working_df["condition_kind"] == "treatment")
+            & (working_df["concentration_band"].isin(selected_concentrations))
+        ].copy()
+
+        compounds = mechanism_df["compound"].drop_duplicates().tolist()[:max_compounds_per_action]
+        for compound in compounds:
+            treatment_rows = (
+                mechanism_df[mechanism_df["compound"] == compound]
+                .drop_duplicates(subset=["image_condition_dir"])
+                .sort_values(["concentration_band", "image_condition_dir"])
+                .head(max_tensors_per_compound)
+            )
+            control_rows = (
+                working_df[
+                    (working_df["compound"] == compound)
+                    & (working_df["condition_kind"] == "control")
+                ]
+                .drop_duplicates(subset=["image_condition_dir"])
+                .sort_values("image_condition_dir")
+                .head(max_tensors_per_compound)
+            )
+
+            for _, row in treatment_rows.iterrows():
+                tensor = load_image_condition_tensor(
+                    condition_dir=row["image_condition_dir"],
+                    output_size=output_size,
+                    normalize_global_drift=normalize_global_drift,
+                    loess_frac=loess_frac,
+                    use_cache=use_cache,
+                    use_tiff_cache=use_tiff_cache,
+                )
+                add_example(
+                    base_tensor=tensor,
+                    label=mechanism_index,
+                    label_name=mechanism,
+                    row=row,
+                    is_control=False,
+                )
+
+            for _, row in control_rows.iterrows():
+                tensor = load_image_condition_tensor(
+                    condition_dir=row["image_condition_dir"],
+                    output_size=output_size,
+                    normalize_global_drift=normalize_global_drift,
+                    loess_frac=loess_frac,
+                    use_cache=use_cache,
+                    use_tiff_cache=use_tiff_cache,
+                )
+                add_example(
+                    base_tensor=tensor,
+                    label=0,
+                    label_name="Water",
+                    row=row,
+                    is_control=True,
+                )
+
+    if not tensors:
+        raise ValueError("No dataset examples were created with the provided filters")
+
+    return {
+        "tensors": torch.stack(tensors, dim=0),
+        "labels": torch.tensor(labels, dtype=torch.long),
+        "metadata": pd.DataFrame(rows),
+        "label_map": label_map,
+    }

@@ -8,7 +8,7 @@ The workflow is built around:
 - a mounted imaging directory tree under `/mnt/tyler`
 - shared utility code in [`zebrafish_notebook_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_notebook_utils.py)
 - dedicated tensor loading code in [`zebrafish_tensor_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_tensor_utils.py)
-- four notebooks for exploration and export
+- five notebooks for exploration and export
 
 ## Inputs
 
@@ -68,6 +68,8 @@ This module is intended to grow with future preprocessing. It currently handles:
 - optional post-load intensity-drift normalization using a LOESS-style smoother on the per-timepoint global mean
 - repo-local tensor caching in `.tensor_cache/`
 - repo-local TIFF mirroring for selected timepoints in `.tiff_cache/`
+- tensor-level XY rotation augmentation
+- labeled dataset assembly for downstream ML workflows
 
 Downsampling uses explicit target sizes via `output_size=(T, Z, Y, X)`.
 
@@ -124,6 +126,8 @@ Tensor-loading helpers include:
 - `load_tiff_as_tzyx()`
 - `downsample_tzyx()`
 - `load_image_condition_tensor()`
+- `rotate_tensor_xy()`
+- `build_moa_labeled_tensor_dataset()`
 
 ## Generated CSV Files
 
@@ -272,6 +276,35 @@ The tensor shape is:
 
 The plotting step shows every loaded timepoint, uses the middle z plane of the loaded tensor, and lays the panels out using `n_columns`.
 
+### 5. Dataset Preparation for ML
+
+- [`5_dataset_preparation_ml.ipynb`](/home/fabrizio/code/ZebraFish/5_dataset_preparation_ml.ipynb)
+
+Purpose:
+
+- build a labeled tensor dataset for downstream ML applications
+- select a list of mechanisms of action to include as classes
+- use water controls as class `0`
+- cap the number of compounds per mechanism and the number of tensors per compound
+- optionally augment examples with random XY rotations
+
+Current flow:
+
+1. build the condition map
+2. set:
+   `selected_mechanisms`, `selected_concentrations`, `max_compounds_per_action`, `max_tensors_per_compound`
+3. set tensor-loading and augmentation options:
+   `output_size`, `num_random_rotations`, `rotation_range_degrees`
+4. build the dataset with `build_moa_labeled_tensor_dataset(...)`
+5. inspect tensor shapes, label tensor, label map, and metadata table
+
+Dataset conventions:
+
+- label `0` is always `Water`
+- each selected mechanism of action is assigned a distinct positive integer label
+- `selected_concentrations` controls which treatment concentration bands are included
+- cached tensor loading and cached selected-TIFF mirroring are used through the same loader path as notebook 4
+
 ## Typical Workflow
 
 1. Mount the image share using the command in [`mount_command.txt`](/home/fabrizio/code/ZebraFish/mount_command.txt).
@@ -279,6 +312,7 @@ The plotting step shows every loaded timepoint, uses the middle z plane of the l
 3. Use notebook 2 to build or inspect run-folder mappings.
 4. Use notebook 3 to inspect condition-folder and concentration mappings.
 5. Use notebook 4 to load a condition directory into a tensor and visualize sampled timepoints.
+6. Use notebook 5 to prepare labeled tensor datasets for ML experiments.
 
 ## Notes
 
