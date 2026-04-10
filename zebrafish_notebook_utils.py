@@ -8,7 +8,9 @@ from typing import Iterable
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from tifffile import TiffFile
+import torch
+
+from zebrafish_tensor_utils import load_image_condition_tensor as _load_image_condition_tensor
 
 
 DEFAULT_WORKBOOK = "compounds (MJW V2).xlsx"
@@ -598,24 +600,49 @@ def choose_sample_files(files: list[Path], n: int = 10) -> list[Path]:
     return [files[i] for i in indices]
 
 
-def load_mid_z_slice(path: str | Path) -> np.ndarray:
-    path = Path(path)
-    with TiffFile(path) as tif:
-        series = tif.series[0]
-        arr = series.asarray()
-        axes = getattr(series, "axes", "")
-    arr = np.asarray(arr).squeeze()
-    if arr.ndim == 2:
-        return arr
-    if axes and "Z" in axes:
-        z_axis = axes.index("Z")
-        while z_axis >= arr.ndim:
-            z_axis -= 1
-        mid_z = arr.shape[z_axis] // 2
-        return np.take(arr, mid_z, axis=z_axis).squeeze()
-    if arr.ndim >= 3:
-        return arr[arr.shape[0] // 2].squeeze()
-    return arr
+def load_image_condition_tensor(
+    condition_dir: str | Path | None = None,
+    *,
+    condition_df: pd.DataFrame | None = None,
+    selected_compound: str | None = None,
+    selector_column: str | None = None,
+    selected_concentration: str | None = None,
+    only_active: bool = True,
+    selected_condition_index: int = 0,
+    output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+) -> torch.Tensor:
+    if condition_dir is None:
+        if condition_df is None:
+            raise ValueError("condition_df is required when condition_dir is not provided")
+        if selected_compound is None or selector_column is None or selected_concentration is None:
+            raise ValueError(
+                "selected_compound, selector_column, and selected_concentration are required "
+                "when condition_dir is not provided"
+            )
+
+        condition_choices = select_condition_choices(
+            condition_df,
+            selected_compound=selected_compound,
+            selector_column=selector_column,
+            selected_concentration=selected_concentration,
+            only_active=only_active,
+        )
+        if condition_choices.empty:
+            raise ValueError(
+                f"No matching condition folders for compound={selected_compound!r}, "
+                f"{selector_column}={selected_concentration!r}, only_active={only_active}."
+            )
+        condition_dir = condition_choices.iloc[selected_condition_index]["image_condition_dir"]
+
+    return _load_image_condition_tensor(condition_dir, output_size=output_size)
+
+
+def choose_sample_indices(n_total: int, n_samples: int = 10) -> list[int]:
+    if n_total <= 0:
+        return []
+    if n_total <= n_samples:
+        return list(range(n_total))
+    return np.linspace(0, n_total - 1, n_samples, dtype=int).tolist()
 
 
 def select_condition_choices(
@@ -647,27 +674,30 @@ def select_condition_choices(
     )
 
 
-def plot_midz_time_samples(
-    condition_dir: str | Path,
-    sample_count: int = 10,
+def plot_midz_time_slices_from_tensor(
+    tensor: torch.Tensor,
+    n_columns: int = 5,
     title: str | None = None,
 ):
-    condition_dir = Path(condition_dir)
-    timepoint_files = list_timepoint_files(condition_dir)
-    sample_files = choose_sample_files(timepoint_files, n=sample_count)
+    if n_columns <= 0:
+        raise ValueError(f"n_columns must be positive, got {n_columns}")
 
-    fig, axes = plt.subplots(2, 5, figsize=(16, 7))
-    axes = axes.ravel()
+    n_timepoints = int(tensor.shape[0])
+    z_index = int(tensor.shape[1] // 2)
+    n_rows = int(np.ceil(n_timepoints / n_columns))
 
-    for ax, file_path in zip(axes, sample_files):
-        image = load_mid_z_slice(file_path)
+    fig, axes = plt.subplots(n_rows, n_columns, figsize=(3 * n_columns, 3 * n_rows))
+    axes = np.atleast_1d(axes).ravel()
+
+    for ax, time_index in zip(axes, range(n_timepoints)):
+        image = tensor[time_index, z_index].detach().cpu().numpy()
         ax.imshow(image, cmap="gray")
-        ax.set_title(file_path.name.replace("_Angle0.ome.tiff", ""), fontsize=9)
+        ax.set_title(f"T={time_index}, Z={z_index}", fontsize=9)
         ax.axis("off")
 
-    for ax in axes[len(sample_files) :]:
+    for ax in axes[n_timepoints:]:
         ax.axis("off")
 
-    fig.suptitle(title or condition_dir.name, fontsize=14)
+    fig.suptitle(title or "Mid-Z Time Slices", fontsize=14)
     fig.tight_layout()
     return fig, axes
