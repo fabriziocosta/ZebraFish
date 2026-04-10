@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 
 import numpy as np
 import torch
@@ -12,6 +13,7 @@ from tifffile import TiffFile, memmap as tiff_memmap
 
 CACHE_VERSION = 1
 TENSOR_CACHE_DIR = Path(__file__).resolve().parent / ".tensor_cache"
+TIFF_CACHE_DIR = Path(__file__).resolve().parent / ".tiff_cache"
 
 
 def _squeeze_array_and_axes(arr: np.ndarray, axes: str) -> tuple[np.ndarray, str]:
@@ -87,6 +89,34 @@ def list_timepoint_files(condition_dir: str | Path) -> list[Path]:
     if direct_files:
         return direct_files
     return sorted(condition_dir.rglob("*.tif*"), key=timepoint_sort_key)
+
+
+def build_tiff_cache_path(path: str | Path) -> Path:
+    source_path = Path(path).resolve()
+    relative_parts = source_path.parts[1:] if source_path.is_absolute() else source_path.parts
+    return TIFF_CACHE_DIR.joinpath(*relative_parts)
+
+
+def ensure_cached_tiff(path: str | Path) -> Path:
+    source_path = Path(path).resolve()
+    cache_path = build_tiff_cache_path(source_path)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if cache_path.exists():
+        source_stat = source_path.stat()
+        cache_stat = cache_path.stat()
+        if (
+            cache_stat.st_size == source_stat.st_size
+            and cache_stat.st_mtime_ns >= source_stat.st_mtime_ns
+        ):
+            return cache_path
+
+    shutil.copy2(source_path, cache_path)
+    return cache_path
+
+
+def ensure_cached_tiffs(paths: list[Path]) -> list[Path]:
+    return [ensure_cached_tiff(path) for path in paths]
 
 
 def build_tensor_cache_key(
@@ -243,6 +273,7 @@ def load_image_condition_tensor(
     normalize_global_drift: bool = True,
     loess_frac: float = 0.25,
     use_cache: bool = True,
+    use_tiff_cache: bool = True,
 ) -> torch.Tensor:
     condition_dir = Path(condition_dir)
     timepoint_files = list_timepoint_files(condition_dir)
@@ -267,9 +298,11 @@ def load_image_condition_tensor(
         if cached_tensor is not None:
             return cached_tensor
 
-    tensors = [load_tiff_as_tzyx(path, output_size=output_size) for path in timepoint_files]
+    load_paths = ensure_cached_tiffs(timepoint_files) if use_tiff_cache else timepoint_files
+
+    tensors = [load_tiff_as_tzyx(path, output_size=output_size) for path in load_paths]
     reference_shape = tensors[0].shape[1:]
-    mismatched = [str(path) for path, tensor in zip(timepoint_files, tensors) if tensor.shape[1:] != reference_shape]
+    mismatched = [str(path) for path, tensor in zip(load_paths, tensors) if tensor.shape[1:] != reference_shape]
     if mismatched:
         raise ValueError(
             f"Inconsistent Z/Y/X shapes in {condition_dir}; expected {reference_shape}, mismatched files: {mismatched}"

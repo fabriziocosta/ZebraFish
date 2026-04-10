@@ -67,6 +67,7 @@ This module is intended to grow with future preprocessing. It currently handles:
 - z downsampling during per-file load when possible
 - optional post-load intensity-drift normalization using a LOESS-style smoother on the per-timepoint global mean
 - repo-local tensor caching in `.tensor_cache/`
+- repo-local TIFF mirroring for selected timepoints in `.tiff_cache/`
 
 Downsampling uses explicit target sizes via `output_size=(T, Z, Y, X)`.
 
@@ -94,6 +95,17 @@ Loaded tensors are cached in:
 The cache key includes the selected files, file mtimes and sizes, `output_size`, and normalization settings. The cache directory is ignored by git.
 
 Caching is enabled by default and can be disabled with `use_cache=False`.
+
+Selected TIFF files can also be mirrored locally in:
+
+- [`.tiff_cache/`](/home/fabrizio/code/ZebraFish/.tiff_cache)
+
+Only the timepoint files selected after time downsampling are copied. The mirrored cache preserves the source path structure under the cache root, for example:
+
+- source: `/mnt/tyler/Matt Winter/BRAIN IMAGES BACKUP/.../TL001.ome.tiff`
+- cached: `.tiff_cache/mnt/tyler/Matt Winter/BRAIN IMAGES BACKUP/.../TL001.ome.tiff`
+
+This cache is enabled by default and can be disabled with `use_tiff_cache=False`.
 
 Key public helpers include:
 

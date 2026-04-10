@@ -613,6 +613,7 @@ def load_image_condition_tensor(
     normalize_global_drift: bool = True,
     loess_frac: float = 0.25,
     use_cache: bool = True,
+    use_tiff_cache: bool = True,
 ) -> torch.Tensor:
     if condition_dir is None:
         if condition_df is None:
@@ -643,6 +644,7 @@ def load_image_condition_tensor(
         normalize_global_drift=normalize_global_drift,
         loess_frac=loess_frac,
         use_cache=use_cache,
+        use_tiff_cache=use_tiff_cache,
     )
 
 

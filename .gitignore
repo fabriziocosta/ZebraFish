@@ -1,5 +1,6 @@
 images/
 .tensor_cache/
+.tiff_cache/
 __pycache__/
 *.pyc
 .venv/
