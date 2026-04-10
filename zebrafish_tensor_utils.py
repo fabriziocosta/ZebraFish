@@ -7,11 +7,13 @@ from pathlib import Path
 import re
 import shutil
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 from tifffile import TiffFile, memmap as tiff_memmap
+from sklearn.decomposition import PCA
 
 
 CACHE_VERSION = 2
@@ -522,3 +524,97 @@ def build_moa_labeled_tensor_dataset(
         "metadata": pd.DataFrame(rows),
         "label_map": label_map,
     }
+
+
+def build_tensor_embedding_2d(
+    tensors: torch.Tensor,
+    labels: torch.Tensor | np.ndarray | list[int],
+    *,
+    label_map: dict[int, str] | None = None,
+    metadata: pd.DataFrame | None = None,
+    method: str = "pca",
+    random_state: int = 0,
+    umap_n_neighbors: int = 15,
+    umap_min_dist: float = 0.1,
+) -> pd.DataFrame:
+    if tensors.ndim < 2:
+        raise ValueError(f"Expected tensors with leading sample dimension, got shape {tuple(tensors.shape)}")
+
+    features = tensors.detach().cpu().reshape(tensors.shape[0], -1).numpy()
+    labels_np = np.asarray(labels, dtype=int)
+    if labels_np.shape[0] != features.shape[0]:
+        raise ValueError("labels length must match number of tensors")
+
+    method_lower = method.lower()
+    if method_lower == "pca":
+        reducer = PCA(n_components=2, random_state=random_state)
+        embedding = reducer.fit_transform(features)
+    elif method_lower == "umap":
+        try:
+            import umap
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                "UMAP requires the 'umap-learn' package in the active environment"
+            ) from exc
+        reducer = umap.UMAP(
+            n_components=2,
+            n_neighbors=umap_n_neighbors,
+            min_dist=umap_min_dist,
+            random_state=random_state,
+        )
+        embedding = reducer.fit_transform(features)
+    else:
+        raise ValueError(f"Unsupported embedding method {method!r}; use 'pca' or 'umap'")
+
+    embedding_df = pd.DataFrame(
+        {
+            "embed_x": embedding[:, 0],
+            "embed_y": embedding[:, 1],
+            "label": labels_np,
+            "label_name": [label_map.get(int(label), str(int(label))) for label in labels_np]
+            if label_map is not None
+            else labels_np.astype(str),
+        }
+    )
+    embedding_df["method"] = method_lower
+
+    if metadata is not None:
+        metadata_reset = metadata.reset_index(drop=True).copy()
+        if len(metadata_reset) != len(embedding_df):
+            raise ValueError("metadata length must match number of tensors")
+        embedding_df = pd.concat([embedding_df, metadata_reset], axis=1)
+
+    return embedding_df
+
+
+def plot_tensor_embedding_2d(
+    embedding_df: pd.DataFrame,
+    *,
+    title: str | None = None,
+    ax=None,
+):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    else:
+        fig = ax.figure
+
+    unique_labels = embedding_df[["label", "label_name"]].drop_duplicates().sort_values("label")
+    cmap = plt.get_cmap("tab10", len(unique_labels))
+
+    for color_index, row in enumerate(unique_labels.itertuples(index=False)):
+        class_df = embedding_df[embedding_df["label"] == row.label]
+        ax.scatter(
+            class_df["embed_x"],
+            class_df["embed_y"],
+            s=28,
+            alpha=0.8,
+            color=cmap(color_index),
+            label=f"{row.label}: {row.label_name}",
+        )
+
+    ax.set_xlabel("Component 1")
+    ax.set_ylabel("Component 2")
+    ax.set_title(title or f"{embedding_df['method'].iloc[0].upper()} tensor embedding")
+    ax.legend(title="Class", bbox_to_anchor=(1.02, 1), loc="upper left")
+    fig.tight_layout()
+    return fig, ax

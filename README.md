@@ -128,6 +128,8 @@ Tensor-loading helpers include:
 - `load_image_condition_tensor()`
 - `rotate_tensor_xy()`
 - `build_moa_labeled_tensor_dataset()`
+- `build_tensor_embedding_2d()`
+- `plot_tensor_embedding_2d()`
 
 ## Generated CSV Files
 
@@ -297,6 +299,8 @@ Current flow:
    `output_size`, `num_random_rotations`, `rotation_range_degrees`
 4. build the dataset with `build_moa_labeled_tensor_dataset(...)`
 5. inspect tensor shapes, label tensor, label map, and metadata table
+6. optionally reduce the tensors to 2D with `build_tensor_embedding_2d(...)`
+7. visualize the class structure with `plot_tensor_embedding_2d(...)`
 
 Dataset conventions:
 
@@ -304,6 +308,8 @@ Dataset conventions:
 - each selected mechanism of action is assigned a distinct positive integer label
 - `selected_concentrations` controls which treatment concentration bands are included
 - cached tensor loading and cached selected-TIFF mirroring are used through the same loader path as notebook 4
+- PCA is available by default through scikit-learn
+- UMAP is also supported, but requires the optional `umap-learn` package in the active environment
 
 ## Typical Workflow
 
