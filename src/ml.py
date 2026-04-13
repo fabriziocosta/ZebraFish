@@ -405,6 +405,11 @@ class TimeChannel3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixi
         epochs: int = 20,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
+        early_stopping_patience: int | None = None,
+        early_stopping_min_delta: float = 0.0,
+        scheduler_patience: int | None = None,
+        scheduler_factor: float = 0.5,
+        scheduler_min_lr: float = 1e-6,
         validation_split: float = 0.2,
         random_state: int = 0,
         standardize: bool = True,
@@ -426,6 +431,11 @@ class TimeChannel3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixi
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.early_stopping_patience = early_stopping_patience
+        self.early_stopping_min_delta = early_stopping_min_delta
+        self.scheduler_patience = scheduler_patience
+        self.scheduler_factor = scheduler_factor
+        self.scheduler_min_lr = scheduler_min_lr
         self.validation_split = validation_split
         self.random_state = random_state
         self.standardize = standardize
@@ -577,10 +587,23 @@ class TimeChannel3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixi
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
         )
+        scheduler = (
+            torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                factor=self.scheduler_factor,
+                patience=self.scheduler_patience,
+                min_lr=self.scheduler_min_lr,
+            )
+            if self.scheduler_patience is not None and self.scheduler_patience >= 0
+            else None
+        )
 
         history_rows: list[dict[str, float | int]] = []
         best_state = deepcopy(self.model_.state_dict())
         best_metric = float("inf")
+        best_epoch = 0
+        epochs_without_improvement = 0
         training_start = time.perf_counter()
 
         for epoch in range(1, self.epochs + 1):
@@ -624,26 +647,48 @@ class TimeChannel3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixi
             else:
                 metric = float(row["train_loss"])
 
-            if metric <= best_metric:
+            improved = metric < (best_metric - float(self.early_stopping_min_delta))
+            if improved:
                 best_metric = metric
+                best_epoch = epoch
+                epochs_without_improvement = 0
                 best_state = deepcopy(self.model_.state_dict())
+            else:
+                epochs_without_improvement += 1
+
+            if scheduler is not None:
+                scheduler.step(metric)
 
             history_rows.append(row)
             if self.verbose:
                 elapsed = time.perf_counter() - training_start
                 avg_epoch_seconds = elapsed / epoch
                 eta = _format_eta(avg_epoch_seconds * (self.epochs - epoch))
+                current_lr = optimizer.param_groups[0]["lr"]
                 if "val_loss" in row:
                     print(
                         f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} "
-                        f"val_loss={row['val_loss']:.4f} eta={eta}"
+                        f"val_loss={row['val_loss']:.4f} lr={current_lr:.2e} eta={eta}"
                     )
                 else:
-                    print(f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} eta={eta}")
+                    print(
+                        f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} "
+                        f"lr={current_lr:.2e} eta={eta}"
+                    )
+
+            if self.early_stopping_patience is not None and epochs_without_improvement >= self.early_stopping_patience:
+                if self.verbose:
+                    print(
+                        f"early_stop epoch={epoch:03d} best_epoch={best_epoch:03d} "
+                        f"best_metric={best_metric:.4f}"
+                    )
+                break
 
         self.model_.load_state_dict(best_state)
         self.model_.eval()
         self.history_ = pd.DataFrame(history_rows)
+        self.best_epoch_ = int(best_epoch) if best_epoch else int(len(history_rows))
+        self.best_metric_ = float(best_metric)
         return self
 
     def _forward_batches(self, X: torch.Tensor | np.ndarray, *, features: bool) -> np.ndarray:
@@ -720,6 +765,11 @@ class CommutativeCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
         epochs: int = 20,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
+        early_stopping_patience: int | None = None,
+        early_stopping_min_delta: float = 0.0,
+        scheduler_patience: int | None = None,
+        scheduler_factor: float = 0.5,
+        scheduler_min_lr: float = 1e-6,
         validation_split: float = 0.2,
         random_state: int = 0,
         standardize: bool = True,
@@ -760,6 +810,11 @@ class CommutativeCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.early_stopping_patience = early_stopping_patience
+        self.early_stopping_min_delta = early_stopping_min_delta
+        self.scheduler_patience = scheduler_patience
+        self.scheduler_factor = scheduler_factor
+        self.scheduler_min_lr = scheduler_min_lr
         self.validation_split = validation_split
         self.random_state = random_state
         self.standardize = standardize
@@ -960,10 +1015,23 @@ class CommutativeCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
         )
+        scheduler = (
+            torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                factor=self.scheduler_factor,
+                patience=self.scheduler_patience,
+                min_lr=self.scheduler_min_lr,
+            )
+            if self.scheduler_patience is not None and self.scheduler_patience >= 0
+            else None
+        )
 
         history_rows: list[dict[str, float | int]] = []
         best_state = deepcopy(self.model_.state_dict())
         best_metric = float("inf")
+        best_epoch = 0
+        epochs_without_improvement = 0
         training_start = time.perf_counter()
 
         for epoch in range(1, self.epochs + 1):
@@ -1026,26 +1094,48 @@ class CommutativeCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
             else:
                 metric = float(row["train_loss"])
 
-            if metric <= best_metric:
+            improved = metric < (best_metric - float(self.early_stopping_min_delta))
+            if improved:
                 best_metric = metric
+                best_epoch = epoch
+                epochs_without_improvement = 0
                 best_state = deepcopy(self.model_.state_dict())
+            else:
+                epochs_without_improvement += 1
+
+            if scheduler is not None:
+                scheduler.step(metric)
 
             history_rows.append(row)
             if self.verbose:
                 elapsed = time.perf_counter() - training_start
                 avg_epoch_seconds = elapsed / epoch
                 eta = _format_eta(avg_epoch_seconds * (self.epochs - epoch))
+                current_lr = optimizer.param_groups[0]["lr"]
                 if "val_loss" in row:
                     print(
                         f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} "
-                        f"val_loss={row['val_loss']:.4f} eta={eta}"
+                        f"val_loss={row['val_loss']:.4f} lr={current_lr:.2e} eta={eta}"
                     )
                 else:
-                    print(f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} eta={eta}")
+                    print(
+                        f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} "
+                        f"lr={current_lr:.2e} eta={eta}"
+                    )
+
+            if self.early_stopping_patience is not None and epochs_without_improvement >= self.early_stopping_patience:
+                if self.verbose:
+                    print(
+                        f"early_stop epoch={epoch:03d} best_epoch={best_epoch:03d} "
+                        f"best_metric={best_metric:.4f}"
+                    )
+                break
 
         self.model_.load_state_dict(best_state)
         self.model_.eval()
         self.history_ = pd.DataFrame(history_rows)
+        self.best_epoch_ = int(best_epoch) if best_epoch else int(len(history_rows))
+        self.best_metric_ = float(best_metric)
         return self
 
     def _forward_batches(self, X: torch.Tensor | np.ndarray, *, output_key: str) -> np.ndarray:
