@@ -1,13 +1,11 @@
-from src.ml import (
-    CommutativeCNNClassifier,
+from src.models.configs import (
     CommutativeCNNConfig,
-    CommutativeTransformerClassifier,
     CommutativeTransformerConfig,
     LossWeightConfig,
     OptimizationConfig,
-    TimeChannel3DCNNClassifier,
     TimeChannel3DCNNConfig,
 )
+from src.models.estimators import CommutativeCNNClassifier, CommutativeTransformerClassifier, TimeChannel3DCNNClassifier
 
 __all__ = [
     "CommutativeCNNConfig",

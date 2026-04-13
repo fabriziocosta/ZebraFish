@@ -116,6 +116,58 @@ Tensor-loading helpers include:
 - [`src/ml.py`](src/ml.py)
   Simple model-training utilities for tensor classification experiments.
 
+`src/ml.py` is now a compatibility façade. The implementation is split internally into:
+
+- [`src/models/common.py`](src/models/common.py)
+  shared tensor/label validation helpers, multitask target preparation, and the shared estimator mixin
+- [`src/models/configs.py`](src/models/configs.py)
+  typed configuration dataclasses for model architecture, optimization, and loss weights
+- [`src/models/backbones_cnn.py`](src/models/backbones_cnn.py)
+  baseline 3D CNN backbone and pure-CNN commutative backbone modules
+- [`src/models/backbones_transformer.py`](src/models/backbones_transformer.py)
+  transformer patch/embed/encoder blocks and the commutative transformer backbone
+- [`src/models/estimators.py`](src/models/estimators.py)
+  the public scikit-style estimator classes only
+- [`src/training/data.py`](src/training/data.py)
+  train/validation/holdout split and training-only augmentation helpers
+- [`src/training/losses.py`](src/training/losses.py)
+  shared commutative-consistency and auxiliary multitask loss helpers
+- [`src/training/loop.py`](src/training/loop.py)
+  shared optimization loop, checkpoint selection, inference batching, and score helpers
+- [`src/training/reporting.py`](src/training/reporting.py)
+  loss plotting, confusion matrices, and classification-report utilities
+- [`src/training/workflow.py`](src/training/workflow.py)
+  notebook-thinning helpers for experiment preparation, multitask evaluation, and artifact persistence
+
+The three public estimators now share one internal estimator scaffold for:
+
+- target preparation and encoding
+- optimizer / scheduler setup
+- early stopping
+- epoch logging and history collection
+- prediction, probability output, and embedding extraction
+
+The model-specific code is therefore constrained to:
+
+- backbone construction
+- architecture-specific forward outputs
+- architecture-specific loss terms
+- branch-specific diagnostics such as `transform_branches(...)`
+
+Typed configuration helpers are available through:
+
+- `TimeChannel3DCNNConfig`
+- `CommutativeCNNConfig`
+- `CommutativeTransformerConfig`
+- `OptimizationConfig`
+- `LossWeightConfig`
+
+Shared experiment helpers are available through:
+
+- `prepare_multitask_experiment_data()`
+- `evaluate_multitask_estimator()`
+- `persist_experiment_artifacts()`
+
 Current contents:
 
 - `TimeChannel3DCNNClassifier`
@@ -140,6 +192,24 @@ Estimator API note:
 - `predict(...)` and `predict_proba(...)` for the current classifiers return dictionaries keyed by target:
   `action`, `compound`, and `concentration`
 - `transform(...)` still returns the shared embedding used for downstream visualization and analysis
+
+Experiment persistence note:
+
+- `persist_experiment_artifacts()` writes a config snapshot, training history CSV, per-target report CSVs, a summary metrics CSV, and a PyTorch checkpoint for the fitted model
+
+## Testing
+
+The repository now includes a small `unittest` smoke suite under [`tests/`](tests) covering:
+
+- estimator API and config-object construction
+- leakage-safe split behavior
+- shared experiment preparation, evaluation, and persistence helpers
+
+Run it with:
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 Important leakage rule:
 

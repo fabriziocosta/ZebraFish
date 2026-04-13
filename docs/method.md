@@ -5,9 +5,10 @@ This document describes the method itself. Repository structure, notebook flow, 
 Status:
 
 - this document specifies the proposed commutative dual-pathway method
-- the currently implemented repository baseline is the simpler 3D CNN classifier described in [README.md](../README.md)
-- an experimental pure-CNN dual-pathway implementation is now available in `CommutativeCNNClassifier` and notebook 7, but it should still be treated as an early method implementation rather than the established repository baseline
-- an experimental transformer dual-pathway implementation is now available in `CommutativeTransformerClassifier` and notebook 8, with the same status
+- the currently established repository baseline is the simpler 3D CNN classifier described in [README.md](../README.md)
+- `CommutativeCNNClassifier` and notebook 7 implement the first experimental pure-CNN realization of the method
+- `CommutativeTransformerClassifier` and notebook 8 implement a heavier experimental transformer realization of the method
+- the commutative models are implemented end to end, but they should still be treated as experimental research models rather than stable production baselines
 - the current implementations can supervise the shared embedding against mechanism, compound, and concentration targets simultaneously
 
 The raw imaging signal is a 4D tensor
@@ -99,28 +100,28 @@ q_i^{ST} = \operatorname{softmax}(p_i^{ST}/\tau), \qquad
 q_i^{TS} = \operatorname{softmax}(p_i^{TS}/\tau).
 $$
 
-The commutative training signal is the swapped-assignment consistency loss
+The commutative consistency loss is defined as a swapped-assignment consistency term
 
 $$
 \mathcal L_{\text{swap}} = H(q_i^{ST}, \operatorname{softmax}(p_i^{TS}/\tau)) + H(q_i^{TS}, \operatorname{softmax}(p_i^{ST}/\tau)).
 $$
 
-This enforces semantic agreement in prototype space rather than exact equality of latent vectors. Equivalently, if $\pi$ denotes the prototype-assignment map, then the method encourages
+This commutative consistency loss enforces semantic agreement in prototype space rather than exact equality of latent vectors. Equivalently, if $\pi$ denotes the prototype-assignment map, then the method encourages
 
 $$
 \pi(ST(X)) \approx \pi(TS(X)).
 $$
 
-An optional feature-level alignment term may be added:
+An optional feature-alignment term may be added:
 
 $$
 \mathcal L_{\text{feat}} = \lVert z_i^{ST} - z_i^{TS} \rVert_2^2.
 $$
 
-The total loss is then
+The full commutative consistency loss is then
 
 $$
-\mathcal L = \mathcal L_{\text{swap}} + \lambda \mathcal L_{\text{feat}}.
+\mathcal L_{\text{comm}} = \mathcal L_{\text{swap}} + \lambda \mathcal L_{\text{feat}}.
 $$
 
 ### 2.3 Interpretation

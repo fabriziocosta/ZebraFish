@@ -1,0 +1,172 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+import json
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import torch
+
+from src.training.data import augment_training_tensors_with_rotations, split_labeled_tensor_dataset_by_instance
+from src.training.reporting import build_multitask_classification_reports
+
+
+@dataclass
+class MultitaskExperimentData:
+    splits: Any
+    X_train: torch.Tensor
+    y_train: pd.Series
+    compound_train: pd.Series | None
+    concentration_train: pd.Series | None
+    train_metadata: pd.DataFrame | None
+    y_true_holdout: dict[str, Any]
+    label_maps: dict[str, dict[int, str]]
+    class_labels: dict[str, list[int]]
+
+
+@dataclass
+class ExperimentArtifacts:
+    output_dir: str
+    config_path: str
+    history_path: str
+    summary_metrics_path: str
+    per_class_dir: str
+    checkpoint_path: str
+
+
+def prepare_multitask_experiment_data(
+    dataset: dict[str, object],
+    *,
+    holdout_fraction: float,
+    validation_fraction_within_train: float,
+    train_num_random_rotations: int = 0,
+    rotation_range_degrees: float = 5.0,
+    random_state: int = 0,
+) -> MultitaskExperimentData:
+    splits = split_labeled_tensor_dataset_by_instance(
+        dataset,
+        holdout_fraction=holdout_fraction,
+        validation_fraction_within_train=validation_fraction_within_train,
+        random_state=random_state,
+    )
+    X_train, y_train, train_metadata = augment_training_tensors_with_rotations(
+        splits.X_train_base,
+        splits.y_train_base,
+        metadata=splits.metadata_train_base,
+        num_random_rotations=train_num_random_rotations,
+        rotation_range_degrees=rotation_range_degrees,
+        random_state=random_state,
+    )
+    compound_train = None
+    concentration_train = None
+    if splits.compound_train_base is not None:
+        _, compound_train, _ = augment_training_tensors_with_rotations(
+            splits.X_train_base,
+            splits.compound_train_base,
+            metadata=None,
+            num_random_rotations=train_num_random_rotations,
+            rotation_range_degrees=rotation_range_degrees,
+            random_state=random_state,
+        )
+    if splits.concentration_train_base is not None:
+        _, concentration_train, _ = augment_training_tensors_with_rotations(
+            splits.X_train_base,
+            splits.concentration_train_base,
+            metadata=None,
+            num_random_rotations=train_num_random_rotations,
+            rotation_range_degrees=rotation_range_degrees,
+            random_state=random_state,
+        )
+
+    label_maps = {
+        "action": {int(k): str(v) for k, v in dataset["label_map"].items()},
+        "compound": {int(k): str(v) for k, v in dataset.get("compound_label_map", {}).items()},
+        "concentration": {int(k): str(v) for k, v in dataset.get("concentration_label_map", {}).items()},
+    }
+    class_labels = {
+        "action": sorted(int(k) for k in dataset["label_map"].keys()),
+        "compound": sorted(int(k) for k in dataset.get("compound_label_map", {}).keys()),
+        "concentration": sorted(int(k) for k in dataset.get("concentration_label_map", {}).keys()),
+    }
+    y_true_holdout = {
+        "action": splits.y_holdout,
+        "compound": splits.compound_holdout,
+        "concentration": splits.concentration_holdout,
+    }
+    y_true_holdout = {k: v for k, v in y_true_holdout.items() if v is not None}
+    label_maps = {k: v for k, v in label_maps.items() if v}
+    class_labels = {k: v for k, v in class_labels.items() if v}
+
+    return MultitaskExperimentData(
+        splits=splits,
+        X_train=X_train,
+        y_train=pd.Series(y_train),
+        compound_train=None if compound_train is None else pd.Series(compound_train),
+        concentration_train=None if concentration_train is None else pd.Series(concentration_train),
+        train_metadata=train_metadata,
+        y_true_holdout=y_true_holdout,
+        label_maps=label_maps,
+        class_labels=class_labels,
+    )
+
+
+def evaluate_multitask_estimator(
+    estimator,
+    X: torch.Tensor,
+    y_true: dict[str, Any],
+    *,
+    label_maps: dict[str, dict[int, str]] | None = None,
+    class_labels: dict[str, list[int]] | None = None,
+) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
+    y_pred = estimator.predict(X)
+    y_proba = estimator.predict_proba(X)
+    filtered_pred = {target: y_pred[target] for target in y_true}
+    filtered_proba = {target: y_proba[target] for target in y_true if target in y_proba}
+    return build_multitask_classification_reports(
+        y_true,
+        filtered_pred,
+        y_proba=filtered_proba,
+        label_maps=label_maps,
+        class_labels=class_labels,
+    )
+
+
+def persist_experiment_artifacts(
+    *,
+    output_dir: str | Path,
+    estimator,
+    reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    config: dict[str, Any],
+) -> ExperimentArtifacts:
+    output_path = Path(output_dir)
+    per_class_dir = output_path / "per_class_reports"
+    output_path.mkdir(parents=True, exist_ok=True)
+    per_class_dir.mkdir(parents=True, exist_ok=True)
+
+    config_path = output_path / "config.json"
+    history_path = output_path / "history.csv"
+    summary_path = output_path / "summary_metrics.csv"
+    checkpoint_path = output_path / "model_state.pt"
+
+    with config_path.open("w", encoding="utf-8") as handle:
+        json.dump(config, handle, indent=2, sort_keys=True)
+
+    estimator.history_.to_csv(history_path, index=False)
+    summary_frames: list[pd.DataFrame] = []
+    for target, (per_class_df, summary_df) in reports.items():
+        per_class_df.to_csv(per_class_dir / f"{target}.csv")
+        target_summary = summary_df.rename_axis("metric").reset_index()
+        target_summary.insert(0, "target", target)
+        summary_frames.append(target_summary)
+    pd.concat(summary_frames, ignore_index=True).to_csv(summary_path, index=False)
+    torch.save(estimator.model_.state_dict(), checkpoint_path)
+
+    return ExperimentArtifacts(
+        output_dir=str(output_path),
+        config_path=str(config_path),
+        history_path=str(history_path),
+        summary_metrics_path=str(summary_path),
+        per_class_dir=str(per_class_dir),
+        checkpoint_path=str(checkpoint_path),
+    )

@@ -8,6 +8,16 @@ This document describes the three model architectures currently represented in t
 
 Theory and objective-level motivation remain in [method.md](method.md). Preprocessing and dataset conventions remain in [preprocessing.md](preprocessing.md).
 
+Implementation note:
+
+- the three estimator families now inherit shared target preparation, standardization, and estimator behavior from `src/models/common.py`
+- typed architecture, optimization, and loss-weight dataclasses are defined in `src/models/configs.py`
+- backbone code is split by family into `src/models/backbones_cnn.py` and `src/models/backbones_transformer.py`
+- optimization, inference batching, and checkpoint selection now live in `src/training/loop.py`
+- shared commutative and auxiliary multitask loss helpers now live in `src/training/losses.py`
+- experiment preparation, evaluation, and persistence helpers now live in `src/training/workflow.py`
+- `src/ml.py` remains only the public import surface; the implementation lives under `src/models/` and `src/training/`
+
 ## 1. Baseline: time-as-channels 3D CNN
 
 Implemented as `TimeChannel3DCNNClassifier` in [`src/ml.py`](../src/ml.py) and used in notebook 6.
