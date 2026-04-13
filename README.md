@@ -11,6 +11,17 @@ The workflow is built around:
 - dedicated ML/training code in [`zebrafish_ml.py`](/home/fabrizio/code/ZebraFish/zebrafish_ml.py)
 - six notebooks for exploration, dataset preparation, and model training
 
+## Documentation
+
+- [README.md](/home/fabrizio/code/ZebraFish/README.md)
+  Repository index and workflow orchestration: inputs, modules, notebooks, artifacts, and execution order.
+- [docs/method.md](/home/fabrizio/code/ZebraFish/docs/method.md)
+  Method specification: preprocessing assumptions, theoretical objective, and practical architecture options.
+- [docs/figures.md](/home/fabrizio/code/ZebraFish/docs/figures.md)
+  Standalone figures referenced by the method document.
+- [docs/introduction.md](/home/fabrizio/code/ZebraFish/docs/introduction.md)
+  Higher-level conceptual introduction to the commutative representation-learning idea.
+
 ## Inputs
 
 ### Workbook
