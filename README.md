@@ -11,7 +11,7 @@ The workflow is built around:
 - shared utility code in [`src/notebook_utils.py`](src/notebook_utils.py)
 - dedicated tensor loading code in [`src/tensor_utils.py`](src/tensor_utils.py)
 - dedicated ML/training code in [`src/ml.py`](src/ml.py)
-- seven notebooks for exploration, dataset preparation, baseline training, and commutative-model experiments
+- eight notebooks for exploration, dataset preparation, baseline training, and commutative-model experiments
 
 ## Documentation
 
@@ -19,6 +19,8 @@ The workflow is built around:
   Repository index and workflow orchestration: inputs, modules, notebooks, artifacts, and execution order.
 - [docs/method.md](docs/method.md)
   Proposed commutative-representation method: theory, architecture options, and implementation direction.
+- [docs/architecture.md](docs/architecture.md)
+  Detailed architecture reference for the baseline 3D CNN, the pure-CNN commutative model, and the transformer commutative model.
 - [docs/preprocessing.md](docs/preprocessing.md)
   Tensor-loading, downsampling, normalization, caching, and dataset-preparation conventions.
 - [docs/data_artifacts.md](docs/data_artifacts.md)
@@ -83,7 +85,7 @@ At a high level, the tensor pipeline handles:
 - deterministic downsampling across time and space
 - optional LOESS-style global intensity-drift normalization
 - repo-local tensor and selected-TIFF caching
-- tensor-level augmentation and labeled dataset assembly for downstream ML workflows
+- labeled dataset assembly for downstream ML workflows
 
 Key public helpers include:
 
@@ -117,15 +119,27 @@ Tensor-loading helpers include:
 Current contents:
 
 - `TimeChannel3DCNNClassifier`
-  A scikit-style estimator built on a simple 3D CNN that treats time as channels and supports configurable convolution kernel sizes, strides, and pooling separately for `z` and `xy`.
+  A scikit-style estimator built on a simple 3D CNN that treats time as channels and supports configurable convolution kernel sizes, strides, and pooling separately for `z` and `xy`. It now supports multi-head supervision for action, compound, and concentration targets.
+- `CommutativeCNNClassifier`
+  A scikit-style estimator for the pure-CNN dual-pathway commutative model, with the same multi-head target support.
+- `CommutativeTransformerClassifier`
+  A scikit-style estimator for the factorized transformer dual-pathway commutative model, with the same multi-head target support.
 - `augment_training_tensors_with_rotations()`
   Training-only XY rotation augmentation helper.
 - `split_labeled_tensor_dataset_by_instance()`
-  Leakage-safe train / validation / holdout splitter for persisted tensor datasets, grouping by `original_instance_id` and returning the sliced tensors, labels, metadata, and split ids needed by notebook 6.
+  Leakage-safe train / validation / holdout splitter for persisted tensor datasets, grouping by `original_instance_id` and returning the sliced tensors, labels, auxiliary targets, metadata, and split ids needed by notebooks 6-8.
+- `build_multitask_classification_reports()`
+  Builds separate per-target classification reports for `action`, `compound`, and `concentration`.
 - `plot_training_history()`
   Plot train and validation loss by epoch.
 - `plot_confusion_matrices()`
   Plot both absolute-count and row-fraction confusion matrices.
+
+Estimator API note:
+
+- `predict(...)` and `predict_proba(...)` for the current classifiers return dictionaries keyed by target:
+  `action`, `compound`, and `concentration`
+- `transform(...)` still returns the shared embedding used for downstream visualization and analysis
 
 Important leakage rule:
 
@@ -199,7 +213,9 @@ Purpose:
 
 - select a normalized compound and concentration grouping
 - explicitly materialize the image data as a torch tensor
-- plot all loaded time slices from the middle z plane
+- plot all loaded time slices from the sampled middle z plane
+- show the sampled source timepoints and source z index in panel titles
+- inspect per-timepoint mean intensity with a line plot
 
 Current flow:
 
@@ -209,7 +225,9 @@ Current flow:
 3. set the tensor downsampling target with `tensor_size = (T, Z, Y, X)`
 4. load `condition_tensor = load_image_condition_tensor(...)` directly from `condition_df` plus the selection inputs
 5. inspect `condition_tensor.shape`
-6. plot all loaded timepoints with `plot_midz_time_slices_from_tensor(condition_tensor, n_columns=...)`
+6. derive source-timepoint labels and the sampled middle-z label
+7. plot all loaded timepoints with `plot_midz_time_slices_from_tensor(condition_tensor, n_columns=..., time_labels=..., z_label=...)`
+8. plot the mean intensity by sampled timepoint with `plot_timepoint_mean_intensity(...)`
 
 The tensor shape is:
 
@@ -227,35 +245,37 @@ Purpose:
 - select a list of mechanisms of action to include as classes
 - use water controls as class `0`
 - cap the number of compounds per mechanism and the number of tensors per compound
-- optionally augment examples with random XY rotations for exploratory datasets and embeddings
-- persist the prepared dataset artifact for reuse in notebook 6
+- persist the prepared dataset artifact for reuse in notebooks 6-8
 
 Current flow:
 
 1. build the condition map
 2. set:
    `selected_mechanisms`, `selected_concentrations`, `max_compounds_per_action`, `max_tensors_per_compound`
-3. set tensor-loading and augmentation options:
-   `output_size`, `num_random_rotations`, `rotation_range_degrees`
+3. set tensor-loading options:
+   `output_size`
 4. set `dataset_artifact_path` for the saved tensor dataset artifact
 5. build the dataset with `build_moa_labeled_tensor_dataset(...)`
 6. save it with `save_labeled_tensor_dataset(...)`
 7. inspect tensor shapes, label tensor, label map, and metadata table
-8. optionally reduce the tensors to 2D with `build_tensor_embedding_2d(...)`
-9. visualize the class structure with `plot_tensor_embedding_2d(...)`
+8. inspect the persisted auxiliary target tensors and label maps for mechanism, compound, concentration, and control
+9. optionally reduce the tensors to 2D with `build_dataset_tensor_embedding_2d(...)`
+10. visualize the dataset structure with `plot_tensor_embedding_2d(...)`
 
 Dataset conventions:
 
 - label `0` is always `Water`
 - each selected mechanism of action is assigned a distinct positive integer label
 - `selected_concentrations` controls which treatment concentration bands are included
-- metadata includes `original_instance_id`, which is stable across all random rotations derived from the same base tensor
+- metadata includes `original_instance_id`, which identifies each persisted base tensor
+- the persisted dataset artifact also stores explicit `compound_labels`, `concentration_labels`, and `is_control` tensors plus their label maps
+- water/control examples are collapsed to a dedicated control class for the compound and concentration auxiliary targets
 - cached tensor loading and cached selected-TIFF mirroring are used through the same loader path as notebook 4
 - PCA is available by default through scikit-learn
 - UMAP is also supported, but requires the optional `umap-learn` package in the active environment
 - `plot_tensor_embedding_2d(...)` can optionally show an RBF-SVM decision background on the 2D embedding
 
-For model training, use notebook 5 to persist the base dataset artifact, then let notebook 6 split by `original_instance_id` before applying any training-only augmentation. That keeps all rotated views of the same source tensor together and avoids leakage.
+For model training, use notebook 5 to persist the unaugmented base dataset artifact, then let notebooks 6-8 split by `original_instance_id` before applying any training-only augmentation.
 
 ### 6. Train 3D CNN Classifier
 
@@ -270,7 +290,7 @@ Purpose:
 - split on `original_instance_id` so all rotated variants of the same source tensor stay together
 - augment only the training subset with random XY rotations
 - monitor train and validation loss during training
-- evaluate the holdout split with classification metrics and confusion matrices
+- evaluate the holdout split separately for action, compound, and concentration with classification metrics and confusion matrices
 - visualize learned pre-classifier embeddings in 2D
 
 Current flow:
@@ -281,9 +301,10 @@ Current flow:
 4. augment only the training subset with `augment_training_tensors_with_rotations(...)`
 5. fit `TimeChannel3DCNNClassifier(...)` with explicit validation data
 6. inspect train / validation loss with `plot_training_history(...)`
-7. inspect holdout confusion matrices with `plot_confusion_matrices(...)`
-8. project learned embeddings with `build_tensor_embedding_2d(...)`
-9. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
+7. inspect target-wise holdout reports with `build_multitask_classification_reports(...)`
+8. inspect target-wise holdout confusion matrices with `plot_confusion_matrices(...)`
+9. project learned embeddings with `build_tensor_embedding_2d(...)`
+10. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
 
 ### 7. Train Commutative CNN Classifier
 
@@ -293,7 +314,7 @@ Purpose:
 
 - train the pure-CNN dual-pathway commutative classifier on the persisted tensor dataset
 - keep the same leakage-safe split and training-only augmentation rules as notebook 6
-- optimize supervised classification jointly with prototype-consistency and feature-alignment losses
+- optimize action, compound, and concentration supervision jointly with prototype-consistency and feature-alignment losses
 - inspect branch agreement through branch-specific embeddings and loss components
 - visualize fused holdout embeddings in 2D
 
@@ -305,7 +326,33 @@ Current flow:
 4. augment only the training subset with `augment_training_tensors_with_rotations(...)`
 5. fit `CommutativeCNNClassifier(...)` with explicit validation data
 6. inspect train / validation loss with `plot_training_history(...)`
-7. inspect holdout classification metrics and confusion matrices
+7. inspect target-wise holdout classification metrics and confusion matrices
+8. inspect validation and holdout loss components with `evaluate_loss_components(...)`
+9. inspect branch-specific embeddings with `transform_branches(...)`
+10. project fused holdout embeddings with `build_tensor_embedding_2d(...)`
+11. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
+
+### 8. Train Commutative Transformer Classifier
+
+- [`8_train_commutative_transformer_classifier.ipynb`](8_train_commutative_transformer_classifier.ipynb)
+
+Purpose:
+
+- train the factorized transformer dual-pathway commutative classifier on the persisted tensor dataset
+- keep the same leakage-safe split and training-only augmentation rules as notebooks 6 and 7
+- optimize action, compound, and concentration supervision jointly with prototype-consistency and feature-alignment losses
+- inspect branch agreement through branch-specific embeddings and loss components
+- visualize fused holdout embeddings in 2D
+
+Current flow:
+
+1. set `dataset_artifact_path` to the saved artifact produced by notebook 5
+2. load the base dataset with `load_labeled_tensor_dataset(...)`
+3. split into train, validation, and holdout subsets on unique `original_instance_id` groups with `split_labeled_tensor_dataset_by_instance(...)`
+4. augment only the training subset with `augment_training_tensors_with_rotations(...)`
+5. fit `CommutativeTransformerClassifier(...)` with explicit validation data
+6. inspect train / validation loss with `plot_training_history(...)`
+7. inspect target-wise holdout classification metrics and confusion matrices
 8. inspect validation and holdout loss components with `evaluate_loss_components(...)`
 9. inspect branch-specific embeddings with `transform_branches(...)`
 10. project fused holdout embeddings with `build_tensor_embedding_2d(...)`
@@ -321,6 +368,7 @@ Current flow:
 6. Use notebook 5 to prepare and persist a labeled tensor dataset artifact, then inspect class structure in 2D.
 7. Use notebook 6 to load that artifact and train the simple 3D CNN baseline with leakage-safe splitting by `original_instance_id`.
 8. Use notebook 7 to train and inspect the experimental pure-CNN commutative dual-pathway model on the same persisted dataset artifacts.
+9. Use notebook 8 to train and inspect the experimental transformer commutative dual-pathway model on the same persisted dataset artifacts.
 
 ## Notes
 
@@ -330,3 +378,4 @@ Current flow:
 - Notebook 6 additionally expects `scikit-learn` and the PyTorch training stack already used by the tensor utilities.
 - The simple 3D CNN in notebook 6 remains the baseline reference pipeline.
 - The commutative dual-pathway method in notebook 7 is an experimental implementation of the design described in [docs/method.md](docs/method.md).
+- The transformer commutative dual-pathway method in notebook 8 is a second experimental implementation of that same design family.

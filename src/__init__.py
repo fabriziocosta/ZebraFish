@@ -1,6 +1,7 @@
-from src.ml import CommutativeCNNClassifier, TimeChannel3DCNNClassifier
+from src.ml import CommutativeCNNClassifier, CommutativeTransformerClassifier, TimeChannel3DCNNClassifier
 
 __all__ = [
     "CommutativeCNNClassifier",
+    "CommutativeTransformerClassifier",
     "TimeChannel3DCNNClassifier",
 ]

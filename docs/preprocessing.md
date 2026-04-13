@@ -76,14 +76,18 @@ Dataset-preparation helpers:
 
 ## 5. Dataset preparation and split conventions
 
-The repository dataset-preparation flow used by notebooks 5 and 6 assumes:
+The repository dataset-preparation flow used by notebooks 5-8 assumes:
 
 - label `0` is always `Water`
 - each selected mechanism of action is assigned a distinct positive integer label
 - `selected_concentrations` controls which treatment concentration bands are included
-- metadata includes `original_instance_id`, which is stable across all random rotations derived from the same base tensor
+- metadata includes `original_instance_id`, which identifies each persisted base tensor
+- the persisted artifact includes explicit target tensors for:
+  mechanism (`labels`), compound (`compound_labels`), concentration band (`concentration_labels`), and control status (`is_control`)
+- control examples are collapsed to a dedicated control class for the compound and concentration auxiliary targets
 - cached tensor loading and cached selected-TIFF mirroring are used through the same loader path as notebook 4
-- exploratory dataset assembly may include random XY rotations
+- notebook 5 persists only unaugmented base tensors
+- notebooks 6-8 derive train-only augmentations from those persisted base tensors after splitting
 
 For evaluation and model training:
 

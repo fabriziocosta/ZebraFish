@@ -1,12 +1,14 @@
 # Method: Commutative Representation Learning for 4D Calcium Imaging
 
-This document describes the method itself. Repository structure, notebook flow, and code entry points remain indexed in [README.md](../README.md), while preprocessing details are documented in [preprocessing.md](preprocessing.md).
+This document describes the method itself. Repository structure, notebook flow, and code entry points remain indexed in [README.md](../README.md), preprocessing details are documented in [preprocessing.md](preprocessing.md), and detailed model specifications are collected in [architecture.md](architecture.md).
 
 Status:
 
 - this document specifies the proposed commutative dual-pathway method
 - the currently implemented repository baseline is the simpler 3D CNN classifier described in [README.md](../README.md)
 - an experimental pure-CNN dual-pathway implementation is now available in `CommutativeCNNClassifier` and notebook 7, but it should still be treated as an early method implementation rather than the established repository baseline
+- an experimental transformer dual-pathway implementation is now available in `CommutativeTransformerClassifier` and notebook 8, with the same status
+- the current implementations can supervise the shared embedding against mechanism, compound, and concentration targets simultaneously
 
 The raw imaging signal is a 4D tensor
 
@@ -126,6 +128,8 @@ $$
 The method is not an augmentation-invariance objective in the usual sense. Instead, it is an operator-invariance objective: the representation should be stable under alternative valid decompositions of the same spatiotemporal structure. Prototype consistency provides the quotient space in which this relaxed form of commutativity is enforced. ([arXiv][2])
 
 ## 3. Practical implementation and architecture options
+
+Detailed architecture descriptions for the three implemented model families now live in [architecture.md](architecture.md). This section only summarizes their methodological role.
 
 ### 3.1 Input layout
 
@@ -291,8 +295,11 @@ The method is designed to sit on top of the existing workflow rather than replac
 
 - [README.md](../README.md) remains the orchestration document for notebooks, modules, and generated artifacts
 - [preprocessing.md](preprocessing.md) defines the tensor materialization and split conventions assumed here
-- notebook 5 persists the labeled tensor dataset artifact
+- notebook 5 persists the labeled tensor dataset artifact together with mechanism, compound, concentration, and control targets
 - notebook 6 performs leakage-safe splitting by `original_instance_id`, applies training-only augmentation, and trains the currently implemented 3D CNN baseline
+- notebook 7 applies the same split discipline to the pure-CNN commutative model
+- notebook 8 applies the same split discipline to the transformer commutative model
+- the current estimator API exposes target-wise predictions and probabilities keyed by `action`, `compound`, and `concentration`
 
 In other words, this document specifies the proposed method and its current implementation direction, while the README documents the repository workflow and the baseline-to-experimental progression across notebooks.
 

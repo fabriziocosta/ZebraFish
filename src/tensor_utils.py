@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 import re
 import shutil
+import time
 import warnings
 
 import matplotlib.pyplot as plt
@@ -25,6 +26,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TENSOR_CACHE_DIR = PROJECT_ROOT / ".tensor_cache"
 TIFF_CACHE_DIR = PROJECT_ROOT / ".tiff_cache"
 DATASET_CACHE_DIR = PROJECT_ROOT / ".dataset_cache"
+
+
+def _format_eta(seconds: float) -> str:
+    remaining = max(int(round(seconds)), 0)
+    minutes, seconds = divmod(remaining, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
 
 
 def _squeeze_array_and_axes(arr: np.ndarray, axes: str) -> tuple[np.ndarray, str]:
@@ -227,12 +237,22 @@ def save_labeled_tensor_dataset(
     if not isinstance(metadata, pd.DataFrame):
         raise TypeError("dataset['metadata'] must be a pandas DataFrame")
 
-    payload = {
+    payload: dict[str, object] = {
         "tensors": dataset["tensors"].detach().cpu(),
         "labels": dataset["labels"].detach().cpu(),
         "metadata_records": metadata.to_dict(orient="records"),
         "label_map": {int(key): str(value) for key, value in dict(dataset["label_map"]).items()},
     }
+    for tensor_key in ("compound_labels", "concentration_labels", "is_control"):
+        if tensor_key in dataset:
+            value = dataset[tensor_key]
+            if not isinstance(value, torch.Tensor):
+                raise TypeError(f"dataset[{tensor_key!r}] must be a torch.Tensor")
+            payload[tensor_key] = value.detach().cpu()
+    for map_key in ("compound_label_map", "concentration_label_map"):
+        if map_key in dataset:
+            payload[map_key] = {int(key): str(value) for key, value in dict(dataset[map_key]).items()}
+
     torch.save(payload, dataset_path)
     return dataset_path
 
@@ -242,12 +262,19 @@ def load_labeled_tensor_dataset(path: str | Path) -> dict[str, object]:
     if not dataset_path.is_absolute():
         dataset_path = DATASET_CACHE_DIR / dataset_path
     payload = torch.load(dataset_path, map_location="cpu")
-    return {
+    dataset = {
         "tensors": payload["tensors"],
         "labels": payload["labels"],
         "metadata": pd.DataFrame(payload["metadata_records"]),
         "label_map": {int(key): value for key, value in payload["label_map"].items()},
     }
+    for tensor_key in ("compound_labels", "concentration_labels", "is_control"):
+        if tensor_key in payload:
+            dataset[tensor_key] = payload[tensor_key]
+    for map_key in ("compound_label_map", "concentration_label_map"):
+        if map_key in payload:
+            dataset[map_key] = {int(key): value for key, value in payload[map_key].items()}
+    return dataset
 
 
 def select_evenly_spaced_indices(n_total: int, n_keep: int) -> list[int]:
@@ -456,14 +483,12 @@ def build_moa_labeled_tensor_dataset(
     output_size: tuple[int | None, int | None, int | None, int | None],
     *,
     only_active: bool = True,
-    num_random_rotations: int = 0,
-    rotation_range_degrees: float = 5.0,
     normalize_global_drift: bool = True,
     loess_frac: float = 0.25,
     use_cache: bool = True,
     use_tiff_cache: bool = True,
-    random_seed: int = 0,
     skip_failed_conditions: bool = True,
+    verbose: bool = True,
 ) -> dict[str, object]:
     if not selected_mechanisms:
         raise ValueError("selected_mechanisms must not be empty")
@@ -473,10 +498,6 @@ def build_moa_labeled_tensor_dataset(
         raise ValueError("max_compounds_per_action must be positive")
     if max_tensors_per_compound <= 0:
         raise ValueError("max_tensors_per_compound must be positive")
-    if num_random_rotations < 0:
-        raise ValueError("num_random_rotations must be non-negative")
-
-    rng = np.random.default_rng(random_seed)
     working_df = condition_df.copy()
     if only_active:
         working_df = working_df[working_df["condition_folder_status"] == "active"].copy()
@@ -484,10 +505,61 @@ def build_moa_labeled_tensor_dataset(
     label_map = {0: "Water"}
     for index, mechanism in enumerate(selected_mechanisms, start=1):
         label_map[index] = mechanism
+    compound_label_map = {0: "Control"}
+    concentration_label_map = {0: "control"}
+    compound_name_to_label: dict[str, int] = {}
+    concentration_value_to_label: dict[str, int] = {}
 
     tensors: list[torch.Tensor] = []
     labels: list[int] = []
+    compound_labels: list[int] = []
+    concentration_labels: list[int] = []
+    is_control_values: list[int] = []
     rows: list[dict[str, object]] = []
+    total_conditions = 0
+
+    for mechanism in selected_mechanisms:
+        mechanism_df = working_df[
+            (working_df["mechanism_of_action"] == mechanism)
+            & (working_df["condition_kind"] == "treatment")
+            & (working_df["concentration_band"].isin(selected_concentrations))
+        ].copy()
+        compounds = mechanism_df["compound"].drop_duplicates().tolist()[:max_compounds_per_action]
+        for compound in compounds:
+            treatment_rows = (
+                mechanism_df[mechanism_df["compound"] == compound]
+                .drop_duplicates(subset=["image_condition_dir"])
+                .sort_values(["concentration_band", "image_condition_dir"])
+                .head(max_tensors_per_compound)
+            )
+            control_rows = (
+                working_df[
+                    (working_df["compound"] == compound)
+                    & (working_df["condition_kind"] == "control")
+                ]
+                .drop_duplicates(subset=["image_condition_dir"])
+                .sort_values("image_condition_dir")
+                .head(max_tensors_per_compound)
+            )
+            total_conditions += int(len(treatment_rows) + len(control_rows))
+
+    attempted_conditions = 0
+    build_start = time.perf_counter()
+
+    def log_progress(*, row: pd.Series, mechanism: str, kind: str) -> None:
+        if not verbose or total_conditions <= 0:
+            return
+        current_index = attempted_conditions + 1
+        elapsed = time.perf_counter() - build_start
+        avg_seconds = elapsed / max(attempted_conditions, 1)
+        eta = _format_eta(avg_seconds * (total_conditions - attempted_conditions))
+        compound = str(row["compound"])
+        concentration = str(row["concentration_band"])
+        print(
+            f"[{current_index:03d}/{total_conditions:03d}] kind={kind} "
+            f"mechanism={mechanism} compound={compound} concentration={concentration} "
+            f"eta={eta}"
+        )
 
     def add_example(
         *,
@@ -498,43 +570,48 @@ def build_moa_labeled_tensor_dataset(
         is_control: bool,
         original_instance_id: int,
     ) -> None:
+        compound_name = str(row["compound"])
+        concentration_value = str(row["concentration_band"])
+        if is_control:
+            compound_label = 0
+            concentration_label = 0
+        else:
+            if compound_name not in compound_name_to_label:
+                compound_label = len(compound_label_map)
+                compound_name_to_label[compound_name] = compound_label
+                compound_label_map[compound_label] = compound_name
+            else:
+                compound_label = compound_name_to_label[compound_name]
+
+            if concentration_value not in concentration_value_to_label:
+                concentration_label = len(concentration_label_map)
+                concentration_value_to_label[concentration_value] = concentration_label
+                concentration_label_map[concentration_label] = concentration_value
+            else:
+                concentration_label = concentration_value_to_label[concentration_value]
+
         tensors.append(base_tensor)
         labels.append(label)
+        compound_labels.append(int(compound_label))
+        concentration_labels.append(int(concentration_label))
+        is_control_values.append(int(is_control))
         rows.append(
             {
                 "original_instance_id": original_instance_id,
                 "label": label,
+                "compound_label": int(compound_label),
+                "compound_label_name": compound_label_map[int(compound_label)],
+                "concentration_label_id": int(concentration_label),
+                "concentration_label_name": concentration_label_map[int(concentration_label)],
                 "label_name": label_name,
                 "mechanism_of_action": row["mechanism_of_action"],
                 "compound": row["compound"],
                 "concentration_band": row["concentration_band"],
                 "concentration_label": row["concentration_label"],
                 "image_condition_dir": row["image_condition_dir"],
-                "augmentation_index": 0,
-                "rotation_degrees": 0.0,
                 "is_control": is_control,
             }
         )
-
-        for augmentation_index in range(1, num_random_rotations + 1):
-            angle = float(rng.uniform(-rotation_range_degrees, rotation_range_degrees))
-            tensors.append(rotate_tensor_xy(base_tensor, angle))
-            labels.append(label)
-            rows.append(
-                {
-                    "original_instance_id": original_instance_id,
-                    "label": label,
-                    "label_name": label_name,
-                    "mechanism_of_action": row["mechanism_of_action"],
-                    "compound": row["compound"],
-                    "concentration_band": row["concentration_band"],
-                    "concentration_label": row["concentration_label"],
-                    "image_condition_dir": row["image_condition_dir"],
-                    "augmentation_index": augmentation_index,
-                    "rotation_degrees": angle,
-                    "is_control": is_control,
-                }
-            )
 
     original_instance_id = 0
     for mechanism_index, mechanism in enumerate(selected_mechanisms, start=1):
@@ -563,6 +640,8 @@ def build_moa_labeled_tensor_dataset(
             )
 
             for _, row in treatment_rows.iterrows():
+                log_progress(row=row, mechanism=mechanism, kind="treatment")
+                attempted_conditions += 1
                 try:
                     tensor = load_image_condition_tensor(
                         condition_dir=row["image_condition_dir"],
@@ -594,6 +673,8 @@ def build_moa_labeled_tensor_dataset(
                 original_instance_id += 1
 
             for _, row in control_rows.iterrows():
+                log_progress(row=row, mechanism=mechanism, kind="control")
+                attempted_conditions += 1
                 try:
                     tensor = load_image_condition_tensor(
                         condition_dir=row["image_condition_dir"],
@@ -629,8 +710,13 @@ def build_moa_labeled_tensor_dataset(
     return {
         "tensors": torch.stack(tensors, dim=0),
         "labels": torch.tensor(labels, dtype=torch.long),
+        "compound_labels": torch.tensor(compound_labels, dtype=torch.long),
+        "concentration_labels": torch.tensor(concentration_labels, dtype=torch.long),
+        "is_control": torch.tensor(is_control_values, dtype=torch.bool),
         "metadata": pd.DataFrame(rows),
         "label_map": label_map,
+        "compound_label_map": compound_label_map,
+        "concentration_label_map": concentration_label_map,
     }
 
 
@@ -704,6 +790,55 @@ def build_tensor_embedding_2d(
             metadata_reset = metadata_reset.drop(columns=duplicate_columns)
         embedding_df = pd.concat([embedding_df, metadata_reset], axis=1)
 
+    return embedding_df
+
+
+def build_dataset_tensor_embedding_2d(
+    dataset: dict[str, object],
+    *,
+    target: str = "mechanism",
+    method: str = "pca",
+    random_state: int = 0,
+    umap_n_neighbors: int = 15,
+    umap_min_dist: float = 0.1,
+) -> pd.DataFrame:
+    target_lower = target.lower()
+    target_config = {
+        "mechanism": ("labels", "label_map"),
+        "compound": ("compound_labels", "compound_label_map"),
+        "concentration": ("concentration_labels", "concentration_label_map"),
+        "control": ("is_control", {0: "Treatment", 1: "Control"}),
+    }
+    if target_lower not in target_config:
+        raise ValueError(
+            f"Unsupported target {target!r}; use one of {sorted(target_config)}"
+        )
+
+    tensor_key, label_map = target_config[target_lower]
+    if tensor_key not in dataset:
+        raise KeyError(f"dataset does not contain {tensor_key!r}")
+    labels = dataset[tensor_key]
+    if isinstance(label_map, str):
+        if label_map not in dataset:
+            raise KeyError(f"dataset does not contain {label_map!r}")
+        label_map = dataset[label_map]
+
+    if isinstance(labels, torch.Tensor):
+        labels_array = labels.detach().cpu().numpy().astype(int)
+    else:
+        labels_array = np.asarray(labels, dtype=int)
+
+    embedding_df = build_tensor_embedding_2d(
+        dataset["tensors"],
+        labels_array,
+        label_map=label_map,
+        metadata=dataset.get("metadata"),
+        method=method,
+        random_state=random_state,
+        umap_n_neighbors=umap_n_neighbors,
+        umap_min_dist=umap_min_dist,
+    )
+    embedding_df["target"] = target_lower
     return embedding_df
 
 

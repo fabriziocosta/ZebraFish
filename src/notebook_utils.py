@@ -3,14 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import subprocess
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from tifffile import TiffFile
 
 from src.tensor_utils import load_image_condition_tensor as _load_image_condition_tensor
+from src.tensor_utils import select_evenly_spaced_indices
 
 
 DEFAULT_WORKBOOK = "compounds (MJW V2).xlsx"
@@ -610,7 +612,7 @@ def choose_sample_files(files: list[Path], n: int = 10) -> list[Path]:
     return [files[i] for i in indices]
 
 
-def load_image_condition_tensor(
+def resolve_condition_dir(
     condition_dir: str | Path | None = None,
     *,
     condition_df: pd.DataFrame | None = None,
@@ -619,12 +621,7 @@ def load_image_condition_tensor(
     selected_concentration: str | None = None,
     only_active: bool = True,
     selected_condition_index: int = 0,
-    output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
-    normalize_global_drift: bool = True,
-    loess_frac: float = 0.25,
-    use_cache: bool = True,
-    use_tiff_cache: bool = True,
-) -> torch.Tensor:
+) -> Path:
     if condition_dir is None:
         if condition_df is None:
             raise ValueError("condition_df is required when condition_dir is not provided")
@@ -647,6 +644,121 @@ def load_image_condition_tensor(
                 f"{selector_column}={selected_concentration!r}, only_active={only_active}."
             )
         condition_dir = condition_choices.iloc[selected_condition_index]["image_condition_dir"]
+
+    return Path(condition_dir)
+
+
+def get_sampled_timepoint_labels(
+    condition_dir: str | Path | None = None,
+    *,
+    condition_df: pd.DataFrame | None = None,
+    selected_compound: str | None = None,
+    selector_column: str | None = None,
+    selected_concentration: str | None = None,
+    only_active: bool = True,
+    selected_condition_index: int = 0,
+    output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+) -> list[str]:
+    resolved_condition_dir = resolve_condition_dir(
+        condition_dir,
+        condition_df=condition_df,
+        selected_compound=selected_compound,
+        selector_column=selector_column,
+        selected_concentration=selected_concentration,
+        only_active=only_active,
+        selected_condition_index=selected_condition_index,
+    )
+    timepoint_files = list_timepoint_files(resolved_condition_dir)
+    if not timepoint_files:
+        raise FileNotFoundError(f"No TIFF files found under {resolved_condition_dir}")
+
+    if output_size is not None and output_size[0] is not None:
+        time_indices = select_evenly_spaced_indices(len(timepoint_files), int(output_size[0]))
+    else:
+        time_indices = list(range(len(timepoint_files)))
+
+    labels: list[str] = []
+    for source_index in time_indices:
+        path = timepoint_files[source_index]
+        tl_match = re.search(r"TL(\d+)", path.name)
+        if tl_match:
+            tl_number = int(tl_match.group(1))
+            labels.append(f"TL{tl_number} ({source_index + 1}/{len(timepoint_files)})")
+        else:
+            labels.append(f"{source_index + 1}/{len(timepoint_files)}")
+    return labels
+
+
+def _get_source_z_size(path: str | Path) -> int:
+    path = Path(path)
+    with TiffFile(path) as tif:
+        if len(tif.pages) > 1:
+            return len(tif.pages)
+        series = tif.series[0]
+        axes = getattr(series, "axes", "")
+        if "Z" in axes:
+            return int(series.shape[axes.index("Z")])
+        return 1
+
+
+def get_sampled_midz_label(
+    condition_dir: str | Path | None = None,
+    *,
+    condition_df: pd.DataFrame | None = None,
+    selected_compound: str | None = None,
+    selector_column: str | None = None,
+    selected_concentration: str | None = None,
+    only_active: bool = True,
+    selected_condition_index: int = 0,
+    output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+) -> str:
+    resolved_condition_dir = resolve_condition_dir(
+        condition_dir,
+        condition_df=condition_df,
+        selected_compound=selected_compound,
+        selector_column=selector_column,
+        selected_concentration=selected_concentration,
+        only_active=only_active,
+        selected_condition_index=selected_condition_index,
+    )
+    timepoint_files = list_timepoint_files(resolved_condition_dir)
+    if not timepoint_files:
+        raise FileNotFoundError(f"No TIFF files found under {resolved_condition_dir}")
+
+    source_z_size = _get_source_z_size(timepoint_files[0])
+    if output_size is not None and output_size[1] is not None:
+        z_indices = select_evenly_spaced_indices(source_z_size, int(output_size[1]))
+    else:
+        z_indices = list(range(source_z_size))
+    mid_local_index = len(z_indices) // 2
+    source_z_index = z_indices[mid_local_index]
+    return f"{source_z_index + 1}/{source_z_size}"
+
+
+def load_image_condition_tensor(
+    condition_dir: str | Path | None = None,
+    *,
+    condition_df: pd.DataFrame | None = None,
+    selected_compound: str | None = None,
+    selector_column: str | None = None,
+    selected_concentration: str | None = None,
+    only_active: bool = True,
+    selected_condition_index: int = 0,
+    output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+    normalize_global_drift: bool = True,
+    loess_frac: float = 0.25,
+    use_cache: bool = True,
+    use_tiff_cache: bool = True,
+) -> torch.Tensor:
+    condition_dir = resolve_condition_dir(
+        condition_dir,
+        condition_df=condition_df,
+        selected_compound=selected_compound,
+        selector_column=selector_column,
+        selected_concentration=selected_concentration,
+        only_active=only_active,
+        selected_condition_index=selected_condition_index,
+    )
 
     return _load_image_condition_tensor(
         condition_dir,
@@ -699,12 +811,17 @@ def plot_midz_time_slices_from_tensor(
     tensor: torch.Tensor,
     n_columns: int = 5,
     title: str | None = None,
+    time_labels: Sequence[str | int] | None = None,
+    z_label: str | int | None = None,
 ):
     if n_columns <= 0:
         raise ValueError(f"n_columns must be positive, got {n_columns}")
 
     n_timepoints = int(tensor.shape[0])
+    if time_labels is not None and len(time_labels) != n_timepoints:
+        raise ValueError(f"time_labels must have length {n_timepoints}, got {len(time_labels)}")
     z_index = int(tensor.shape[1] // 2)
+    resolved_z_label = z_label if z_label is not None else z_index
     n_rows = int(np.ceil(n_timepoints / n_columns))
 
     fig, axes = plt.subplots(n_rows, n_columns, figsize=(3 * n_columns, 3 * n_rows))
@@ -713,7 +830,8 @@ def plot_midz_time_slices_from_tensor(
     for ax, time_index in zip(axes, range(n_timepoints)):
         image = tensor[time_index, z_index].detach().cpu().numpy()
         ax.imshow(image, cmap="gray")
-        ax.set_title(f"T={time_index}, Z={z_index}", fontsize=9)
+        time_label = time_labels[time_index] if time_labels is not None else time_index
+        ax.set_title(f"T={time_label}, Z={resolved_z_label}", fontsize=9)
         ax.axis("off")
 
     for ax in axes[n_timepoints:]:
@@ -722,3 +840,39 @@ def plot_midz_time_slices_from_tensor(
     fig.suptitle(title or "Mid-Z Time Slices", fontsize=14)
     fig.tight_layout()
     return fig, axes
+
+
+def plot_timepoint_mean_intensity(
+    tensor: torch.Tensor,
+    *,
+    time_labels: Sequence[str | int] | None = None,
+    title: str | None = None,
+    ax=None,
+):
+    if tensor.ndim != 4:
+        raise ValueError(f"Expected tensor with shape T x Z x Y x X, got {tuple(tensor.shape)}")
+
+    n_timepoints = int(tensor.shape[0])
+    if time_labels is not None and len(time_labels) != n_timepoints:
+        raise ValueError(f"time_labels must have length {n_timepoints}, got {len(time_labels)}")
+
+    mean_intensity = tensor.to(torch.float32).mean(dim=(1, 2, 3)).detach().cpu().numpy()
+    x_values = np.arange(n_timepoints)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(max(7, 0.45 * n_timepoints), 4))
+    else:
+        fig = ax.figure
+
+    ax.plot(x_values, mean_intensity, marker="o", linewidth=1.5)
+    ax.set_xlabel("Time slice")
+    ax.set_ylabel("Mean intensity")
+    ax.set_title(title or "Mean intensity by time slice")
+    ax.grid(True, alpha=0.25)
+
+    if time_labels is not None:
+        ax.set_xticks(x_values)
+        ax.set_xticklabels([str(label) for label in time_labels], rotation=45, ha="right")
+
+    fig.tight_layout()
+    return fig, ax, mean_intensity
