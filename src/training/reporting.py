@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable, Sequence
 
+from IPython.display import display
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -252,3 +253,62 @@ def plot_confusion_matrices(
 
     fig.tight_layout()
     return fig, axes, cm_abs, cm_frac
+
+
+def plot_embedding_projection(
+    embeddings: np.ndarray,
+    labels: Iterable[int],
+    label_map: dict[int, str],
+    *,
+    title: str,
+):
+    labels_array = pd.Series(list(labels)).astype(int).to_numpy()
+    from sklearn.decomposition import PCA
+
+    coords = PCA(n_components=2, random_state=0).fit_transform(embeddings)
+    frame = pd.DataFrame(
+        {
+            "embed_x": coords[:, 0],
+            "embed_y": coords[:, 1],
+            "label": labels_array,
+            "label_name": [label_map.get(int(label), str(int(label))) for label in labels_array],
+        }
+    )
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for label_value, group_df in frame.groupby("label", sort=True):
+        ax.scatter(
+            group_df["embed_x"],
+            group_df["embed_y"],
+            s=42,
+            alpha=0.82,
+            label=label_map.get(int(label_value), str(int(label_value))),
+        )
+    ax.set_title(title)
+    ax.set_xlabel("PC1")
+    ax.set_ylabel("PC2")
+    ax.grid(True, alpha=0.2)
+    ax.legend(loc="best")
+    plt.show()
+    return frame
+
+
+def display_multitask_reports_and_confusions(
+    reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    *,
+    y_true: dict[str, Iterable[int]],
+    y_pred: dict[str, Iterable[int]],
+    class_labels: dict[str, Sequence[int]] | None = None,
+    label_maps: dict[str, dict[int, str]] | None = None,
+) -> None:
+    for target, (per_class_df, summary_df) in reports.items():
+        print()
+        print(f"## Holdout report: {target}")
+        display(per_class_df)
+        display(summary_df)
+        plot_confusion_matrices(
+            y_true[target],
+            y_pred[target],
+            class_labels=None if class_labels is None else class_labels.get(target),
+            label_map=None if label_maps is None else label_maps.get(target),
+        )
+        plt.show()

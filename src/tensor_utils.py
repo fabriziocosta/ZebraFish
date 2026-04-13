@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import json
 import math
@@ -553,12 +554,19 @@ def build_moa_labeled_tensor_dataset(
         elapsed = time.perf_counter() - build_start
         avg_seconds = elapsed / max(attempted_conditions, 1)
         eta = _format_eta(avg_seconds * (total_conditions - attempted_conditions))
+        elapsed_text = _format_eta(elapsed)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         compound = str(row["compound"])
         concentration = str(row["concentration_band"])
         print(
-            f"[{current_index:03d}/{total_conditions:03d}] kind={kind} "
-            f"mechanism={mechanism} compound={compound} concentration={concentration} "
-            f"eta={eta}"
+            f"[{timestamp}] "
+            f"[{current_index:03d}/{total_conditions:03d}] "
+            f"kind={kind:<9} "
+            f"conc={concentration:<8} "
+            f"elapsed={elapsed_text} "
+            f"eta={eta} "
+            f"mechanism={mechanism} "
+            f"compound={compound}"
         )
 
     def add_example(

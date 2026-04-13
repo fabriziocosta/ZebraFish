@@ -5,11 +5,16 @@ import json
 from pathlib import Path
 from typing import Any
 
+from IPython.display import display
 import pandas as pd
 import torch
 
 from src.training.data import augment_training_tensors_with_rotations, split_labeled_tensor_dataset_by_instance
-from src.training.reporting import build_multitask_classification_reports
+from src.training.reporting import (
+    build_multitask_classification_reports,
+    display_multitask_reports_and_confusions,
+    plot_embedding_projection,
+)
 
 
 @dataclass
@@ -33,6 +38,13 @@ class ExperimentArtifacts:
     summary_metrics_path: str
     per_class_dir: str
     checkpoint_path: str
+
+
+@dataclass
+class MultitaskEvaluationResult:
+    predictions: dict[str, Any]
+    probabilities: dict[str, Any]
+    reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]]
 
 
 def prepare_multitask_experiment_data(
@@ -130,6 +142,101 @@ def evaluate_multitask_estimator(
         label_maps=label_maps,
         class_labels=class_labels,
     )
+
+
+def fit_estimator_on_experiment(estimator, experiment: MultitaskExperimentData):
+    splits = experiment.splits
+    estimator.fit(
+        experiment.X_train,
+        experiment.y_train.to_numpy(),
+        validation_data=(splits.X_val, splits.y_val),
+        compound_y=None if experiment.compound_train is None else experiment.compound_train.to_numpy(),
+        concentration_y=None if experiment.concentration_train is None else experiment.concentration_train.to_numpy(),
+        validation_compound_y=splits.compound_val,
+        validation_concentration_y=splits.concentration_val,
+    )
+    return estimator
+
+
+def display_experiment_summary(experiment: MultitaskExperimentData, *, top_n: int = 20) -> None:
+    splits = experiment.splits
+    summary_df = pd.DataFrame(
+        [
+            {"split": "train_augmented", "n_samples": int(len(experiment.X_train))},
+            {"split": "train_base", "n_samples": int(len(splits.X_train_base))},
+            {"split": "val", "n_samples": int(len(splits.X_val))},
+            {"split": "holdout", "n_samples": int(len(splits.X_holdout))},
+        ]
+    )
+    display(summary_df)
+    if experiment.train_metadata is not None:
+        display(
+            experiment.train_metadata[["mechanism_of_action", "compound", "concentration_band"]]
+            .value_counts()
+            .rename("n_samples")
+            .reset_index()
+            .head(top_n)
+        )
+
+
+def display_holdout_evaluation(
+    estimator,
+    experiment: MultitaskExperimentData,
+) -> MultitaskEvaluationResult:
+    predictions = estimator.predict(experiment.splits.X_holdout)
+    probabilities = estimator.predict_proba(experiment.splits.X_holdout)
+    reports = evaluate_multitask_estimator(
+        estimator,
+        experiment.splits.X_holdout,
+        experiment.y_true_holdout,
+        label_maps=experiment.label_maps,
+        class_labels=experiment.class_labels,
+    )
+    display_multitask_reports_and_confusions(
+        reports,
+        y_true=experiment.y_true_holdout,
+        y_pred=predictions,
+        class_labels=experiment.class_labels,
+        label_maps=experiment.label_maps,
+    )
+    return MultitaskEvaluationResult(
+        predictions=predictions,
+        probabilities=probabilities,
+        reports=reports,
+    )
+
+
+def plot_holdout_embedding_projection(
+    estimator,
+    experiment: MultitaskExperimentData,
+    *,
+    target: str = "action",
+    title: str = "Holdout embedding projection",
+) -> pd.DataFrame:
+    return plot_embedding_projection(
+        estimator.transform(experiment.splits.X_holdout),
+        experiment.y_true_holdout[target],
+        experiment.label_maps[target],
+        title=title,
+    )
+
+
+def plot_holdout_branch_embedding_projections(
+    estimator,
+    experiment: MultitaskExperimentData,
+    *,
+    target: str = "action",
+) -> dict[str, pd.DataFrame]:
+    branch_embeddings = estimator.transform_branches(experiment.splits.X_holdout)
+    projections: dict[str, pd.DataFrame] = {}
+    for key in ["st_embedding", "ts_embedding", "embedding"]:
+        projections[key] = plot_embedding_projection(
+            branch_embeddings[key],
+            experiment.y_true_holdout[target],
+            experiment.label_maps[target],
+            title=f"Holdout {key} projection by {target}",
+        )
+    return projections
 
 
 def persist_experiment_artifacts(
