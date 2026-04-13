@@ -1,5 +1,7 @@
 # Introduction
 
+This document is the conceptual overview of the project. For preprocessing details, see [preprocessing.md](preprocessing.md). For the formal method specification, see [method.md](method.md).
+
 **Commutative Representation Learning via Prototype-Consistent Dual Pathways**
 
 ---

@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn.functional as F
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
@@ -155,6 +156,234 @@ class _TimeChannel3DCNN(nn.Module):
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         return self.classifier(self.forward_features(X))
+
+
+class _Conv1DStack(nn.Module):
+    def __init__(
+        self,
+        *,
+        in_channels: int,
+        channels: Sequence[int],
+        kernel_sizes: Sequence[int],
+        dropout: float,
+    ) -> None:
+        super().__init__()
+        blocks: list[nn.Module] = []
+        current_channels = in_channels
+        for index, out_channels in enumerate(channels):
+            kernel_size = int(kernel_sizes[index])
+            blocks.append(
+                nn.Conv1d(
+                    in_channels=current_channels,
+                    out_channels=int(out_channels),
+                    kernel_size=kernel_size,
+                    padding=kernel_size // 2,
+                    bias=False,
+                )
+            )
+            blocks.append(nn.BatchNorm1d(int(out_channels)))
+            blocks.append(nn.ReLU(inplace=True))
+            if dropout > 0:
+                blocks.append(nn.Dropout(p=dropout))
+            current_channels = int(out_channels)
+        self.network = nn.Sequential(*blocks)
+        self.out_channels = current_channels
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        return self.network(X)
+
+
+class _Conv3DBackbone(nn.Module):
+    def __init__(
+        self,
+        *,
+        in_channels: int,
+        conv_channels: Sequence[int],
+        kernel_size_z: Sequence[int],
+        kernel_size_xy: Sequence[int],
+        stride_z: Sequence[int],
+        stride_xy: Sequence[int],
+        pool_kernel_z: Sequence[int],
+        pool_kernel_xy: Sequence[int],
+        pool_stride_z: Sequence[int],
+        pool_stride_xy: Sequence[int],
+    ) -> None:
+        super().__init__()
+
+        blocks: list[nn.Module] = []
+        current_channels = in_channels
+        for block_index, out_channels in enumerate(conv_channels):
+            blocks.append(
+                nn.Conv3d(
+                    in_channels=current_channels,
+                    out_channels=int(out_channels),
+                    kernel_size=_as_tuple(kernel_size_z[block_index], kernel_size_xy[block_index]),
+                    stride=_as_tuple(stride_z[block_index], stride_xy[block_index]),
+                    padding=_as_tuple(kernel_size_z[block_index] // 2, kernel_size_xy[block_index] // 2),
+                    bias=False,
+                )
+            )
+            blocks.append(nn.BatchNorm3d(int(out_channels)))
+            blocks.append(nn.ReLU(inplace=True))
+
+            pool_kernel = _as_tuple(pool_kernel_z[block_index], pool_kernel_xy[block_index])
+            pool_stride = _as_tuple(pool_stride_z[block_index], pool_stride_xy[block_index])
+            if pool_kernel != (1, 1, 1):
+                blocks.append(nn.MaxPool3d(kernel_size=pool_kernel, stride=pool_stride))
+            current_channels = int(out_channels)
+
+        self.network = nn.Sequential(*blocks)
+        self.out_channels = current_channels
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        return self.network(X)
+
+
+class _PureCNNDualPathwayNetwork(nn.Module):
+    def __init__(
+        self,
+        *,
+        num_classes: int,
+        spatial_conv_channels: Sequence[int],
+        spatial_kernel_size_z: Sequence[int],
+        spatial_kernel_size_xy: Sequence[int],
+        spatial_stride_z: Sequence[int],
+        spatial_stride_xy: Sequence[int],
+        spatial_pool_kernel_z: Sequence[int],
+        spatial_pool_kernel_xy: Sequence[int],
+        spatial_pool_stride_z: Sequence[int],
+        spatial_pool_stride_xy: Sequence[int],
+        temporal_st_channels: Sequence[int],
+        temporal_st_kernel_sizes: Sequence[int],
+        temporal_ts_channels: Sequence[int],
+        temporal_ts_kernel_sizes: Sequence[int],
+        spatial_agg_channels: Sequence[int],
+        spatial_agg_kernel_size_z: Sequence[int],
+        spatial_agg_kernel_size_xy: Sequence[int],
+        spatial_agg_stride_z: Sequence[int],
+        spatial_agg_stride_xy: Sequence[int],
+        spatial_agg_pool_kernel_z: Sequence[int],
+        spatial_agg_pool_kernel_xy: Sequence[int],
+        spatial_agg_pool_stride_z: Sequence[int],
+        spatial_agg_pool_stride_xy: Sequence[int],
+        patch_size_z: int,
+        patch_size_xy: int,
+        embedding_dim: int,
+        num_prototypes: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
+        self.patch_size_z = int(patch_size_z)
+        self.patch_size_xy = int(patch_size_xy)
+        if self.patch_size_z <= 0 or self.patch_size_xy <= 0:
+            raise ValueError("patch_size_z and patch_size_xy must be positive")
+
+        self.frame_encoder = _Conv3DBackbone(
+            in_channels=1,
+            conv_channels=spatial_conv_channels,
+            kernel_size_z=spatial_kernel_size_z,
+            kernel_size_xy=spatial_kernel_size_xy,
+            stride_z=spatial_stride_z,
+            stride_xy=spatial_stride_xy,
+            pool_kernel_z=spatial_pool_kernel_z,
+            pool_kernel_xy=spatial_pool_kernel_xy,
+            pool_stride_z=spatial_pool_stride_z,
+            pool_stride_xy=spatial_pool_stride_xy,
+        )
+        self.frame_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        self.temporal_st = _Conv1DStack(
+            in_channels=self.frame_encoder.out_channels,
+            channels=temporal_st_channels,
+            kernel_sizes=temporal_st_kernel_sizes,
+            dropout=dropout,
+        )
+        self.st_projection = nn.Linear(self.temporal_st.out_channels, embedding_dim)
+
+        self.temporal_ts = _Conv1DStack(
+            in_channels=1,
+            channels=temporal_ts_channels,
+            kernel_sizes=temporal_ts_kernel_sizes,
+            dropout=dropout,
+        )
+        self.spatial_aggregator = _Conv3DBackbone(
+            in_channels=self.temporal_ts.out_channels,
+            conv_channels=spatial_agg_channels,
+            kernel_size_z=spatial_agg_kernel_size_z,
+            kernel_size_xy=spatial_agg_kernel_size_xy,
+            stride_z=spatial_agg_stride_z,
+            stride_xy=spatial_agg_stride_xy,
+            pool_kernel_z=spatial_agg_pool_kernel_z,
+            pool_kernel_xy=spatial_agg_pool_kernel_xy,
+            pool_stride_z=spatial_agg_pool_stride_z,
+            pool_stride_xy=spatial_agg_pool_stride_xy,
+        )
+        self.spatial_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        self.ts_projection = nn.Linear(self.spatial_aggregator.out_channels, embedding_dim)
+
+        self.prototype_layer = nn.Linear(embedding_dim, num_prototypes, bias=False)
+        self.classifier = nn.Linear(embedding_dim, num_classes)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def _validate_patch_shape(self, X: torch.Tensor) -> tuple[int, int, int]:
+        _, _, z_size, y_size, x_size = X.shape
+        if z_size % self.patch_size_z != 0 or y_size % self.patch_size_xy != 0 or x_size % self.patch_size_xy != 0:
+            raise ValueError(
+                "Input spatial dimensions must be divisible by patch sizes: "
+                f"got {(z_size, y_size, x_size)} with patch sizes "
+                f"{(self.patch_size_z, self.patch_size_xy, self.patch_size_xy)}"
+            )
+        return z_size // self.patch_size_z, y_size // self.patch_size_xy, x_size // self.patch_size_xy
+
+    def _forward_st(self, X: torch.Tensor) -> torch.Tensor:
+        n_samples, n_timepoints, _, _, _ = X.shape
+        frames = X.reshape(n_samples * n_timepoints, 1, *X.shape[2:])
+        frame_features = self.frame_encoder(frames)
+        frame_features = self.frame_pool(frame_features).flatten(1)
+        frame_features = frame_features.reshape(n_samples, n_timepoints, -1).transpose(1, 2)
+        temporal_features = self.temporal_st(frame_features)
+        temporal_features = temporal_features.mean(dim=-1)
+        return self.st_projection(self.dropout(temporal_features))
+
+    def _forward_ts(self, X: torch.Tensor) -> torch.Tensor:
+        n_samples, n_timepoints, _, _, _ = X.shape
+        patch_grid_z, patch_grid_y, patch_grid_x = self._validate_patch_shape(X)
+
+        pooled = F.avg_pool3d(
+            X.reshape(n_samples * n_timepoints, 1, *X.shape[2:]),
+            kernel_size=(self.patch_size_z, self.patch_size_xy, self.patch_size_xy),
+            stride=(self.patch_size_z, self.patch_size_xy, self.patch_size_xy),
+        )
+        pooled = pooled.reshape(n_samples, n_timepoints, patch_grid_z, patch_grid_y, patch_grid_x)
+        patch_sequences = pooled.permute(0, 2, 3, 4, 1).reshape(n_samples * patch_grid_z * patch_grid_y * patch_grid_x, 1, n_timepoints)
+
+        patch_embeddings = self.temporal_ts(patch_sequences).mean(dim=-1)
+        patch_embeddings = patch_embeddings.reshape(
+            n_samples,
+            patch_grid_z,
+            patch_grid_y,
+            patch_grid_x,
+            self.temporal_ts.out_channels,
+        ).permute(0, 4, 1, 2, 3)
+        spatial_features = self.spatial_aggregator(patch_embeddings)
+        spatial_features = self.spatial_pool(spatial_features).flatten(1)
+        return self.ts_projection(self.dropout(spatial_features))
+
+    def forward_features(self, X: torch.Tensor) -> dict[str, torch.Tensor]:
+        st_embedding = self._forward_st(X)
+        ts_embedding = self._forward_ts(X)
+        fused_embedding = 0.5 * (st_embedding + ts_embedding)
+        return {
+            "st_embedding": st_embedding,
+            "ts_embedding": ts_embedding,
+            "embedding": fused_embedding,
+            "st_prototypes": self.prototype_layer(st_embedding),
+            "ts_prototypes": self.prototype_layer(ts_embedding),
+        }
+
+    def forward(self, X: torch.Tensor) -> dict[str, torch.Tensor]:
+        outputs = self.forward_features(X)
+        outputs["logits"] = self.classifier(outputs["embedding"])
+        return outputs
 
 
 class Zebrafish3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin):
@@ -453,6 +682,470 @@ class Zebrafish3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
         return float(accuracy_score(y_true, y_pred))
 
 
+class ZebrafishCommutativeCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin):
+    def __init__(
+        self,
+        *,
+        spatial_conv_channels: tuple[int, ...] = (16, 32, 64),
+        spatial_kernel_size_z: int | tuple[int, ...] = 1,
+        spatial_kernel_size_xy: int | tuple[int, ...] = 3,
+        spatial_stride_z: int | tuple[int, ...] = 1,
+        spatial_stride_xy: int | tuple[int, ...] = 1,
+        spatial_pool_kernel_z: int | tuple[int, ...] = 1,
+        spatial_pool_kernel_xy: int | tuple[int, ...] = 2,
+        spatial_pool_stride_z: int | tuple[int, ...] | None = None,
+        spatial_pool_stride_xy: int | tuple[int, ...] | None = None,
+        temporal_st_channels: tuple[int, ...] = (128, 128),
+        temporal_st_kernel_sizes: int | tuple[int, ...] = 3,
+        temporal_ts_channels: tuple[int, ...] = (64, 64),
+        temporal_ts_kernel_sizes: int | tuple[int, ...] = 5,
+        spatial_agg_channels: tuple[int, ...] = (64, 128),
+        spatial_agg_kernel_size_z: int | tuple[int, ...] = 3,
+        spatial_agg_kernel_size_xy: int | tuple[int, ...] = 3,
+        spatial_agg_stride_z: int | tuple[int, ...] = 1,
+        spatial_agg_stride_xy: int | tuple[int, ...] = 1,
+        spatial_agg_pool_kernel_z: int | tuple[int, ...] = 1,
+        spatial_agg_pool_kernel_xy: int | tuple[int, ...] = 2,
+        spatial_agg_pool_stride_z: int | tuple[int, ...] | None = None,
+        spatial_agg_pool_stride_xy: int | tuple[int, ...] | None = None,
+        patch_size_z: int = 1,
+        patch_size_xy: int = 16,
+        embedding_dim: int = 128,
+        num_prototypes: int = 64,
+        consistency_weight: float = 0.5,
+        feature_weight: float = 0.1,
+        prototype_temperature: float = 0.1,
+        dropout: float = 0.2,
+        batch_size: int = 16,
+        epochs: int = 20,
+        learning_rate: float = 1e-3,
+        weight_decay: float = 1e-4,
+        validation_split: float = 0.2,
+        random_state: int = 0,
+        standardize: bool = True,
+        device: str | None = None,
+        verbose: bool = True,
+    ) -> None:
+        self.spatial_conv_channels = spatial_conv_channels
+        self.spatial_kernel_size_z = spatial_kernel_size_z
+        self.spatial_kernel_size_xy = spatial_kernel_size_xy
+        self.spatial_stride_z = spatial_stride_z
+        self.spatial_stride_xy = spatial_stride_xy
+        self.spatial_pool_kernel_z = spatial_pool_kernel_z
+        self.spatial_pool_kernel_xy = spatial_pool_kernel_xy
+        self.spatial_pool_stride_z = spatial_pool_stride_z
+        self.spatial_pool_stride_xy = spatial_pool_stride_xy
+        self.temporal_st_channels = temporal_st_channels
+        self.temporal_st_kernel_sizes = temporal_st_kernel_sizes
+        self.temporal_ts_channels = temporal_ts_channels
+        self.temporal_ts_kernel_sizes = temporal_ts_kernel_sizes
+        self.spatial_agg_channels = spatial_agg_channels
+        self.spatial_agg_kernel_size_z = spatial_agg_kernel_size_z
+        self.spatial_agg_kernel_size_xy = spatial_agg_kernel_size_xy
+        self.spatial_agg_stride_z = spatial_agg_stride_z
+        self.spatial_agg_stride_xy = spatial_agg_stride_xy
+        self.spatial_agg_pool_kernel_z = spatial_agg_pool_kernel_z
+        self.spatial_agg_pool_kernel_xy = spatial_agg_pool_kernel_xy
+        self.spatial_agg_pool_stride_z = spatial_agg_pool_stride_z
+        self.spatial_agg_pool_stride_xy = spatial_agg_pool_stride_xy
+        self.patch_size_z = patch_size_z
+        self.patch_size_xy = patch_size_xy
+        self.embedding_dim = embedding_dim
+        self.num_prototypes = num_prototypes
+        self.consistency_weight = consistency_weight
+        self.feature_weight = feature_weight
+        self.prototype_temperature = prototype_temperature
+        self.dropout = dropout
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.validation_split = validation_split
+        self.random_state = random_state
+        self.standardize = standardize
+        self.device = device
+        self.verbose = verbose
+
+    def _device(self) -> torch.device:
+        if self.device is not None:
+            return torch.device(self.device)
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    def _standardize_fit(self, X: torch.Tensor) -> None:
+        if self.standardize:
+            self.input_mean_ = float(X.mean().item())
+            self.input_std_ = float(X.std().item())
+            if self.input_std_ == 0:
+                self.input_std_ = 1.0
+        else:
+            self.input_mean_ = 0.0
+            self.input_std_ = 1.0
+
+    def _standardize_apply(self, X: torch.Tensor) -> torch.Tensor:
+        return (X - self.input_mean_) / self.input_std_
+
+    def _encode_labels(self, y: np.ndarray) -> torch.Tensor:
+        encoded = np.array([self.class_to_index_[value] for value in y], dtype=np.int64)
+        return torch.from_numpy(encoded)
+
+    def _prepare_training_data(
+        self,
+        X: torch.Tensor | np.ndarray,
+        y: torch.Tensor | np.ndarray | Sequence[int],
+        validation_data: tuple[torch.Tensor | np.ndarray, torch.Tensor | np.ndarray | Sequence[int]] | None,
+    ) -> _PreparedData:
+        X_tensor = _ensure_tensor_5d(X)
+        y_values = _ensure_labels_1d(y)
+        if len(X_tensor) != len(y_values):
+            raise ValueError("X and y must have the same number of samples")
+
+        self.classes_ = np.array(sorted(np.unique(y_values)))
+        self.class_to_index_ = {label: index for index, label in enumerate(self.classes_)}
+
+        if validation_data is not None:
+            X_val = _ensure_tensor_5d(validation_data[0])
+            y_val_values = _ensure_labels_1d(validation_data[1])
+            if len(X_val) != len(y_val_values):
+                raise ValueError("validation_data tensors and labels must have the same number of samples")
+            X_train = X_tensor
+            y_train_values = y_values
+        elif self.validation_split and 0 < self.validation_split < 1:
+            indices = np.arange(len(y_values))
+            stratify = y_values if len(np.unique(y_values)) > 1 else None
+            try:
+                train_indices, val_indices = train_test_split(
+                    indices,
+                    test_size=self.validation_split,
+                    random_state=self.random_state,
+                    stratify=stratify,
+                )
+            except ValueError:
+                train_indices, val_indices = train_test_split(
+                    indices,
+                    test_size=self.validation_split,
+                    random_state=self.random_state,
+                    stratify=None,
+                )
+            X_train = X_tensor[train_indices]
+            X_val = X_tensor[val_indices]
+            y_train_values = y_values[train_indices]
+            y_val_values = y_values[val_indices]
+        else:
+            X_train = X_tensor
+            X_val = None
+            y_train_values = y_values
+            y_val_values = None
+
+        self._standardize_fit(X_train)
+        X_train = self._standardize_apply(X_train)
+        y_train = self._encode_labels(y_train_values)
+
+        if X_val is not None and y_val_values is not None:
+            X_val = self._standardize_apply(X_val)
+            y_val = self._encode_labels(y_val_values)
+        else:
+            X_val = None
+            y_val = None
+
+        return _PreparedData(X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val)
+
+    def _build_model(self, num_classes: int) -> _PureCNNDualPathwayNetwork:
+        n_spatial_blocks = len(self.spatial_conv_channels)
+        n_agg_blocks = len(self.spatial_agg_channels)
+        temporal_st_kernels = _expand_per_block(
+            self.temporal_st_kernel_sizes,
+            len(self.temporal_st_channels),
+            "temporal_st_kernel_sizes",
+        )
+        temporal_ts_kernels = _expand_per_block(
+            self.temporal_ts_kernel_sizes,
+            len(self.temporal_ts_channels),
+            "temporal_ts_kernel_sizes",
+        )
+        spatial_pool_stride_z = self.spatial_pool_kernel_z if self.spatial_pool_stride_z is None else self.spatial_pool_stride_z
+        spatial_pool_stride_xy = self.spatial_pool_kernel_xy if self.spatial_pool_stride_xy is None else self.spatial_pool_stride_xy
+        spatial_agg_pool_stride_z = (
+            self.spatial_agg_pool_kernel_z if self.spatial_agg_pool_stride_z is None else self.spatial_agg_pool_stride_z
+        )
+        spatial_agg_pool_stride_xy = (
+            self.spatial_agg_pool_kernel_xy if self.spatial_agg_pool_stride_xy is None else self.spatial_agg_pool_stride_xy
+        )
+        return _PureCNNDualPathwayNetwork(
+            num_classes=num_classes,
+            spatial_conv_channels=self.spatial_conv_channels,
+            spatial_kernel_size_z=_expand_per_block(self.spatial_kernel_size_z, n_spatial_blocks, "spatial_kernel_size_z"),
+            spatial_kernel_size_xy=_expand_per_block(self.spatial_kernel_size_xy, n_spatial_blocks, "spatial_kernel_size_xy"),
+            spatial_stride_z=_expand_per_block(self.spatial_stride_z, n_spatial_blocks, "spatial_stride_z"),
+            spatial_stride_xy=_expand_per_block(self.spatial_stride_xy, n_spatial_blocks, "spatial_stride_xy"),
+            spatial_pool_kernel_z=_expand_per_block(self.spatial_pool_kernel_z, n_spatial_blocks, "spatial_pool_kernel_z"),
+            spatial_pool_kernel_xy=_expand_per_block(self.spatial_pool_kernel_xy, n_spatial_blocks, "spatial_pool_kernel_xy"),
+            spatial_pool_stride_z=_expand_per_block(spatial_pool_stride_z, n_spatial_blocks, "spatial_pool_stride_z"),
+            spatial_pool_stride_xy=_expand_per_block(spatial_pool_stride_xy, n_spatial_blocks, "spatial_pool_stride_xy"),
+            temporal_st_channels=self.temporal_st_channels,
+            temporal_st_kernel_sizes=temporal_st_kernels,
+            temporal_ts_channels=self.temporal_ts_channels,
+            temporal_ts_kernel_sizes=temporal_ts_kernels,
+            spatial_agg_channels=self.spatial_agg_channels,
+            spatial_agg_kernel_size_z=_expand_per_block(self.spatial_agg_kernel_size_z, n_agg_blocks, "spatial_agg_kernel_size_z"),
+            spatial_agg_kernel_size_xy=_expand_per_block(self.spatial_agg_kernel_size_xy, n_agg_blocks, "spatial_agg_kernel_size_xy"),
+            spatial_agg_stride_z=_expand_per_block(self.spatial_agg_stride_z, n_agg_blocks, "spatial_agg_stride_z"),
+            spatial_agg_stride_xy=_expand_per_block(self.spatial_agg_stride_xy, n_agg_blocks, "spatial_agg_stride_xy"),
+            spatial_agg_pool_kernel_z=_expand_per_block(self.spatial_agg_pool_kernel_z, n_agg_blocks, "spatial_agg_pool_kernel_z"),
+            spatial_agg_pool_kernel_xy=_expand_per_block(self.spatial_agg_pool_kernel_xy, n_agg_blocks, "spatial_agg_pool_kernel_xy"),
+            spatial_agg_pool_stride_z=_expand_per_block(spatial_agg_pool_stride_z, n_agg_blocks, "spatial_agg_pool_stride_z"),
+            spatial_agg_pool_stride_xy=_expand_per_block(spatial_agg_pool_stride_xy, n_agg_blocks, "spatial_agg_pool_stride_xy"),
+            patch_size_z=self.patch_size_z,
+            patch_size_xy=self.patch_size_xy,
+            embedding_dim=self.embedding_dim,
+            num_prototypes=self.num_prototypes,
+            dropout=self.dropout,
+        )
+
+    def _consistency_loss(self, st_logits: torch.Tensor, ts_logits: torch.Tensor) -> torch.Tensor:
+        temperature = float(self.prototype_temperature)
+        st_targets = torch.softmax(st_logits.detach() / temperature, dim=1)
+        ts_targets = torch.softmax(ts_logits.detach() / temperature, dim=1)
+        st_log_probs = torch.log_softmax(st_logits / temperature, dim=1)
+        ts_log_probs = torch.log_softmax(ts_logits / temperature, dim=1)
+        loss_st = -(st_targets * ts_log_probs).sum(dim=1).mean()
+        loss_ts = -(ts_targets * st_log_probs).sum(dim=1).mean()
+        return 0.5 * (loss_st + loss_ts)
+
+    def _compute_losses(self, outputs: dict[str, torch.Tensor], targets: torch.Tensor, criterion: nn.Module) -> tuple[torch.Tensor, dict[str, float]]:
+        classification_loss = criterion(outputs["logits"], targets)
+        consistency_loss = self._consistency_loss(outputs["st_prototypes"], outputs["ts_prototypes"])
+        feature_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
+        total_loss = (
+            classification_loss
+            + float(self.consistency_weight) * consistency_loss
+            + float(self.feature_weight) * feature_loss
+        )
+        return total_loss, {
+            "classification_loss": float(classification_loss.item()),
+            "consistency_loss": float(consistency_loss.item()),
+            "feature_loss": float(feature_loss.item()),
+        }
+
+    def fit(
+        self,
+        X: torch.Tensor | np.ndarray,
+        y: torch.Tensor | np.ndarray | Sequence[int],
+        *,
+        validation_data: tuple[torch.Tensor | np.ndarray, torch.Tensor | np.ndarray | Sequence[int]] | None = None,
+    ) -> "ZebrafishCommutativeCNNClassifier":
+        prepared = self._prepare_training_data(X, y, validation_data)
+        self.model_ = self._build_model(num_classes=len(self.classes_))
+        self.device_ = self._device()
+        self.model_.to(self.device_)
+        self.input_shape_ = tuple(int(size) for size in prepared.X_train.shape[1:])
+
+        train_loader = DataLoader(
+            TensorDataset(prepared.X_train, prepared.y_train),
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+        val_loader = (
+            DataLoader(
+                TensorDataset(prepared.X_val, prepared.y_val),
+                batch_size=self.batch_size,
+                shuffle=False,
+            )
+            if prepared.X_val is not None and prepared.y_val is not None
+            else None
+        )
+
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(
+            self.model_.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+        )
+
+        history_rows: list[dict[str, float | int]] = []
+        best_state = deepcopy(self.model_.state_dict())
+        best_metric = float("inf")
+        training_start = time.perf_counter()
+
+        for epoch in range(1, self.epochs + 1):
+            self.model_.train()
+            train_total_loss_sum = 0.0
+            train_classification_loss_sum = 0.0
+            train_consistency_loss_sum = 0.0
+            train_feature_loss_sum = 0.0
+            train_count = 0
+
+            for X_batch, y_batch in train_loader:
+                X_batch = X_batch.to(self.device_, non_blocking=True)
+                y_batch = y_batch.to(self.device_, non_blocking=True)
+
+                optimizer.zero_grad(set_to_none=True)
+                outputs = self.model_(X_batch)
+                loss, loss_components = self._compute_losses(outputs, y_batch, criterion)
+                loss.backward()
+                optimizer.step()
+
+                batch_size = int(X_batch.shape[0])
+                train_total_loss_sum += float(loss.item()) * batch_size
+                train_classification_loss_sum += loss_components["classification_loss"] * batch_size
+                train_consistency_loss_sum += loss_components["consistency_loss"] * batch_size
+                train_feature_loss_sum += loss_components["feature_loss"] * batch_size
+                train_count += batch_size
+
+            row: dict[str, float | int] = {
+                "epoch": epoch,
+                "train_loss": train_total_loss_sum / max(train_count, 1),
+                "train_classification_loss": train_classification_loss_sum / max(train_count, 1),
+                "train_consistency_loss": train_consistency_loss_sum / max(train_count, 1),
+                "train_feature_loss": train_feature_loss_sum / max(train_count, 1),
+            }
+
+            if val_loader is not None:
+                self.model_.eval()
+                val_total_loss_sum = 0.0
+                val_classification_loss_sum = 0.0
+                val_consistency_loss_sum = 0.0
+                val_feature_loss_sum = 0.0
+                val_count = 0
+                with torch.no_grad():
+                    for X_batch, y_batch in val_loader:
+                        X_batch = X_batch.to(self.device_, non_blocking=True)
+                        y_batch = y_batch.to(self.device_, non_blocking=True)
+                        outputs = self.model_(X_batch)
+                        loss, loss_components = self._compute_losses(outputs, y_batch, criterion)
+                        batch_size = int(X_batch.shape[0])
+                        val_total_loss_sum += float(loss.item()) * batch_size
+                        val_classification_loss_sum += loss_components["classification_loss"] * batch_size
+                        val_consistency_loss_sum += loss_components["consistency_loss"] * batch_size
+                        val_feature_loss_sum += loss_components["feature_loss"] * batch_size
+                        val_count += batch_size
+                row["val_loss"] = val_total_loss_sum / max(val_count, 1)
+                row["val_classification_loss"] = val_classification_loss_sum / max(val_count, 1)
+                row["val_consistency_loss"] = val_consistency_loss_sum / max(val_count, 1)
+                row["val_feature_loss"] = val_feature_loss_sum / max(val_count, 1)
+                metric = float(row["val_loss"])
+            else:
+                metric = float(row["train_loss"])
+
+            if metric <= best_metric:
+                best_metric = metric
+                best_state = deepcopy(self.model_.state_dict())
+
+            history_rows.append(row)
+            if self.verbose:
+                elapsed = time.perf_counter() - training_start
+                avg_epoch_seconds = elapsed / epoch
+                eta = _format_eta(avg_epoch_seconds * (self.epochs - epoch))
+                if "val_loss" in row:
+                    print(
+                        f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} "
+                        f"val_loss={row['val_loss']:.4f} eta={eta}"
+                    )
+                else:
+                    print(f"epoch {epoch:03d}/{self.epochs:03d} train_loss={row['train_loss']:.4f} eta={eta}")
+
+        self.model_.load_state_dict(best_state)
+        self.model_.eval()
+        self.history_ = pd.DataFrame(history_rows)
+        return self
+
+    def _forward_batches(self, X: torch.Tensor | np.ndarray, *, output_key: str) -> np.ndarray:
+        check_is_fitted(self, ["model_", "classes_", "input_mean_", "input_std_"])
+        X_tensor = self._standardize_apply(_ensure_tensor_5d(X))
+        loader = DataLoader(TensorDataset(X_tensor), batch_size=self.batch_size, shuffle=False)
+        outputs: list[np.ndarray] = []
+        self.model_.eval()
+        with torch.no_grad():
+            for (X_batch,) in loader:
+                X_batch = X_batch.to(self.device_, non_blocking=True)
+                batch_out = self.model_(X_batch)[output_key]
+                outputs.append(batch_out.detach().cpu().numpy())
+        return np.concatenate(outputs, axis=0)
+
+    def _forward_feature_batches(self, X: torch.Tensor | np.ndarray) -> dict[str, np.ndarray]:
+        check_is_fitted(self, ["model_", "classes_", "input_mean_", "input_std_"])
+        X_tensor = self._standardize_apply(_ensure_tensor_5d(X))
+        loader = DataLoader(TensorDataset(X_tensor), batch_size=self.batch_size, shuffle=False)
+        collected = {
+            "st_embedding": [],
+            "ts_embedding": [],
+            "embedding": [],
+            "st_prototypes": [],
+            "ts_prototypes": [],
+            "logits": [],
+        }
+        self.model_.eval()
+        with torch.no_grad():
+            for (X_batch,) in loader:
+                X_batch = X_batch.to(self.device_, non_blocking=True)
+                outputs = self.model_(X_batch)
+                for key in collected:
+                    collected[key].append(outputs[key].detach().cpu().numpy())
+        return {key: np.concatenate(values, axis=0) for key, values in collected.items()}
+
+    def predict_proba(self, X: torch.Tensor | np.ndarray) -> np.ndarray:
+        logits = self._forward_batches(X, output_key="logits")
+        return torch.softmax(torch.from_numpy(logits), dim=1).numpy()
+
+    def predict(self, X: torch.Tensor | np.ndarray) -> np.ndarray:
+        probabilities = self.predict_proba(X)
+        indices = probabilities.argmax(axis=1)
+        return self.classes_[indices]
+
+    def transform(self, X: torch.Tensor | np.ndarray) -> np.ndarray:
+        return self._forward_batches(X, output_key="embedding")
+
+    def transform_branches(self, X: torch.Tensor | np.ndarray) -> dict[str, np.ndarray]:
+        outputs = self._forward_feature_batches(X)
+        return {
+            "st_embedding": outputs["st_embedding"],
+            "ts_embedding": outputs["ts_embedding"],
+            "embedding": outputs["embedding"],
+        }
+
+    def evaluate_loss_components(
+        self,
+        X: torch.Tensor | np.ndarray,
+        y: torch.Tensor | np.ndarray | Sequence[int],
+    ) -> dict[str, float]:
+        check_is_fitted(self, ["model_", "classes_", "input_mean_", "input_std_"])
+        X_tensor = self._standardize_apply(_ensure_tensor_5d(X))
+        y_values = _ensure_labels_1d(y)
+        if len(X_tensor) != len(y_values):
+            raise ValueError("X and y must have the same number of samples")
+        y_tensor = self._encode_labels(y_values)
+        loader = DataLoader(TensorDataset(X_tensor, y_tensor), batch_size=self.batch_size, shuffle=False)
+        criterion = nn.CrossEntropyLoss()
+        total_loss_sum = 0.0
+        classification_loss_sum = 0.0
+        consistency_loss_sum = 0.0
+        feature_loss_sum = 0.0
+        count = 0
+        self.model_.eval()
+        with torch.no_grad():
+            for X_batch, y_batch in loader:
+                X_batch = X_batch.to(self.device_, non_blocking=True)
+                y_batch = y_batch.to(self.device_, non_blocking=True)
+                outputs = self.model_(X_batch)
+                loss, loss_components = self._compute_losses(outputs, y_batch, criterion)
+                batch_size = int(X_batch.shape[0])
+                total_loss_sum += float(loss.item()) * batch_size
+                classification_loss_sum += loss_components["classification_loss"] * batch_size
+                consistency_loss_sum += loss_components["consistency_loss"] * batch_size
+                feature_loss_sum += loss_components["feature_loss"] * batch_size
+                count += batch_size
+        return {
+            "loss": total_loss_sum / max(count, 1),
+            "classification_loss": classification_loss_sum / max(count, 1),
+            "consistency_loss": consistency_loss_sum / max(count, 1),
+            "feature_loss": feature_loss_sum / max(count, 1),
+        }
+
+    def score(self, X: torch.Tensor | np.ndarray, y: torch.Tensor | np.ndarray | Sequence[int]) -> float:
+        y_true = _ensure_labels_1d(y)
+        y_pred = self.predict(X)
+        return float(accuracy_score(y_true, y_pred))
+
+
 def augment_training_tensors_with_rotations(
     tensors: torch.Tensor | np.ndarray,
     labels: torch.Tensor | np.ndarray | Sequence[int],
@@ -594,12 +1287,12 @@ def split_labeled_tensor_dataset_by_instance(
 
 
 def plot_training_history(
-    history: pd.DataFrame | Zebrafish3DCNNClassifier,
+    history: pd.DataFrame | Zebrafish3DCNNClassifier | ZebrafishCommutativeCNNClassifier,
     *,
     ax=None,
     title: str = "Training history",
 ):
-    if isinstance(history, Zebrafish3DCNNClassifier):
+    if isinstance(history, (Zebrafish3DCNNClassifier, ZebrafishCommutativeCNNClassifier)):
         check_is_fitted(history, ["history_"])
         history_df = history.history_
     else:

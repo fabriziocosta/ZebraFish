@@ -1,6 +1,12 @@
 # Method: Commutative Representation Learning for 4D Calcium Imaging
 
-This document describes the method itself. Repository structure, notebook flow, and code entry points remain indexed in [README.md](/home/fabrizio/code/ZebraFish/README.md).
+This document describes the method itself. Repository structure, notebook flow, and code entry points remain indexed in [README.md](../README.md), while preprocessing details are documented in [preprocessing.md](preprocessing.md).
+
+Status:
+
+- this document specifies the proposed commutative dual-pathway method
+- the currently implemented repository baseline is the simpler 3D CNN classifier described in [README.md](../README.md)
+- an experimental pure-CNN dual-pathway implementation is now available in `ZebrafishCommutativeCNNClassifier` and notebook 7, but it should still be treated as an early method implementation rather than the established repository baseline
 
 The raw imaging signal is a 4D tensor
 
@@ -16,41 +22,23 @@ $$
 
 The objective is to learn a representation that is invariant to the order in which valid spatial and temporal abstraction operators are applied.
 
-## 1. Preprocessing and data conventions
+## 1. Preprocessing assumptions
 
-The method assumes the preprocessing pipeline implemented in the repository tensor utilities and summarized in [README.md](/home/fabrizio/code/ZebraFish/README.md).
+The method assumes the preprocessing and dataset conventions documented in [preprocessing.md](preprocessing.md):
 
-### 1.1 Tensor materialization
+- tensors are materialized in canonical `T x Z x Y x X` order
+- deterministic downsampling is applied through `output_size=(T', Z', H', W')`
+- optional LOESS-style drift normalization may be applied during loading
+- dataset artifacts preserve `original_instance_id` for leakage-safe split assignment
+- augmentation is applied only after splitting, and only to the training subset
 
-Each imaging condition is loaded as a tensor with canonical axis order
-
-$$
-X \in \mathbb{R}^{T \times Z \times Y \times X}.
-$$
-
-The loader normalizes source TIFF layouts to this convention before any downstream processing. Deterministic subsampling is then applied through an explicit target size
-
-$$
-\texttt{output\_size} = (T', Z', H', W').
-$$
-
-The current preprocessing path is compatible with the repository implementation in the following ways:
-
-- time downsampling is applied before file reads
-- $z$ downsampling is applied during per-file load when possible
-- spatial downsampling is deterministic across $Y$ and $X$
-- optional global intensity-drift normalization is applied after loading by fitting a LOESS-style smooth trend to the per-timepoint global mean
-- tensor caching and selected-TIFF mirroring are implementation details of the loader and do not change the mathematical definition of the method
-
-### 1.2 Recommended working resolution
-
-Because the native tensor is too large for direct dual-pathway training, the method operates on a subsampled tensor
+The working tensor for the method is therefore
 
 $$
 X \mapsto \tilde X \in \mathbb{R}^{T' \times Z' \times H' \times W'}.
 $$
 
-Practical default resolutions are
+Practical default working resolutions are
 
 $$
 (T', Z', H', W') = (125, 10, 100, 150)
@@ -59,21 +47,8 @@ $$
 or
 
 $$
-(125, 8, 100, 150),
+(125, 8, 100, 150).
 $$
-
-depending on memory budget. This matches the downsampling strategy described in the repository documentation and keeps the method compatible with the existing tensor-loading code.
-
-### 1.3 Dataset-level conventions
-
-For supervised or self-supervised training on persisted dataset artifacts, the method assumes the dataset conventions already used in notebooks 5 and 6:
-
-- tensors are persisted after preprocessing and optional exploratory dataset assembly
-- metadata carries an `original_instance_id` that identifies all views derived from the same source tensor
-- train, validation, and holdout splits are performed on unaugmented base tensors grouped by `original_instance_id`
-- random XY rotation augmentation is applied only after splitting, and only to the training subset
-
-These constraints are necessary for leakage-safe evaluation and are consistent with the current implementation in `build_moa_labeled_tensor_dataset(...)`, `split_labeled_tensor_dataset_by_instance(...)`, and `augment_training_tensors_with_rotations(...)`.
 
 ## 2. Theory of the method
 
@@ -160,7 +135,7 @@ $$
 \tilde X \in \mathbb{R}^{T' \times Z' \times H' \times W'}.
 $$
 
-For PyTorch implementation, branch-specific reshaping is applied as needed. The repository’s current baseline classifier already uses `Conv3d` with channel-first volumetric inputs. ([PyTorch Documentation][1])
+For PyTorch implementation, branch-specific reshaping is applied as needed. `Conv3d` provides the core volumetric primitive for the CNN-based baseline and for the proposed dual-pathway design. ([PyTorch Documentation][1])
 
 ### 3.2 First implementation: pure-CNN dual pathway
 
@@ -171,7 +146,7 @@ The recommended first version is fully convolutional:
 - shared projection head to latent dimension $d$
 - shared prototype matrix $C$
 
-This design is compatible with the current repository preprocessing and with the practical constraint that full voxelwise tokenization is too expensive at the working resolutions above.
+This design is compatible with the repository preprocessing assumptions and with the practical constraint that full voxelwise tokenization is too expensive at the working resolutions above.
 
 #### Spatial-then-temporal branch
 
@@ -258,7 +233,7 @@ This variant is conceptually attractive but substantially more expensive in memo
 
 ### 3.4 High-level architecture diagram
 
-See [Figure 1 in `docs/figures.md`](/home/fabrizio/code/ZebraFish/docs/figures.md).
+See [Figure 1 in `figures.md`](figures.md).
 
 ### 3.5 Example tensor shapes for the pure-CNN baseline
 
@@ -314,12 +289,12 @@ Global average pool
 
 The method is designed to sit on top of the existing workflow rather than replace it:
 
-- [README.md](/home/fabrizio/code/ZebraFish/README.md) remains the orchestration document for notebooks, modules, and generated artifacts
-- preprocessing is inherited from the tensor-loading and dataset-building utilities already documented there
+- [README.md](../README.md) remains the orchestration document for notebooks, modules, and generated artifacts
+- [preprocessing.md](preprocessing.md) defines the tensor materialization and split conventions assumed here
 - notebook 5 persists the labeled tensor dataset artifact
-- notebook 6 performs leakage-safe splitting by `original_instance_id`, applies training-only augmentation, and trains the baseline model
+- notebook 6 performs leakage-safe splitting by `original_instance_id`, applies training-only augmentation, and trains the currently implemented 3D CNN baseline
 
-In other words, this document specifies the method, while the README specifies where each part of that method is implemented and executed in the repository.
+In other words, this document specifies the proposed method and its current implementation direction, while the README documents the repository workflow and the baseline-to-experimental progression across notebooks.
 
 [1]: https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv3d.html?utm_source=chatgpt.com "Conv3d — PyTorch 2.11 documentation"
 [2]: https://arxiv.org/abs/2006.09882?utm_source=chatgpt.com "Unsupervised Learning of Visual Features by Contrasting ..."

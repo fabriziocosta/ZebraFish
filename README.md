@@ -2,36 +2,42 @@
 
 This repo contains a small notebook-and-utility workflow for linking a compound workbook to zebrafish imaging folders, deriving concentration-aware condition maps, and inspecting image time series.
 
+Start here: use this README to understand the repository layout, the notebook workflow, and where each detailed document lives.
+
 The workflow is built around:
 
 - a workbook of compounds, classes, and mechanisms of action
 - a mounted imaging directory tree under `/mnt/tyler`
-- shared utility code in [`zebrafish_notebook_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_notebook_utils.py)
-- dedicated tensor loading code in [`zebrafish_tensor_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_tensor_utils.py)
-- dedicated ML/training code in [`zebrafish_ml.py`](/home/fabrizio/code/ZebraFish/zebrafish_ml.py)
-- six notebooks for exploration, dataset preparation, and model training
+- shared utility code in [`zebrafish_notebook_utils.py`](zebrafish_notebook_utils.py)
+- dedicated tensor loading code in [`zebrafish_tensor_utils.py`](zebrafish_tensor_utils.py)
+- dedicated ML/training code in [`zebrafish_ml.py`](zebrafish_ml.py)
+- seven notebooks for exploration, dataset preparation, baseline training, and commutative-model experiments
 
 ## Documentation
 
-- [README.md](/home/fabrizio/code/ZebraFish/README.md)
+- [README.md](README.md)
   Repository index and workflow orchestration: inputs, modules, notebooks, artifacts, and execution order.
-- [docs/method.md](/home/fabrizio/code/ZebraFish/docs/method.md)
-  Method specification: preprocessing assumptions, theoretical objective, and practical architecture options.
-- [docs/figures.md](/home/fabrizio/code/ZebraFish/docs/figures.md)
+- [docs/method.md](docs/method.md)
+  Proposed commutative-representation method: theory, architecture options, and implementation direction.
+- [docs/preprocessing.md](docs/preprocessing.md)
+  Tensor-loading, downsampling, normalization, caching, and dataset-preparation conventions.
+- [docs/data_artifacts.md](docs/data_artifacts.md)
+  Generated CSV artifacts and their column meanings.
+- [docs/figures.md](docs/figures.md)
   Standalone figures referenced by the method document.
-- [docs/introduction.md](/home/fabrizio/code/ZebraFish/docs/introduction.md)
+- [docs/introduction.md](docs/introduction.md)
   Higher-level conceptual introduction to the commutative representation-learning idea.
 
 ## Inputs
 
 ### Workbook
 
-- [`compounds (MJW V2).xlsx`](/home/fabrizio/code/ZebraFish/compounds%20(MJW%20V2).xlsx)
+- [`compounds (MJW V2).xlsx`](compounds%20(MJW%20V2).xlsx)
   Source workbook used to derive compound names, compound classes, mechanisms of action, and exposure-condition text.
 
 ### Imaging Mount
 
-- [`mount_command.txt`](/home/fabrizio/code/ZebraFish/mount_command.txt)
+- [`mount_command.txt`](mount_command.txt)
   Example CIFS mount command used to expose the imaging tree at `/mnt/tyler`.
 
 The notebooks assume the image data are accessible from the mounted path referenced in the generated CSVs, for example:
@@ -54,7 +60,7 @@ Raw workbook strings are still used internally where needed for folder matching 
 
 ## Main Utility Module
 
-- [`zebrafish_notebook_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_notebook_utils.py)
+- [`zebrafish_notebook_utils.py`](zebrafish_notebook_utils.py)
   Shared logic for:
   - loading workbook data
   - normalizing compound names
@@ -66,60 +72,18 @@ Raw workbook strings are still used internally where needed for folder matching 
 
 ## Tensor Loading Module
 
-- [`zebrafish_tensor_utils.py`](/home/fabrizio/code/ZebraFish/zebrafish_tensor_utils.py)
+- [`zebrafish_tensor_utils.py`](zebrafish_tensor_utils.py)
   Dedicated image tensor materialization code.
 
-This module is intended to grow with future preprocessing. It currently handles:
+The detailed preprocessing specification now lives in [docs/preprocessing.md](docs/preprocessing.md).
 
-- reading TIFF series
-- normalizing axes to `T x Z x Y x X`
-- stacking all files inside an `image_condition_dir` into one torch tensor
-- deterministic downsampling across `T`, `Z`, `Y`, and `X`
-- time downsampling before file reads
-- z downsampling during per-file load when possible
-- optional post-load intensity-drift normalization using a LOESS-style smoother on the per-timepoint global mean
-- repo-local tensor caching in `.tensor_cache/`
-- repo-local TIFF mirroring for selected timepoints in `.tiff_cache/`
-- tensor-level XY rotation augmentation
-- labeled dataset assembly for downstream ML workflows
+At a high level, the tensor pipeline handles:
 
-Downsampling uses explicit target sizes via `output_size=(T, Z, Y, X)`.
-
-Examples:
-
-- `(10, 1, 32, 32)`
-  Load 10 timepoints, keep only the middle z slice, and keep a `32 x 32` sampled image grid.
-- `(3, None, None, None)`
-  Load 3 timepoints: first, middle, and last.
-
-When a requested size is odd, the exact middle index is always included. When a requested size is `1`, the middle index is used.
-
-By default, `load_image_condition_tensor()` also applies a global intensity-drift correction:
-
-- it computes the global mean intensity for each loaded timepoint
-- fits a LOESS-style smooth trend across time
-- subtracts the smoothed drift while preserving the overall mean level
-
-This correction can be disabled with `normalize_global_drift=False`.
-
-Loaded tensors are cached in:
-
-- [`.tensor_cache/`](/home/fabrizio/code/ZebraFish/.tensor_cache)
-
-The cache key includes the selected files, file mtimes and sizes, `output_size`, and normalization settings. The cache directory is ignored by git.
-
-Caching is enabled by default and can be disabled with `use_cache=False`.
-
-Selected TIFF files can also be mirrored locally in:
-
-- [`.tiff_cache/`](/home/fabrizio/code/ZebraFish/.tiff_cache)
-
-Only the timepoint files selected after time downsampling are copied. The mirrored cache preserves the source path structure under the cache root, for example:
-
-- source: `/mnt/tyler/Matt Winter/BRAIN IMAGES BACKUP/.../TL001.ome.tiff`
-- cached: `.tiff_cache/mnt/tyler/Matt Winter/BRAIN IMAGES BACKUP/.../TL001.ome.tiff`
-
-This cache is enabled by default and can be disabled with `use_tiff_cache=False`.
+- TIFF loading and axis normalization to `T x Z x Y x X`
+- deterministic downsampling across time and space
+- optional LOESS-style global intensity-drift normalization
+- repo-local tensor and selected-TIFF caching
+- tensor-level augmentation and labeled dataset assembly for downstream ML workflows
 
 Key public helpers include:
 
@@ -147,7 +111,7 @@ Tensor-loading helpers include:
 
 ## ML Module
 
-- [`zebrafish_ml.py`](/home/fabrizio/code/ZebraFish/zebrafish_ml.py)
+- [`zebrafish_ml.py`](zebrafish_ml.py)
   Simple model-training utilities for tensor classification experiments.
 
 Current contents:
@@ -173,78 +137,13 @@ This rule is enforced by `split_labeled_tensor_dataset_by_instance()` in noteboo
 
 ## Generated CSV Files
 
-### `compound_image_run_map.csv`
-
-- [`compound_image_run_map.csv`](/home/fabrizio/code/ZebraFish/compound_image_run_map.csv)
-  Run-level mapping between normalized compounds and image run directories.
-
-Meaning of the main columns:
-
-- `compound`: normalized compound name
-- `compound_class`: compound class from the workbook
-- `mechanism_of_action`: normalized mechanism mnemonic
-- `image_run_dir`: absolute path to the matched image run folder
-- `image_run_dir_relative`: run path relative to the image root
-- `source_batch`: top-level batch folder
-- `dir_name`: original run folder name
-- `folder_status`: inferred folder usability, typically `active` or `do_not_use`
-
-Each row represents one matched image run directory for one compound.
-
-### `compound_image_index.csv`
-
-- [`compound_image_index.csv`](/home/fabrizio/code/ZebraFish/compound_image_index.csv)
-  Compound-level summary of the run map.
-
-Meaning of the main columns:
-
-- `n_image_run_dirs`: total matched run directories
-- `n_active_image_run_dirs`: matched run directories not flagged as do-not-use
-- `image_run_dirs`: pipe-delimited list of all matched run directories
-- `active_image_run_dirs`: pipe-delimited list of active run directories only
-
-Each row summarizes one normalized `compound` / `compound_class` / `mechanism_of_action` combination.
-
-### `compound_image_condition_map.csv`
-
-- [`compound_image_condition_map.csv`](/home/fabrizio/code/ZebraFish/compound_image_condition_map.csv)
-  Condition-level mapping derived from the child folders inside each image run directory.
-
-Meaning of the main columns:
-
-- inherited run metadata:
-  `compound`, `compound_class`, `mechanism_of_action`, `image_run_dir`, `folder_status`
-- condition directory fields:
-  `image_condition_dir`, `image_condition_dir_name`, `condition_folder_status`
-- concentration/exposure fields:
-  `exposure_conditions`, `condition_kind`, `concentration_value`, `concentration_unit`,
-  `concentration_value_uM`, `concentration_label`
-- ranking/grouping fields:
-  `concentration_rank_in_run`, `concentration_band`, `n_treatment_concentrations_in_run`
-
-`concentration_band` is a coarse within-run label such as `control`, `low`, `mid`, or `high`.
-
-Each row represents one condition folder under one run folder.
-
-### `compound_image_condition_index.csv`
-
-- [`compound_image_condition_index.csv`](/home/fabrizio/code/ZebraFish/compound_image_condition_index.csv)
-  Summary table of condition folders grouped by normalized compound and concentration band.
-
-Meaning of the main columns:
-
-- `concentration_band`: grouped concentration label within run
-- `n_condition_dirs`: total condition folders in the group
-- `n_active_condition_dirs`: active condition folders only
-- `condition_dirs`: pipe-delimited list of condition directory paths
-
-Each row summarizes a normalized `compound` / `compound_class` / `mechanism_of_action` / `concentration_band` group.
+Generated mapping and index CSVs are part of the workflow outputs. Detailed artifact descriptions now live in [docs/data_artifacts.md](docs/data_artifacts.md).
 
 ## Notebooks
 
 ### 1. Compound Class and Mechanism of Action
 
-- [`1_compound_class_moa.ipynb`](/home/fabrizio/code/ZebraFish/1_compound_class_moa.ipynb)
+- [`1_compound_class_moa.ipynb`](1_compound_class_moa.ipynb)
 
 Purpose:
 
@@ -261,7 +160,7 @@ Current flow:
 
 ### 2. Compound Image Folder Mapping
 
-- [`2_compound_image_mapping.ipynb`](/home/fabrizio/code/ZebraFish/2_compound_image_mapping.ipynb)
+- [`2_compound_image_mapping.ipynb`](2_compound_image_mapping.ipynb)
 
 Purpose:
 
@@ -277,7 +176,7 @@ This notebook is the run-folder linkage step.
 
 ### 3. Compound Image Concentration Mapping
 
-- [`3_compound_image_concentration_mapping.ipynb`](/home/fabrizio/code/ZebraFish/3_compound_image_concentration_mapping.ipynb)
+- [`3_compound_image_concentration_mapping.ipynb`](3_compound_image_concentration_mapping.ipynb)
 
 Purpose:
 
@@ -294,7 +193,7 @@ This notebook is the concentration/condition parsing step.
 
 ### 4. View Mid-Z Time Samples
 
-- [`4_view_midz_time_samples.ipynb`](/home/fabrizio/code/ZebraFish/4_view_midz_time_samples.ipynb)
+- [`4_view_midz_time_samples.ipynb`](4_view_midz_time_samples.ipynb)
 
 Purpose:
 
@@ -320,7 +219,7 @@ The plotting step shows every loaded timepoint, uses the middle z plane of the l
 
 ### 5. Dataset Preparation for ML
 
-- [`5_dataset_preparation_ml.ipynb`](/home/fabrizio/code/ZebraFish/5_dataset_preparation_ml.ipynb)
+- [`5_dataset_preparation_ml.ipynb`](5_dataset_preparation_ml.ipynb)
 
 Purpose:
 
@@ -360,7 +259,7 @@ For model training, use notebook 5 to persist the base dataset artifact, then le
 
 ### 6. Train 3D CNN Classifier
 
-- [`6_train_3d_cnn_classifier.ipynb`](/home/fabrizio/code/ZebraFish/6_train_3d_cnn_classifier.ipynb)
+- [`6_train_3d_cnn_classifier.ipynb`](6_train_3d_cnn_classifier.ipynb)
 
 Purpose:
 
@@ -386,15 +285,42 @@ Current flow:
 8. project learned embeddings with `build_tensor_embedding_2d(...)`
 9. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
 
+### 7. Train Commutative CNN Classifier
+
+- [`7_train_commutative_cnn_classifier.ipynb`](7_train_commutative_cnn_classifier.ipynb)
+
+Purpose:
+
+- train the pure-CNN dual-pathway commutative classifier on the persisted tensor dataset
+- keep the same leakage-safe split and training-only augmentation rules as notebook 6
+- optimize supervised classification jointly with prototype-consistency and feature-alignment losses
+- inspect branch agreement through branch-specific embeddings and loss components
+- visualize fused holdout embeddings in 2D
+
+Current flow:
+
+1. set `dataset_artifact_path` to the saved artifact produced by notebook 5
+2. load the base dataset with `load_labeled_tensor_dataset(...)`
+3. split into train, validation, and holdout subsets on unique `original_instance_id` groups with `split_labeled_tensor_dataset_by_instance(...)`
+4. augment only the training subset with `augment_training_tensors_with_rotations(...)`
+5. fit `ZebrafishCommutativeCNNClassifier(...)` with explicit validation data
+6. inspect train / validation loss with `plot_training_history(...)`
+7. inspect holdout classification metrics and confusion matrices
+8. inspect validation and holdout loss components with `evaluate_loss_components(...)`
+9. inspect branch-specific embeddings with `transform_branches(...)`
+10. project fused holdout embeddings with `build_tensor_embedding_2d(...)`
+11. visualize those learned embeddings with `plot_tensor_embedding_2d(...)`
+
 ## Typical Workflow
 
-1. Mount the image share using the command in [`mount_command.txt`](/home/fabrizio/code/ZebraFish/mount_command.txt).
+1. Mount the image share using the command in [`mount_command.txt`](mount_command.txt).
 2. Use notebook 1 to inspect normalization maps and the normalized classification table.
 3. Use notebook 2 to build or inspect run-folder mappings.
 4. Use notebook 3 to inspect condition-folder and concentration mappings.
 5. Use notebook 4 to load a condition directory into a tensor and visualize sampled timepoints.
 6. Use notebook 5 to prepare and persist a labeled tensor dataset artifact, then inspect class structure in 2D.
 7. Use notebook 6 to load that artifact and train the simple 3D CNN baseline with leakage-safe splitting by `original_instance_id`.
+8. Use notebook 7 to train and inspect the experimental pure-CNN commutative dual-pathway model on the same persisted dataset artifacts.
 
 ## Notes
 
@@ -402,3 +328,5 @@ Current flow:
 - Notebook outputs may be stale until re-run.
 - The utility module expects the Python environment to provide the imaging and dataframe dependencies used by the notebooks, including `pandas`, `tifffile`, and `torch`.
 - Notebook 6 additionally expects `scikit-learn` and the PyTorch training stack already used by the tensor utilities.
+- The simple 3D CNN in notebook 6 remains the baseline reference pipeline.
+- The commutative dual-pathway method in notebook 7 is an experimental implementation of the design described in [docs/method.md](docs/method.md).
