@@ -6,7 +6,7 @@ Status:
 
 - this document specifies the proposed commutative dual-pathway method
 - the currently implemented repository baseline is the simpler 3D CNN classifier described in [README.md](../README.md)
-- an experimental pure-CNN dual-pathway implementation is now available in `ZebrafishCommutativeCNNClassifier` and notebook 7, but it should still be treated as an early method implementation rather than the established repository baseline
+- an experimental pure-CNN dual-pathway implementation is now available in `CommutativeCNNClassifier` and notebook 7, but it should still be treated as an early method implementation rather than the established repository baseline
 
 The raw imaging signal is a 4D tensor
 

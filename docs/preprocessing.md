@@ -4,7 +4,7 @@ This document describes the image tensor materialization and dataset-preparation
 
 ## 1. Tensor materialization
 
-The image tensor pipeline is implemented in [`zebrafish_tensor_utils.py`](../zebrafish_tensor_utils.py).
+The image tensor pipeline is implemented in [`src/tensor_utils.py`](../src/tensor_utils.py).
 
 The current preprocessing path handles:
 

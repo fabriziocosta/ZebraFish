@@ -21,9 +21,10 @@ from sklearn.svm import SVC
 
 
 CACHE_VERSION = 2
-TENSOR_CACHE_DIR = Path(__file__).resolve().parent / ".tensor_cache"
-TIFF_CACHE_DIR = Path(__file__).resolve().parent / ".tiff_cache"
-DATASET_CACHE_DIR = Path(__file__).resolve().parent / ".dataset_cache"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+TENSOR_CACHE_DIR = PROJECT_ROOT / ".tensor_cache"
+TIFF_CACHE_DIR = PROJECT_ROOT / ".tiff_cache"
+DATASET_CACHE_DIR = PROJECT_ROOT / ".dataset_cache"
 
 
 def _squeeze_array_and_axes(arr: np.ndarray, axes: str) -> tuple[np.ndarray, str]:

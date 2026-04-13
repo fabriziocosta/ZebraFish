@@ -8,9 +8,9 @@ The workflow is built around:
 
 - a workbook of compounds, classes, and mechanisms of action
 - a mounted imaging directory tree under `/mnt/tyler`
-- shared utility code in [`zebrafish_notebook_utils.py`](zebrafish_notebook_utils.py)
-- dedicated tensor loading code in [`zebrafish_tensor_utils.py`](zebrafish_tensor_utils.py)
-- dedicated ML/training code in [`zebrafish_ml.py`](zebrafish_ml.py)
+- shared utility code in [`src/notebook_utils.py`](src/notebook_utils.py)
+- dedicated tensor loading code in [`src/tensor_utils.py`](src/tensor_utils.py)
+- dedicated ML/training code in [`src/ml.py`](src/ml.py)
 - seven notebooks for exploration, dataset preparation, baseline training, and commutative-model experiments
 
 ## Documentation
@@ -60,7 +60,7 @@ Raw workbook strings are still used internally where needed for folder matching 
 
 ## Main Utility Module
 
-- [`zebrafish_notebook_utils.py`](zebrafish_notebook_utils.py)
+- [`src/notebook_utils.py`](src/notebook_utils.py)
   Shared logic for:
   - loading workbook data
   - normalizing compound names
@@ -72,7 +72,7 @@ Raw workbook strings are still used internally where needed for folder matching 
 
 ## Tensor Loading Module
 
-- [`zebrafish_tensor_utils.py`](zebrafish_tensor_utils.py)
+- [`src/tensor_utils.py`](src/tensor_utils.py)
   Dedicated image tensor materialization code.
 
 The detailed preprocessing specification now lives in [docs/preprocessing.md](docs/preprocessing.md).
@@ -111,12 +111,12 @@ Tensor-loading helpers include:
 
 ## ML Module
 
-- [`zebrafish_ml.py`](zebrafish_ml.py)
+- [`src/ml.py`](src/ml.py)
   Simple model-training utilities for tensor classification experiments.
 
 Current contents:
 
-- `Zebrafish3DCNNClassifier`
+- `TimeChannel3DCNNClassifier`
   A scikit-style estimator built on a simple 3D CNN that treats time as channels and supports configurable convolution kernel sizes, strides, and pooling separately for `z` and `xy`.
 - `augment_training_tensors_with_rotations()`
   Training-only XY rotation augmentation helper.
@@ -279,7 +279,7 @@ Current flow:
 2. load the base dataset with `load_labeled_tensor_dataset(...)`
 3. split into train, validation, and holdout subsets on unique `original_instance_id` groups with `split_labeled_tensor_dataset_by_instance(...)`
 4. augment only the training subset with `augment_training_tensors_with_rotations(...)`
-5. fit `Zebrafish3DCNNClassifier(...)` with explicit validation data
+5. fit `TimeChannel3DCNNClassifier(...)` with explicit validation data
 6. inspect train / validation loss with `plot_training_history(...)`
 7. inspect holdout confusion matrices with `plot_confusion_matrices(...)`
 8. project learned embeddings with `build_tensor_embedding_2d(...)`
@@ -303,7 +303,7 @@ Current flow:
 2. load the base dataset with `load_labeled_tensor_dataset(...)`
 3. split into train, validation, and holdout subsets on unique `original_instance_id` groups with `split_labeled_tensor_dataset_by_instance(...)`
 4. augment only the training subset with `augment_training_tensors_with_rotations(...)`
-5. fit `ZebrafishCommutativeCNNClassifier(...)` with explicit validation data
+5. fit `CommutativeCNNClassifier(...)` with explicit validation data
 6. inspect train / validation loss with `plot_training_history(...)`
 7. inspect holdout classification metrics and confusion matrices
 8. inspect validation and holdout loss components with `evaluate_loss_components(...)`

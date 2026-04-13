@@ -17,7 +17,7 @@ from sklearn.utils.validation import check_is_fitted
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from zebrafish_tensor_utils import rotate_tensor_xy
+from src.tensor_utils import rotate_tensor_xy
 
 
 def _as_tuple(value: int, xy_value: int) -> tuple[int, int, int]:
@@ -386,7 +386,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
         return outputs
 
 
-class Zebrafish3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin):
+class TimeChannel3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin):
     def __init__(
         self,
         *,
@@ -546,7 +546,7 @@ class Zebrafish3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
         y: torch.Tensor | np.ndarray | Sequence[int],
         *,
         validation_data: tuple[torch.Tensor | np.ndarray, torch.Tensor | np.ndarray | Sequence[int]] | None = None,
-    ) -> "Zebrafish3DCNNClassifier":
+    ) -> "TimeChannel3DCNNClassifier":
         prepared = self._prepare_training_data(X, y, validation_data)
         self.model_ = self._build_model(
             in_channels=int(prepared.X_train.shape[1]),
@@ -682,7 +682,7 @@ class Zebrafish3DCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin)
         return float(accuracy_score(y_true, y_pred))
 
 
-class ZebrafishCommutativeCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin):
+class CommutativeCNNClassifier(BaseEstimator, ClassifierMixin, TransformerMixin):
     def __init__(
         self,
         *,
@@ -932,7 +932,7 @@ class ZebrafishCommutativeCNNClassifier(BaseEstimator, ClassifierMixin, Transfor
         y: torch.Tensor | np.ndarray | Sequence[int],
         *,
         validation_data: tuple[torch.Tensor | np.ndarray, torch.Tensor | np.ndarray | Sequence[int]] | None = None,
-    ) -> "ZebrafishCommutativeCNNClassifier":
+    ) -> "CommutativeCNNClassifier":
         prepared = self._prepare_training_data(X, y, validation_data)
         self.model_ = self._build_model(num_classes=len(self.classes_))
         self.device_ = self._device()
@@ -1287,12 +1287,12 @@ def split_labeled_tensor_dataset_by_instance(
 
 
 def plot_training_history(
-    history: pd.DataFrame | Zebrafish3DCNNClassifier | ZebrafishCommutativeCNNClassifier,
+    history: pd.DataFrame | TimeChannel3DCNNClassifier | CommutativeCNNClassifier,
     *,
     ax=None,
     title: str = "Training history",
 ):
-    if isinstance(history, (Zebrafish3DCNNClassifier, ZebrafishCommutativeCNNClassifier)):
+    if isinstance(history, (TimeChannel3DCNNClassifier, CommutativeCNNClassifier)):
         check_is_fitted(history, ["history_"])
         history_df = history.history_
     else:

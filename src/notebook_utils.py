@@ -10,13 +10,13 @@ import numpy as np
 import pandas as pd
 import torch
 
-from zebrafish_tensor_utils import load_image_condition_tensor as _load_image_condition_tensor
+from src.tensor_utils import load_image_condition_tensor as _load_image_condition_tensor
 
 
 DEFAULT_WORKBOOK = "compounds (MJW V2).xlsx"
 DEFAULT_SHEET = "REVISED TABLE 25 NOV 2019"
 DEFAULT_IMAGE_ROOT = "images"
-DEFAULT_MANIFEST = "/tmp/zebrafish_image_dirs.txt"
+DEFAULT_MANIFEST = "/tmp/image_dirs_manifest.txt"
 DEFAULT_RUN_MAP_CSV = "compound_image_run_map.csv"
 DEFAULT_CONDITION_MAP_CSV = "compound_image_condition_map.csv"
 
