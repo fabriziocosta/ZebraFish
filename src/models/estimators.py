@@ -100,6 +100,9 @@ class TimeChannel3DCNNClassifier(
         self.standardize = standardize
         self.device = device
         self.verbose = verbose
+        self.model_config = model_config
+        self.optimization_config = optimization_config
+        self.loss_weight_config = loss_weight_config
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, in_channels: int, num_classes: int) -> _TimeChannel3DCNN:
@@ -263,6 +266,9 @@ class CommutativeCNNClassifier(
         self.standardize = standardize
         self.device = device
         self.verbose = verbose
+        self.model_config = model_config
+        self.optimization_config = optimization_config
+        self.loss_weight_config = loss_weight_config
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _PureCNNDualPathwayNetwork:
@@ -449,6 +455,9 @@ class CommutativeTransformerClassifier(
         self.standardize = standardize
         self.device = device
         self.verbose = verbose
+        self.model_config = model_config
+        self.optimization_config = optimization_config
+        self.loss_weight_config = loss_weight_config
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _CommutativeTransformerNetwork:

@@ -131,7 +131,13 @@ def split_labeled_tensor_dataset_by_instance(
     The split groups examples by ``original_instance_id`` so any derived views
     of the same source tensor can be kept in the same partition and avoid leakage.
     """
-    metadata_all = dataset["metadata"].reset_index(drop=True).copy()
+    metadata_value = dataset.get("metadata")
+    if metadata_value is None and "metadata_records" in dataset:
+        metadata_value = pd.DataFrame(dataset["metadata_records"])
+    if not isinstance(metadata_value, pd.DataFrame):
+        raise KeyError("dataset must contain 'metadata' as a pandas DataFrame or raw 'metadata_records'")
+
+    metadata_all = metadata_value.reset_index(drop=True).copy()
     if "original_instance_id" not in metadata_all.columns:
         # Backward-compatible fallback for older dataset artifacts saved before original_instance_id existed.
         metadata_all["original_instance_id"] = pd.factorize(

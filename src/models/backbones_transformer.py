@@ -93,7 +93,7 @@ class _TransformerEncoderStack(nn.Module):
                 norm_first=True,
             )
             layer.dropout1.p = attention_dropout
-            self.encoder = nn.TransformerEncoder(layer, num_layers=depth)
+            self.encoder = nn.TransformerEncoder(layer, num_layers=depth, enable_nested_tensor=False)
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:

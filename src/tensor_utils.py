@@ -183,6 +183,20 @@ def ensure_cached_tiff(path: str | Path) -> Path:
     return cache_path
 
 
+def is_tiff_cached(path: str | Path) -> bool:
+    source_path = Path(path).resolve()
+    cache_path = build_tiff_cache_path(source_path)
+    if not cache_path.exists():
+        return False
+
+    source_stat = source_path.stat()
+    cache_stat = cache_path.stat()
+    return (
+        cache_stat.st_size == source_stat.st_size
+        and cache_stat.st_mtime_ns >= source_stat.st_mtime_ns
+    )
+
+
 def ensure_cached_tiffs(paths: list[Path]) -> list[Path]:
     return [ensure_cached_tiff(path) for path in paths]
 
@@ -217,6 +231,11 @@ def load_cached_tensor(cache_key: str) -> torch.Tensor | None:
     if not cache_path.exists():
         return None
     return torch.load(cache_path, map_location="cpu")
+
+
+def has_cached_tensor(cache_key: str) -> bool:
+    cache_path = TENSOR_CACHE_DIR / f"{cache_key}.pt"
+    return cache_path.exists()
 
 
 def save_cached_tensor(cache_key: str, tensor: torch.Tensor) -> None:
@@ -446,6 +465,40 @@ def load_image_condition_tensor(
     return tensor
 
 
+def describe_condition_tensor_source(
+    condition_dir: str | Path,
+    output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
+    *,
+    normalize_global_drift: bool = True,
+    loess_frac: float = 0.25,
+    use_cache: bool = True,
+    use_tiff_cache: bool = True,
+) -> str:
+    condition_dir = Path(condition_dir)
+    timepoint_files = list_timepoint_files(condition_dir)
+    if not timepoint_files:
+        return "missing"
+
+    if output_size is not None:
+        time_size = output_size[0]
+        if time_size is not None:
+            time_indices = select_evenly_spaced_indices(len(timepoint_files), int(time_size))
+            timepoint_files = [timepoint_files[index] for index in time_indices]
+
+    cache_key = build_tensor_cache_key(
+        condition_dir=condition_dir,
+        timepoint_files=timepoint_files,
+        output_size=output_size,
+        normalize_global_drift=normalize_global_drift,
+        loess_frac=loess_frac,
+    )
+    if use_cache and has_cached_tensor(cache_key):
+        return "tensor_cache"
+    if use_tiff_cache and all(is_tiff_cached(path) for path in timepoint_files):
+        return "tiff_cache"
+    return "source_fs"
+
+
 def rotate_tensor_xy(tensor: torch.Tensor, angle_degrees: float) -> torch.Tensor:
     if tensor.ndim != 4:
         raise ValueError(f"Expected tensor with shape T x Z x Y x X, got shape {tuple(tensor.shape)}")
@@ -547,7 +600,7 @@ def build_moa_labeled_tensor_dataset(
     attempted_conditions = 0
     build_start = time.perf_counter()
 
-    def log_progress(*, row: pd.Series, mechanism: str, kind: str) -> None:
+    def log_progress(*, row: pd.Series, mechanism: str, kind: str, source: str) -> None:
         if not verbose or total_conditions <= 0:
             return
         current_index = attempted_conditions + 1
@@ -562,6 +615,7 @@ def build_moa_labeled_tensor_dataset(
             f"[{timestamp}] "
             f"[{current_index:03d}/{total_conditions:03d}] "
             f"kind={kind:<9} "
+            f"source={source:<12} "
             f"conc={concentration:<8} "
             f"elapsed={elapsed_text} "
             f"eta={eta} "
@@ -648,7 +702,15 @@ def build_moa_labeled_tensor_dataset(
             )
 
             for _, row in treatment_rows.iterrows():
-                log_progress(row=row, mechanism=mechanism, kind="treatment")
+                source = describe_condition_tensor_source(
+                    condition_dir=row["image_condition_dir"],
+                    output_size=output_size,
+                    normalize_global_drift=normalize_global_drift,
+                    loess_frac=loess_frac,
+                    use_cache=use_cache,
+                    use_tiff_cache=use_tiff_cache,
+                )
+                log_progress(row=row, mechanism=mechanism, kind="treatment", source=source)
                 attempted_conditions += 1
                 try:
                     tensor = load_image_condition_tensor(
@@ -681,7 +743,15 @@ def build_moa_labeled_tensor_dataset(
                 original_instance_id += 1
 
             for _, row in control_rows.iterrows():
-                log_progress(row=row, mechanism=mechanism, kind="control")
+                source = describe_condition_tensor_source(
+                    condition_dir=row["image_condition_dir"],
+                    output_size=output_size,
+                    normalize_global_drift=normalize_global_drift,
+                    loess_frac=loess_frac,
+                    use_cache=use_cache,
+                    use_tiff_cache=use_tiff_cache,
+                )
+                log_progress(row=row, mechanism=mechanism, kind="control", source=source)
                 attempted_conditions += 1
                 try:
                     tensor = load_image_condition_tensor(

@@ -59,6 +59,10 @@ class EstimatorSmokeTests(unittest.TestCase):
             optimization_config=self.optimization,
             loss_weight_config=self.losses,
         )
+        params = estimator.get_params(deep=False)
+        self.assertIsInstance(params["loss_weight_config"], LossWeightConfig)
+        self.assertIsInstance(params["optimization_config"], OptimizationConfig)
+        self.assertIsInstance(params["model_config"], TimeChannel3DCNNConfig)
         self._run_estimator(estimator)
 
     def test_commutative_cnn_estimator_with_configs(self) -> None:
@@ -76,6 +80,10 @@ class EstimatorSmokeTests(unittest.TestCase):
             optimization_config=self.optimization,
             loss_weight_config=self.losses,
         )
+        params = estimator.get_params(deep=False)
+        self.assertIsInstance(params["loss_weight_config"], LossWeightConfig)
+        self.assertIsInstance(params["optimization_config"], OptimizationConfig)
+        self.assertIsInstance(params["model_config"], CommutativeCNNConfig)
         self._run_estimator(estimator)
 
     def test_commutative_transformer_estimator_with_configs(self) -> None:
@@ -96,6 +104,10 @@ class EstimatorSmokeTests(unittest.TestCase):
             optimization_config=self.optimization,
             loss_weight_config=self.losses,
         )
+        params = estimator.get_params(deep=False)
+        self.assertIsInstance(params["loss_weight_config"], LossWeightConfig)
+        self.assertIsInstance(params["optimization_config"], OptimizationConfig)
+        self.assertIsInstance(params["model_config"], CommutativeTransformerConfig)
         self._run_estimator(estimator)
 
 

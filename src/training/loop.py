@@ -40,6 +40,121 @@ def _format_loss_components_for_log(row: dict[str, float | int], *, prefix: str)
     return " ".join(parts)
 
 
+def _loss_acronym(name: str) -> str:
+    return {
+        "loss": "L",
+        "action_loss": "A",
+        "commutative_consistency_loss": "CC",
+        "feature_alignment_loss": "FA",
+        "compound_loss": "Co",
+        "concentration_loss": "Cn",
+    }.get(name, name)
+
+
+def _build_epoch_log_layout(*, include_val: bool) -> tuple[list[tuple[str, str, str]], str, str]:
+    ordered_names = [
+        "loss",
+        "action_loss",
+        "commutative_consistency_loss",
+        "feature_alignment_loss",
+        "compound_loss",
+        "concentration_loss",
+    ]
+    run_columns: list[tuple[str, str, str]] = [
+        ("epoch", "ep", "epoch"),
+        ("lr", "lr", "learning_rate"),
+        ("eta", "eta", "estimated_time_remaining"),
+    ]
+    train_columns = [(f"train_{name}", f"tr{_loss_acronym(name)}", f"train_{name}") for name in ordered_names]
+    val_columns = [(f"val_{name}", f"va{_loss_acronym(name)}", f"val_{name}") for name in ordered_names] if include_val else []
+    columns = run_columns + train_columns + val_columns
+    legend_items: list[tuple[str, str]] = [
+        ("ep", "epoch"),
+        ("lr", "learning_rate"),
+        ("eta", "estimated_time_remaining"),
+        ("trL", "train_loss"),
+        ("trA", "train_action_loss"),
+        ("trCC", "train_commutative_consistency_loss"),
+        ("trFA", "train_feature_alignment_loss"),
+        ("trCo", "train_compound_loss"),
+        ("trCn", "train_concentration_loss"),
+    ]
+    if include_val:
+        legend_items.extend(
+            [
+                ("vaL", "val_loss"),
+                ("vaA", "val_action_loss"),
+                ("vaCC", "val_commutative_consistency_loss"),
+                ("vaFA", "val_feature_alignment_loss"),
+                ("vaCo", "val_compound_loss"),
+                ("vaCn", "val_concentration_loss"),
+            ]
+        )
+    legend = "cols:\n" + "\n".join(f"    {acronym}={description}" for acronym, description in legend_items)
+    sections = [
+        [acronym for _, acronym, _ in run_columns],
+        [acronym for _, acronym, _ in train_columns],
+    ]
+    if include_val:
+        sections.append([acronym for _, acronym, _ in val_columns])
+    header_parts: list[str] = []
+    for section_index, section in enumerate(sections):
+        if section_index > 0:
+            header_parts.append("|")
+        for acronym in section:
+            header_parts.append(
+                f"{acronym:>8}" if acronym not in {"ep", "eta"} else (f"{acronym:>9}" if acronym == "eta" else f"{acronym:>7}")
+            )
+    header = " ".join(header_parts)
+    return columns, legend, header
+
+
+def _format_epoch_log_row(
+    row: dict[str, float | int | str],
+    *,
+    epochs: int,
+    current_lr: float,
+    eta: str,
+    include_val: bool,
+) -> str:
+    columns, _, _ = _build_epoch_log_layout(include_val=include_val)
+    run_keys = {"epoch", "lr", "eta"}
+    train_keys = {
+        "train_loss",
+        "train_action_loss",
+        "train_commutative_consistency_loss",
+        "train_feature_alignment_loss",
+        "train_compound_loss",
+        "train_concentration_loss",
+    }
+    values: dict[str, float | int | str] = dict(row)
+    values["lr"] = current_lr
+    values["eta"] = eta
+    run_parts: list[str] = []
+    train_parts: list[str] = []
+    val_parts: list[str] = []
+    for key, acronym, _ in columns:
+        if key == "epoch":
+            rendered = f"{int(values[key]):03d}/{epochs:03d}".rjust(7)
+        elif key == "eta":
+            rendered = str(values[key]).rjust(9)
+        elif key == "lr":
+            rendered = f"{float(values[key]):8.2e}"
+        else:
+            value = values.get(key)
+            rendered = f"{float(value):8.4f}" if value is not None else f"{'-':>8}"
+        if key in run_keys:
+            run_parts.append(rendered)
+        elif key in train_keys:
+            train_parts.append(rendered)
+        else:
+            val_parts.append(rendered)
+    parts = [" ".join(run_parts), "|", " ".join(train_parts)]
+    if include_val:
+        parts.extend(["|", " ".join(val_parts)])
+    return " ".join(parts)
+
+
 def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     estimator.model_ = estimator._build_model_from_prepared(prepared)
     estimator.device_ = estimator._device()
@@ -86,6 +201,10 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     best_epoch = 0
     epochs_without_improvement = 0
     training_start = time.perf_counter()
+    if estimator.verbose:
+        _, legend, header = _build_epoch_log_layout(include_val=val_loader is not None)
+        print(legend)
+        print(header)
 
     for epoch in range(1, estimator.epochs + 1):
         estimator.model_.train()
@@ -178,21 +297,15 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
             avg_epoch_seconds = elapsed / epoch
             eta = _format_eta(avg_epoch_seconds * (estimator.epochs - epoch))
             current_lr = optimizer.param_groups[0]["lr"]
-            if "val_loss" in row:
-                train_loss_parts = _format_loss_components_for_log(row, prefix="train_")
-                val_loss_parts = _format_loss_components_for_log(row, prefix="val_")
-                print(
-                    f"epoch {epoch:03d}/{estimator.epochs:03d} "
-                    f"train[{train_loss_parts}] "
-                    f"val[{val_loss_parts}] "
-                    f"lr={current_lr:.2e} eta={eta}"
+            print(
+                _format_epoch_log_row(
+                    row,
+                    epochs=estimator.epochs,
+                    current_lr=current_lr,
+                    eta=eta,
+                    include_val="val_loss" in row,
                 )
-            else:
-                train_loss_parts = _format_loss_components_for_log(row, prefix="train_")
-                print(
-                    f"epoch {epoch:03d}/{estimator.epochs:03d} train[{train_loss_parts}] "
-                    f"lr={current_lr:.2e} eta={eta}"
-                )
+            )
 
         if estimator.early_stopping_patience is not None and epochs_without_improvement >= estimator.early_stopping_patience:
             if estimator.verbose:

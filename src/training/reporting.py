@@ -24,11 +24,48 @@ def _humanize_loss_name(name: str) -> str:
     return " ".join(part.capitalize() for part in parts)
 
 
+def _loess_smooth_1d(values: np.ndarray, frac: float = 0.25) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    n = values.size
+    if n <= 1:
+        return values.copy()
+    if not 0 < frac <= 1:
+        raise ValueError(f"frac must be in (0, 1], got {frac}")
+
+    x = np.arange(n, dtype=float)
+    span = max(3, int(np.ceil(frac * n)))
+    span = min(span, n)
+    smoothed = np.empty(n, dtype=float)
+
+    for i in range(n):
+        distances = np.abs(x - x[i])
+        bandwidth = np.partition(distances, span - 1)[span - 1]
+        if bandwidth == 0:
+            smoothed[i] = values[i]
+            continue
+
+        scaled = distances / bandwidth
+        weights = np.where(scaled < 1, (1 - scaled**3) ** 3, 0.0)
+        if not np.any(weights):
+            smoothed[i] = values[i]
+            continue
+
+        x_centered = x - x[i]
+        design = np.column_stack([np.ones(n, dtype=float), x_centered])
+        weighted_design = design * weights[:, None]
+        beta, *_ = np.linalg.lstsq(weighted_design.T @ design, weighted_design.T @ values, rcond=None)
+        smoothed[i] = beta[0]
+
+    return smoothed
+
+
 def plot_training_history(
     history,
     *,
     ax=None,
     title: str = "Training history",
+    loess_frac: float | None = None,
+    show_raw: bool = True,
 ):
     if isinstance(history, pd.DataFrame):
         history_df = history
@@ -89,9 +126,51 @@ def plot_training_history(
         panel_ax = axes[index]
         train_key = f"train_{loss_name}"
         val_key = f"val_{loss_name}"
-        panel_ax.plot(history_df["epoch"], history_df[train_key], marker="o", linewidth=1.8, label="Train")
+        epoch_values = history_df["epoch"].to_numpy()
+        train_values = history_df[train_key].to_numpy(dtype=float)
+        train_color = None
+        if show_raw or loess_frac is None:
+            (train_line,) = panel_ax.plot(
+                epoch_values,
+                train_values,
+                linewidth=1.8,
+                alpha=0.3 if loess_frac is not None and show_raw else 1.0,
+                label="Train",
+            )
+            train_color = train_line.get_color()
+        if loess_frac is not None:
+            panel_ax.plot(
+                epoch_values,
+                _loess_smooth_1d(train_values, frac=loess_frac),
+                linewidth=3.0,
+                alpha=0.9,
+                color=train_color,
+                label="_nolegend_",
+            )
         if val_key in history_df.columns and history_df[val_key].notna().any():
-            panel_ax.plot(history_df["epoch"], history_df[val_key], marker="o", linewidth=1.8, label="Val")
+            val_series = history_df[val_key].astype(float)
+            valid_mask = val_series.notna().to_numpy()
+            val_epoch_values = epoch_values[valid_mask]
+            val_values = val_series.to_numpy()[valid_mask]
+            val_color = None
+            if show_raw or loess_frac is None:
+                (val_line,) = panel_ax.plot(
+                    val_epoch_values,
+                    val_values,
+                    linewidth=1.8,
+                    alpha=0.3 if loess_frac is not None and show_raw else 1.0,
+                    label="Val",
+                )
+                val_color = val_line.get_color()
+            if loess_frac is not None and len(val_values) > 0:
+                panel_ax.plot(
+                    val_epoch_values,
+                    _loess_smooth_1d(val_values, frac=loess_frac),
+                    linewidth=3.0,
+                    alpha=0.9,
+                    color=val_color,
+                    label="_nolegend_",
+                )
         panel_ax.set_xlabel("Epoch")
         panel_ax.set_ylabel("Loss")
         panel_ax.set_title(_humanize_loss_name(loss_name))
@@ -287,7 +366,8 @@ def plot_embedding_projection(
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
     ax.grid(True, alpha=0.2)
-    ax.legend(loc="best")
+    ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), borderaxespad=0.0)
+    fig.tight_layout(rect=(0, 0, 0.8, 1))
     plt.show()
     return frame
 

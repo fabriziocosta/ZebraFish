@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -85,12 +86,36 @@ class WorkflowTests(unittest.TestCase):
                 output_dir=tmpdir,
                 estimator=estimator,
                 reports=reports,
-                config={"model": "TimeChannel3DCNNClassifier"},
+                config={
+                    "model": "TimeChannel3DCNNClassifier",
+                    "dataset_artifact_path": Path("/tmp/example-dataset.pt"),
+                },
             )
             self.assertTrue(Path(artifacts.config_path).exists())
             self.assertTrue(Path(artifacts.history_path).exists())
             self.assertTrue(Path(artifacts.summary_metrics_path).exists())
             self.assertTrue(Path(artifacts.checkpoint_path).exists())
+            persisted_config = json.loads(Path(artifacts.config_path).read_text(encoding="utf-8"))
+            self.assertEqual(persisted_config["dataset_artifact_path"], "/tmp/example-dataset.pt")
+
+    def test_prepare_multitask_experiment_accepts_serialized_metadata_records_payload(self) -> None:
+        raw_dataset = {
+            key: value for key, value in self.dataset.items() if key != "metadata"
+        }
+        raw_dataset["metadata_records"] = self.dataset["metadata"].to_dict(orient="records")
+
+        experiment = prepare_multitask_experiment_data(
+            raw_dataset,
+            holdout_fraction=0.25,
+            validation_fraction_within_train=0.25,
+            train_num_random_rotations=1,
+            rotation_range_degrees=5.0,
+            random_state=0,
+        )
+
+        self.assertIsNotNone(experiment.train_metadata)
+        assert experiment.train_metadata is not None
+        self.assertIn("original_instance_id", experiment.train_metadata.columns)
 
 
 if __name__ == "__main__":

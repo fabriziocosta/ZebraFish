@@ -6,3 +6,5 @@ __pycache__/
 .venv/
 .~lock.*
 *.pt
+artifacts/*
+!artifacts/current_dataset.json

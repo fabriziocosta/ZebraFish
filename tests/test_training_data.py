@@ -53,6 +53,22 @@ class SplitByInstanceTests(unittest.TestCase):
         self.assertEqual(len(splits.X_val), len(splits.y_val))
         self.assertEqual(len(splits.X_holdout), len(splits.y_holdout))
 
+    def test_split_accepts_serialized_metadata_records_payload(self) -> None:
+        raw_dataset = {
+            key: value for key, value in self.dataset.items() if key != "metadata"
+        }
+        raw_dataset["metadata_records"] = self.dataset["metadata"].to_dict(orient="records")
+
+        splits = split_labeled_tensor_dataset_by_instance(
+            raw_dataset,
+            holdout_fraction=0.25,
+            validation_fraction_within_train=0.25,
+            random_state=0,
+        )
+
+        self.assertEqual(len(splits.metadata_all), len(self.dataset["metadata"]))
+        self.assertIn("original_instance_id", splits.metadata_all.columns)
+
 
 if __name__ == "__main__":
     unittest.main()

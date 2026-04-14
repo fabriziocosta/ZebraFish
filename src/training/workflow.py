@@ -47,6 +47,16 @@ class MultitaskEvaluationResult:
     reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]]
 
 
+def _to_json_compatible(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _to_json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_json_compatible(item) for item in value]
+    return value
+
+
 def prepare_multitask_experiment_data(
     dataset: dict[str, object],
     *,
@@ -257,7 +267,7 @@ def persist_experiment_artifacts(
     checkpoint_path = output_path / "model_state.pt"
 
     with config_path.open("w", encoding="utf-8") as handle:
-        json.dump(config, handle, indent=2, sort_keys=True)
+        json.dump(_to_json_compatible(config), handle, indent=2, sort_keys=True)
 
     estimator.history_.to_csv(history_path, index=False)
     summary_frames: list[pd.DataFrame] = []
