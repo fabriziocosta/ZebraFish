@@ -48,6 +48,14 @@ The cache key includes the selected files, file mtimes and sizes, `output_size`,
 
 Caching is enabled by default and can be disabled with `use_cache=False`.
 
+Tensor cache retention is now enforced automatically:
+
+- least-recently-used eviction keeps the cache within its configured size budget
+- files not used for 14 days are eligible for eviction even if the budget is not yet full
+- a cache-maintenance pass runs automatically on cache reads and writes, throttled to avoid excessive rescans
+- recency metadata is stored in a repo-local `.cache_index.json` file inside each cache directory
+- the default repo-local tensor-cache budget is `5G`
+
 Selected TIFF files can also be mirrored locally in [`.tiff_cache/`](../.tiff_cache).
 
 Only the timepoint files selected after time downsampling are copied. The mirrored cache preserves the source path structure under the cache root, for example:
@@ -56,6 +64,34 @@ Only the timepoint files selected after time downsampling are copied. The mirror
 - cached: `.tiff_cache/mnt/tyler/Matt Winter/BRAIN IMAGES BACKUP/.../TL001.ome.tiff`
 
 This cache is enabled by default and can be disabled with `use_tiff_cache=False`.
+
+The TIFF mirror is also treated as a bounded disposable cache:
+
+- it uses the same least-recently-used retention policy as the tensor cache
+- the default repo-local TIFF-cache budget is `30G`
+- writes trigger pre-eviction so new mirrored files do not grow the cache without bound
+
+Persisted labeled datasets under [`.dataset_cache/`](../.dataset_cache) are retained similarly:
+
+- the default dataset-cache budget is `10G`
+- artifacts older than 14 days are eligible for eviction
+- the dataset pointed to by [`artifacts/current_dataset.json`](../artifacts/current_dataset.json) is pinned and protected from eviction
+
+All repo-local caches also respect a shared free-space floor:
+
+- before a cache write is allowed, eviction continues until the backing filesystem has at least `15G` free by default
+
+Retention settings can be tuned with environment variables:
+
+- `ZF_TENSOR_CACHE_MAX_BYTES`
+- `ZF_TIFF_CACHE_MAX_BYTES`
+- `ZF_DATASET_CACHE_MAX_BYTES`
+- `ZF_CACHE_MIN_FREE_BYTES`
+- `ZF_CACHE_MAX_AGE_SECONDS`
+- `ZF_CACHE_MAINTENANCE_INTERVAL_SECONDS`
+- `ZF_PINNED_DATASET_PATHS`
+
+Byte-sized variables accept plain integers or suffixes such as `5G`, `512M`, or `10240`.
 
 ## 4. Tensor and dataset helpers
 

@@ -4,9 +4,11 @@ from datetime import datetime
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import shutil
+import tempfile
 import time
 import warnings
 
@@ -17,9 +19,21 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
-from tifffile import TiffFile, memmap as tiff_memmap
 from sklearn.decomposition import PCA
 from sklearn.svm import SVC
+
+from src.dataset_config import (
+    DEFAULT_CURRENT_DATASET_CONFIG_PATH,
+    load_current_dataset_artifact_path,
+)
+
+try:
+    from tifffile import TiffFile, memmap as tiff_memmap
+except ModuleNotFoundError as tifffile_import_error:
+    TiffFile = None
+    tiff_memmap = None
+else:
+    tifffile_import_error = None
 
 
 CACHE_VERSION = 2
@@ -27,6 +41,16 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TENSOR_CACHE_DIR = PROJECT_ROOT / ".tensor_cache"
 TIFF_CACHE_DIR = PROJECT_ROOT / ".tiff_cache"
 DATASET_CACHE_DIR = PROJECT_ROOT / ".dataset_cache"
+CACHE_INDEX_FILENAME = ".cache_index.json"
+DEFAULT_CACHE_BUDGETS = {
+    TENSOR_CACHE_DIR.resolve(): 5 * 1024**3,
+    TIFF_CACHE_DIR.resolve(): 30 * 1024**3,
+    DATASET_CACHE_DIR.resolve(): 10 * 1024**3,
+}
+DEFAULT_CACHE_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
+DEFAULT_CACHE_MIN_FREE_BYTES = 15 * 1024**3
+DEFAULT_CACHE_MAINTENANCE_INTERVAL_SECONDS = 60.0
+_CACHE_MAINTENANCE_LAST_RUN: dict[Path, float] = {}
 
 
 def _format_eta(seconds: float) -> str:
@@ -36,6 +60,306 @@ def _format_eta(seconds: float) -> str:
     if hours:
         return f"{hours:d}:{minutes:02d}:{seconds:02d}"
     return f"{minutes:02d}:{seconds:02d}"
+
+
+def _parse_size_to_bytes(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        if value < 0:
+            raise ValueError(f"Cache size values must be non-negative, got {value}")
+        return value
+
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    match = re.fullmatch(r"(?i)(\d+)([kmgt]?b?)?", normalized)
+    if match is None:
+        raise ValueError(f"Invalid cache size value: {value!r}")
+    number = int(match.group(1))
+    suffix = (match.group(2) or "").lower().rstrip("b")
+    multipliers = {"": 1, "k": 1024, "m": 1024**2, "g": 1024**3, "t": 1024**4}
+    return number * multipliers[suffix]
+
+
+def _get_cache_budget_bytes(cache_dir: Path) -> int | None:
+    env_key = f"ZF_{cache_dir.name.strip('.').upper()}_MAX_BYTES"
+    env_value = os.environ.get(env_key)
+    if env_value is not None:
+        return _parse_size_to_bytes(env_value)
+    return DEFAULT_CACHE_BUDGETS.get(cache_dir.resolve())
+
+
+def _get_cache_max_age_seconds() -> int | None:
+    env_value = os.environ.get("ZF_CACHE_MAX_AGE_SECONDS")
+    if env_value is None or not env_value.strip():
+        return DEFAULT_CACHE_MAX_AGE_SECONDS
+    parsed = int(env_value)
+    if parsed < 0:
+        raise ValueError(f"ZF_CACHE_MAX_AGE_SECONDS must be non-negative, got {parsed}")
+    return parsed
+
+
+def _get_cache_min_free_bytes() -> int:
+    env_value = os.environ.get("ZF_CACHE_MIN_FREE_BYTES")
+    parsed = _parse_size_to_bytes(env_value)
+    return DEFAULT_CACHE_MIN_FREE_BYTES if parsed is None else parsed
+
+
+def _get_cache_maintenance_interval_seconds() -> float:
+    env_value = os.environ.get("ZF_CACHE_MAINTENANCE_INTERVAL_SECONDS")
+    if env_value is None or not env_value.strip():
+        return DEFAULT_CACHE_MAINTENANCE_INTERVAL_SECONDS
+    parsed = float(env_value)
+    if parsed < 0:
+        raise ValueError(f"ZF_CACHE_MAINTENANCE_INTERVAL_SECONDS must be non-negative, got {parsed}")
+    return parsed
+
+
+def _cache_index_path(cache_dir: Path) -> Path:
+    return cache_dir / CACHE_INDEX_FILENAME
+
+
+def _is_cache_metadata_file(path: Path, cache_dir: Path) -> bool:
+    return path == _cache_index_path(cache_dir)
+
+
+def _read_cache_index(cache_dir: Path) -> dict[str, dict[str, int]]:
+    index_path = _cache_index_path(cache_dir)
+    if not index_path.exists():
+        return {}
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    entries = payload.get("entries")
+    if not isinstance(entries, dict):
+        return {}
+    normalized: dict[str, dict[str, int]] = {}
+    for relative_path, metadata in entries.items():
+        if not isinstance(relative_path, str) or not isinstance(metadata, dict):
+            continue
+        size = metadata.get("size")
+        last_used_ns = metadata.get("last_used_ns")
+        if isinstance(size, int) and isinstance(last_used_ns, int):
+            normalized[relative_path] = {"size": size, "last_used_ns": last_used_ns}
+    return normalized
+
+
+def _write_cache_index(cache_dir: Path, entries: dict[str, dict[str, int]]) -> None:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    index_path = _cache_index_path(cache_dir)
+    payload = {"entries": dict(sorted(entries.items()))}
+    with tempfile.NamedTemporaryFile(
+        "w",
+        dir=cache_dir,
+        prefix=".cache_index.",
+        suffix=".tmp",
+        delete=False,
+        encoding="utf-8",
+    ) as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
+        temp_path = Path(handle.name)
+    temp_path.replace(index_path)
+
+
+def _touch_cache_entry(cache_dir: Path, path: Path, *, size_bytes: int | None = None) -> None:
+    resolved_cache_dir = cache_dir.resolve()
+    resolved_path = path.resolve()
+    try:
+        relative_key = resolved_path.relative_to(resolved_cache_dir).as_posix()
+    except ValueError:
+        return
+    if relative_key == CACHE_INDEX_FILENAME:
+        return
+    if size_bytes is None:
+        try:
+            size_bytes = resolved_path.stat().st_size
+        except FileNotFoundError:
+            return
+    entries = _read_cache_index(resolved_cache_dir)
+    entries[relative_key] = {
+        "size": int(size_bytes),
+        "last_used_ns": time.time_ns(),
+    }
+    _write_cache_index(resolved_cache_dir, entries)
+
+
+def _estimate_dataset_payload_size_bytes(dataset: dict[str, object]) -> int:
+    total = 0
+    for key in ("tensors", "labels", "compound_labels", "concentration_labels", "is_control"):
+        value = dataset.get(key)
+        if isinstance(value, torch.Tensor):
+            total += value.nelement() * value.element_size()
+    metadata = dataset.get("metadata")
+    if isinstance(metadata, pd.DataFrame):
+        total += int(metadata.memory_usage(index=True, deep=True).sum())
+    for key in ("label_map", "compound_label_map", "concentration_label_map"):
+        value = dataset.get(key)
+        if isinstance(value, dict):
+            total += len(json.dumps(value))
+    return max(total, 1)
+
+
+def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
+    if cache_dir.resolve() != DATASET_CACHE_DIR.resolve():
+        return set()
+    pinned_paths: set[Path] = set()
+    try:
+        current_dataset_path = load_current_dataset_artifact_path(
+            config_path=DEFAULT_CURRENT_DATASET_CONFIG_PATH
+        ).resolve()
+    except (FileNotFoundError, KeyError, json.JSONDecodeError, OSError):
+        current_dataset_path = None
+    if current_dataset_path is not None:
+        try:
+            current_dataset_path.relative_to(cache_dir.resolve())
+        except ValueError:
+            pass
+        else:
+            pinned_paths.add(current_dataset_path)
+    extra_pins = os.environ.get("ZF_PINNED_DATASET_PATHS", "")
+    for raw_path in extra_pins.split(os.pathsep):
+        if not raw_path.strip():
+            continue
+        candidate = Path(raw_path).expanduser().resolve()
+        try:
+            candidate.relative_to(cache_dir.resolve())
+        except ValueError:
+            continue
+        pinned_paths.add(candidate)
+    return pinned_paths
+
+
+def _list_cache_files(cache_dir: Path) -> list[Path]:
+    if not cache_dir.exists():
+        return []
+    return [
+        path
+        for path in cache_dir.rglob("*")
+        if path.is_file() and not _is_cache_metadata_file(path.resolve(), cache_dir.resolve())
+    ]
+
+
+def _remove_cache_entry(cache_dir: Path, path: Path) -> None:
+    resolved_cache_dir = cache_dir.resolve()
+    resolved_path = path.resolve()
+    try:
+        resolved_path.unlink(missing_ok=True)
+    except OSError:
+        return
+    entries = _read_cache_index(resolved_cache_dir)
+    try:
+        relative_key = resolved_path.relative_to(resolved_cache_dir).as_posix()
+    except ValueError:
+        relative_key = None
+    if relative_key is not None:
+        entries.pop(relative_key, None)
+        _write_cache_index(resolved_cache_dir, entries)
+    for parent in resolved_path.parents:
+        if parent == resolved_cache_dir:
+            break
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+
+
+def _prune_cache_entries(
+    cache_dir: Path,
+    *,
+    incoming_bytes: int = 0,
+    force: bool = False,
+) -> None:
+    resolved_cache_dir = cache_dir.resolve()
+    resolved_cache_dir.mkdir(parents=True, exist_ok=True)
+    now = time.monotonic()
+    interval_seconds = _get_cache_maintenance_interval_seconds()
+    if not force and now - _CACHE_MAINTENANCE_LAST_RUN.get(resolved_cache_dir, 0.0) < interval_seconds:
+        return
+
+    budget_bytes = _get_cache_budget_bytes(resolved_cache_dir)
+    max_age_seconds = _get_cache_max_age_seconds()
+    min_free_bytes = _get_cache_min_free_bytes()
+    pinned_paths = _collect_pinned_cache_paths(resolved_cache_dir)
+    entries = _read_cache_index(resolved_cache_dir)
+    file_rows: list[dict[str, object]] = []
+    dirty_index = False
+    for path in _list_cache_files(resolved_cache_dir):
+        stat = path.stat()
+        relative_key = path.relative_to(resolved_cache_dir).as_posix()
+        metadata = entries.get(relative_key)
+        last_used_ns = stat.st_mtime_ns if metadata is None else metadata["last_used_ns"]
+        if metadata is None or metadata["size"] != stat.st_size:
+            entries[relative_key] = {"size": int(stat.st_size), "last_used_ns": int(last_used_ns)}
+            dirty_index = True
+        file_rows.append(
+            {
+                "path": path,
+                "size": int(stat.st_size),
+                "last_used_ns": int(last_used_ns),
+                "pinned": path.resolve() in pinned_paths,
+            }
+        )
+
+    known_keys = {row["path"].relative_to(resolved_cache_dir).as_posix() for row in file_rows}
+    stale_keys = [key for key in entries if key not in known_keys]
+    for key in stale_keys:
+        entries.pop(key, None)
+        dirty_index = True
+    if dirty_index:
+        _write_cache_index(resolved_cache_dir, entries)
+
+    now_ns = time.time_ns()
+    for row in file_rows:
+        age_seconds = max(0.0, (now_ns - int(row["last_used_ns"])) / 1_000_000_000)
+        if max_age_seconds is not None and age_seconds > max_age_seconds and not bool(row["pinned"]):
+            _remove_cache_entry(resolved_cache_dir, Path(row["path"]))
+
+    file_rows = []
+    for path in _list_cache_files(resolved_cache_dir):
+        stat = path.stat()
+        relative_key = path.relative_to(resolved_cache_dir).as_posix()
+        metadata = _read_cache_index(resolved_cache_dir).get(
+            relative_key,
+            {"size": int(stat.st_size), "last_used_ns": int(stat.st_mtime_ns)},
+        )
+        file_rows.append(
+            {
+                "path": path,
+                "size": int(stat.st_size),
+                "last_used_ns": int(metadata["last_used_ns"]),
+                "pinned": path.resolve() in pinned_paths,
+            }
+        )
+
+    total_bytes = sum(int(row["size"]) for row in file_rows)
+    disk_usage = shutil.disk_usage(resolved_cache_dir)
+    free_bytes = disk_usage.free
+    needs_budget = budget_bytes is not None and total_bytes + incoming_bytes > budget_bytes
+    needs_free_floor = free_bytes - incoming_bytes < min_free_bytes
+    if needs_budget or needs_free_floor:
+        eviction_candidates = sorted(
+            (row for row in file_rows if not bool(row["pinned"])),
+            key=lambda row: (int(row["last_used_ns"]), str(row["path"])),
+        )
+        for row in eviction_candidates:
+            if budget_bytes is not None and total_bytes + incoming_bytes <= budget_bytes:
+                disk_usage = shutil.disk_usage(resolved_cache_dir)
+                free_bytes = disk_usage.free
+                if free_bytes - incoming_bytes >= min_free_bytes:
+                    break
+            elif budget_bytes is None:
+                disk_usage = shutil.disk_usage(resolved_cache_dir)
+                free_bytes = disk_usage.free
+                if free_bytes - incoming_bytes >= min_free_bytes:
+                    break
+            _remove_cache_entry(resolved_cache_dir, Path(row["path"]))
+            total_bytes -= int(row["size"])
+
+    _CACHE_MAINTENANCE_LAST_RUN[resolved_cache_dir] = now
 
 
 def _squeeze_array_and_axes(arr: np.ndarray, axes: str) -> tuple[np.ndarray, str]:
@@ -57,6 +381,10 @@ def load_tiff_as_tzyx(
     path: str | Path,
     output_size: tuple[int | None, int | None, int | None, int | None] | None = None,
 ) -> torch.Tensor:
+    if TiffFile is None or tiff_memmap is None:
+        raise ModuleNotFoundError(
+            "tifffile is required to load TIFF tensors"
+        ) from tifffile_import_error
     path = Path(path)
     use_local_pages = False
     try:
@@ -166,20 +494,24 @@ def build_tiff_cache_path(path: str | Path) -> Path:
 
 
 def ensure_cached_tiff(path: str | Path) -> Path:
+    _prune_cache_entries(TIFF_CACHE_DIR)
     source_path = Path(path).resolve()
     cache_path = build_tiff_cache_path(source_path)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
+    source_stat = source_path.stat()
 
     if cache_path.exists():
-        source_stat = source_path.stat()
         cache_stat = cache_path.stat()
         if (
             cache_stat.st_size == source_stat.st_size
             and cache_stat.st_mtime_ns >= source_stat.st_mtime_ns
         ):
+            _touch_cache_entry(TIFF_CACHE_DIR, cache_path, size_bytes=cache_stat.st_size)
             return cache_path
 
+    _prune_cache_entries(TIFF_CACHE_DIR, incoming_bytes=source_stat.st_size, force=True)
     shutil.copy2(source_path, cache_path)
+    _touch_cache_entry(TIFF_CACHE_DIR, cache_path, size_bytes=source_stat.st_size)
     return cache_path
 
 
@@ -230,7 +562,9 @@ def load_cached_tensor(cache_key: str) -> torch.Tensor | None:
     cache_path = TENSOR_CACHE_DIR / f"{cache_key}.pt"
     if not cache_path.exists():
         return None
-    return torch.load(cache_path, map_location="cpu")
+    tensor = torch.load(cache_path, map_location="cpu")
+    _touch_cache_entry(TENSOR_CACHE_DIR, cache_path)
+    return tensor
 
 
 def has_cached_tensor(cache_key: str) -> bool:
@@ -241,7 +575,10 @@ def has_cached_tensor(cache_key: str) -> bool:
 def save_cached_tensor(cache_key: str, tensor: torch.Tensor) -> None:
     TENSOR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_path = TENSOR_CACHE_DIR / f"{cache_key}.pt"
+    estimated_size_bytes = max(int(tensor.nelement() * tensor.element_size()), 1)
+    _prune_cache_entries(TENSOR_CACHE_DIR, incoming_bytes=estimated_size_bytes, force=True)
     torch.save(tensor.cpu(), cache_path)
+    _touch_cache_entry(TENSOR_CACHE_DIR, cache_path)
 
 
 def save_labeled_tensor_dataset(
@@ -273,7 +610,15 @@ def save_labeled_tensor_dataset(
         if map_key in dataset:
             payload[map_key] = {int(key): str(value) for key, value in dict(dataset[map_key]).items()}
 
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _prune_cache_entries(
+            DATASET_CACHE_DIR,
+            incoming_bytes=_estimate_dataset_payload_size_bytes(dataset),
+            force=True,
+        )
     torch.save(payload, dataset_path)
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _touch_cache_entry(DATASET_CACHE_DIR, dataset_path)
     return dataset_path
 
 
@@ -281,7 +626,11 @@ def load_labeled_tensor_dataset(path: str | Path) -> dict[str, object]:
     dataset_path = Path(path)
     if not dataset_path.is_absolute():
         dataset_path = DATASET_CACHE_DIR / dataset_path
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _prune_cache_entries(DATASET_CACHE_DIR)
     payload = torch.load(dataset_path, map_location="cpu")
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _touch_cache_entry(DATASET_CACHE_DIR, dataset_path)
     dataset = {
         "tensors": payload["tensors"],
         "labels": payload["labels"],
@@ -702,17 +1051,17 @@ def build_moa_labeled_tensor_dataset(
             )
 
             for _, row in treatment_rows.iterrows():
-                source = describe_condition_tensor_source(
-                    condition_dir=row["image_condition_dir"],
-                    output_size=output_size,
-                    normalize_global_drift=normalize_global_drift,
-                    loess_frac=loess_frac,
-                    use_cache=use_cache,
-                    use_tiff_cache=use_tiff_cache,
-                )
-                log_progress(row=row, mechanism=mechanism, kind="treatment", source=source)
                 attempted_conditions += 1
                 try:
+                    source = describe_condition_tensor_source(
+                        condition_dir=row["image_condition_dir"],
+                        output_size=output_size,
+                        normalize_global_drift=normalize_global_drift,
+                        loess_frac=loess_frac,
+                        use_cache=use_cache,
+                        use_tiff_cache=use_tiff_cache,
+                    )
+                    log_progress(row=row, mechanism=mechanism, kind="treatment", source=source)
                     tensor = load_image_condition_tensor(
                         condition_dir=row["image_condition_dir"],
                         output_size=output_size,
@@ -743,17 +1092,17 @@ def build_moa_labeled_tensor_dataset(
                 original_instance_id += 1
 
             for _, row in control_rows.iterrows():
-                source = describe_condition_tensor_source(
-                    condition_dir=row["image_condition_dir"],
-                    output_size=output_size,
-                    normalize_global_drift=normalize_global_drift,
-                    loess_frac=loess_frac,
-                    use_cache=use_cache,
-                    use_tiff_cache=use_tiff_cache,
-                )
-                log_progress(row=row, mechanism=mechanism, kind="control", source=source)
                 attempted_conditions += 1
                 try:
+                    source = describe_condition_tensor_source(
+                        condition_dir=row["image_condition_dir"],
+                        output_size=output_size,
+                        normalize_global_drift=normalize_global_drift,
+                        loess_frac=loess_frac,
+                        use_cache=use_cache,
+                        use_tiff_cache=use_tiff_cache,
+                    )
+                    log_progress(row=row, mechanism=mechanism, kind="control", source=source)
                     tensor = load_image_condition_tensor(
                         condition_dir=row["image_condition_dir"],
                         output_size=output_size,
@@ -799,7 +1148,7 @@ def build_moa_labeled_tensor_dataset(
 
 
 def build_tensor_embedding_2d(
-    tensors: torch.Tensor,
+    tensors: torch.Tensor | np.ndarray,
     labels: torch.Tensor | np.ndarray | list[int],
     *,
     label_map: dict[int, str] | None = None,
@@ -812,7 +1161,10 @@ def build_tensor_embedding_2d(
     if tensors.ndim < 2:
         raise ValueError(f"Expected tensors with leading sample dimension, got shape {tuple(tensors.shape)}")
 
-    features = tensors.detach().cpu().reshape(tensors.shape[0], -1).numpy()
+    if isinstance(tensors, torch.Tensor):
+        features = tensors.detach().cpu().reshape(tensors.shape[0], -1).numpy()
+    else:
+        features = np.asarray(tensors, dtype=float).reshape(tensors.shape[0], -1)
     labels_np = np.asarray(labels, dtype=int)
     if labels_np.shape[0] != features.shape[0]:
         raise ValueError("labels length must match number of tensors")

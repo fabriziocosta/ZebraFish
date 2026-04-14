@@ -160,6 +160,14 @@ The main training invariants are:
 - random rotation augmentation is applied only to the training subset
 - water/control examples remain mechanism label `0` and are collapsed to dedicated control classes for the auxiliary heads
 
+Repo-local caches are now retention-managed rather than unbounded:
+
+- `.tiff_cache` uses a default `30G` LRU budget
+- `.tensor_cache` uses a default `5G` LRU budget
+- `.dataset_cache` uses a default `10G` LRU budget
+- cache eviction also enforces a default `15G` filesystem free-space floor
+- the dataset referenced by `artifacts/current_dataset.json` is pinned against dataset-cache eviction
+
 See [docs/preprocessing.md](docs/preprocessing.md) for the full data-pipeline specification.
 
 ## Notebooks
