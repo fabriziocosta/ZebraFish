@@ -203,6 +203,68 @@ def _estimate_dataset_payload_size_bytes(dataset: dict[str, object]) -> int:
     return max(total, 1)
 
 
+def _format_bytes(num_bytes: int) -> str:
+    value = float(num_bytes)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024.0 or unit == "TiB":
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024.0
+    return f"{int(num_bytes)} B"
+
+
+def _validate_dataset_save_capacity(
+    dataset_path: Path,
+    *,
+    estimated_size_bytes: int,
+) -> None:
+    resolved_dataset_path = dataset_path.resolve()
+    cache_root = DATASET_CACHE_DIR.resolve()
+    within_dataset_cache = False
+    try:
+        resolved_dataset_path.relative_to(cache_root)
+    except ValueError:
+        within_dataset_cache = False
+    else:
+        within_dataset_cache = True
+
+    existing_size_bytes = 0
+    if resolved_dataset_path.exists():
+        try:
+            existing_size_bytes = resolved_dataset_path.stat().st_size
+        except OSError:
+            existing_size_bytes = 0
+
+    if within_dataset_cache:
+        budget_bytes = _get_cache_budget_bytes(cache_root)
+        if budget_bytes is not None and estimated_size_bytes > budget_bytes:
+            raise RuntimeError(
+                "Dataset artifact is too large for the configured dataset cache budget: "
+                f"estimated save size {_format_bytes(estimated_size_bytes)} exceeds "
+                f"budget {_format_bytes(budget_bytes)} for {resolved_dataset_path}."
+            )
+
+    disk_usage = shutil.disk_usage(resolved_dataset_path.parent)
+    available_bytes = disk_usage.free + existing_size_bytes
+    min_free_bytes = _get_cache_min_free_bytes() if within_dataset_cache else 0
+    required_bytes = estimated_size_bytes + min_free_bytes
+    if available_bytes < required_bytes:
+        if within_dataset_cache and min_free_bytes > 0:
+            raise RuntimeError(
+                "Insufficient free space to save dataset artifact while respecting the cache "
+                f"free-space floor: estimated save size {_format_bytes(estimated_size_bytes)}, "
+                f"available {_format_bytes(available_bytes)}, required "
+                f"{_format_bytes(required_bytes)} including floor "
+                f"{_format_bytes(min_free_bytes)} for {resolved_dataset_path}."
+            )
+        raise RuntimeError(
+            "Insufficient free space to save dataset artifact: "
+            f"estimated save size {_format_bytes(estimated_size_bytes)}, available "
+            f"{_format_bytes(available_bytes)} for {resolved_dataset_path}."
+        )
+
+
 def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
     if cache_dir.resolve() != DATASET_CACHE_DIR.resolve():
         return set()
@@ -594,6 +656,8 @@ def save_labeled_tensor_dataset(
     if not isinstance(metadata, pd.DataFrame):
         raise TypeError("dataset['metadata'] must be a pandas DataFrame")
 
+    estimated_size_bytes = _estimate_dataset_payload_size_bytes(dataset)
+
     payload: dict[str, object] = {
         "tensors": dataset["tensors"].detach().cpu(),
         "labels": dataset["labels"].detach().cpu(),
@@ -613,9 +677,13 @@ def save_labeled_tensor_dataset(
     if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
         _prune_cache_entries(
             DATASET_CACHE_DIR,
-            incoming_bytes=_estimate_dataset_payload_size_bytes(dataset),
+            incoming_bytes=estimated_size_bytes,
             force=True,
         )
+    _validate_dataset_save_capacity(
+        dataset_path,
+        estimated_size_bytes=estimated_size_bytes,
+    )
     torch.save(payload, dataset_path)
     if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
         _touch_cache_entry(DATASET_CACHE_DIR, dataset_path)

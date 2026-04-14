@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import pandas as pd
+import torch
 
 from src import tensor_utils
 from src.dataset_config import write_current_dataset_config
@@ -61,6 +66,16 @@ class CacheRetentionTests(unittest.TestCase):
     def _write_bytes(self, path: Path, size: int) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"x" * size)
+
+    def _build_dataset(self) -> dict[str, object]:
+        return {
+            "tensors": torch.zeros((1, 1, 1, 1, 1), dtype=torch.float32),
+            "labels": torch.tensor([0], dtype=torch.int64),
+            "metadata": pd.DataFrame(
+                [{"original_instance_id": 0, "image_condition_dir": "/tmp/example", "label": 0}]
+            ),
+            "label_map": {0: "Water"},
+        }
 
     def test_prune_cache_entries_removes_oldest_unpinned_files_first(self) -> None:
         older_file = self.tensor_cache_dir / "older.pt"
@@ -119,6 +134,20 @@ class CacheRetentionTests(unittest.TestCase):
 
         self.assertTrue(pinned_file.exists())
         self.assertFalse(stale_file.exists())
+
+    def test_save_labeled_tensor_dataset_fails_early_when_dataset_exceeds_budget(self) -> None:
+        os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1"
+
+        with self.assertRaisesRegex(RuntimeError, "too large for the configured dataset cache budget"):
+            tensor_utils.save_labeled_tensor_dataset(self._build_dataset(), "oversized.pt")
+
+    def test_save_labeled_tensor_dataset_fails_early_when_disk_space_is_insufficient(self) -> None:
+        disk_usage_type = type(shutil.disk_usage(self.root))
+        fake_disk_usage = disk_usage_type(total=1000, used=995, free=5)
+
+        with patch.object(tensor_utils.shutil, "disk_usage", return_value=fake_disk_usage):
+            with self.assertRaisesRegex(RuntimeError, "Insufficient free space to save dataset artifact"):
+                tensor_utils.save_labeled_tensor_dataset(self._build_dataset(), self.root / "external.pt")
 
 
 if __name__ == "__main__":

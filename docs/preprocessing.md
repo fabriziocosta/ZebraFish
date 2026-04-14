@@ -76,6 +76,7 @@ Persisted labeled datasets under [`.dataset_cache/`](../.dataset_cache) are reta
 - the default dataset-cache budget is `10G`
 - artifacts older than 14 days are eligible for eviction
 - the dataset pointed to by [`artifacts/current_dataset.json`](../artifacts/current_dataset.json) is pinned and protected from eviction
+- dataset saves now run a preflight capacity check and fail early with a clear error if a single `.pt` artifact cannot fit within the dataset-cache budget or available free space
 
 All repo-local caches also respect a shared free-space floor:
 
