@@ -160,6 +160,10 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     estimator.device_ = estimator._device()
     estimator.model_.to(estimator.device_)
     estimator.input_shape_ = tuple(int(size) for size in prepared.X_train.shape[1:])
+    if hasattr(estimator, "_load_pretrained_weights_into_model"):
+        estimator._load_pretrained_weights_into_model(estimator.model_)
+    if getattr(estimator, "freeze_backbone", False) and hasattr(estimator, "_set_encoder_trainable"):
+        estimator._set_encoder_trainable(estimator.model_, trainable=False)
 
     train_tensors: list[torch.Tensor] = [prepared.X_train, prepared.y_train]
     if prepared.compound_train is not None:
@@ -179,7 +183,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(
-        estimator.model_.parameters(),
+        [parameter for parameter in estimator.model_.parameters() if parameter.requires_grad],
         lr=estimator.learning_rate,
         weight_decay=estimator.weight_decay,
     )

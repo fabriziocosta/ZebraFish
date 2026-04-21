@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Sequence
+from pathlib import Path
+from typing import Mapping, Sequence
 
 import numpy as np
 import torch
@@ -21,6 +22,10 @@ from src.models.configs import (
 from src.models.common import _PreparedData, _SharedMultitaskEstimatorMixin, _expand_per_block
 from src.training.losses import apply_auxiliary_head_losses, commutative_consistency_loss
 from src.training.loop import _collect_output_batches
+from src.training.pretraining import _pretrain_commutative_estimator
+
+
+_HEAD_PREFIXES = ("classifier.", "compound_classifier.", "concentration_classifier.")
 
 
 def _apply_config(obj, *configs) -> None:
@@ -29,6 +34,97 @@ def _apply_config(obj, *configs) -> None:
             continue
         for key, value in config_as_dict(config).items():
             setattr(obj, key, value)
+
+
+def _load_state_payload(path_or_state: str | Path | Mapping[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    if isinstance(path_or_state, (str, Path)):
+        payload = torch.load(Path(path_or_state), map_location="cpu")
+    else:
+        payload = path_or_state
+    if "model_state_dict" in payload:
+        payload = payload["model_state_dict"]
+    return {str(key): value.detach().cpu() for key, value in payload.items()}
+
+
+class _CommutativePretrainingMixin:
+    def pretrain(
+        self,
+        X: torch.Tensor | np.ndarray,
+        *,
+        validation_data: torch.Tensor | np.ndarray | None = None,
+        epochs: int | None = None,
+        batch_size: int | None = None,
+        learning_rate: float | None = None,
+        weight_decay: float | None = None,
+    ):
+        return _pretrain_commutative_estimator(
+            self,
+            X,
+            validation_data=validation_data,
+            epochs=epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+        )
+
+    def _extract_transfer_state_dict(self, model: nn.Module) -> dict[str, torch.Tensor]:
+        return {
+            key: value.detach().cpu()
+            for key, value in model.state_dict().items()
+            if not key.startswith(_HEAD_PREFIXES)
+        }
+
+    def load_pretrained_encoder(self, path_or_state: str | Path | Mapping[str, torch.Tensor]):
+        self.pretrained_encoder_state_dict_ = {
+            key: value
+            for key, value in _load_state_payload(path_or_state).items()
+            if not key.startswith(_HEAD_PREFIXES)
+        }
+        return self
+
+    def save_pretrained_encoder(self, path: str | Path) -> Path:
+        if hasattr(self, "pretrained_encoder_state_dict_"):
+            state_dict = self.pretrained_encoder_state_dict_
+        elif hasattr(self, "model_"):
+            state_dict = self._extract_transfer_state_dict(self.model_)
+        else:
+            raise AttributeError("No pretrained encoder state is available to save")
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            {
+                "model_state_dict": {key: value.detach().cpu() for key, value in state_dict.items()},
+                "input_mean": getattr(self, "input_mean_", None),
+                "input_std": getattr(self, "input_std_", None),
+            },
+            output_path,
+        )
+        return output_path
+
+    def _load_pretrained_weights_into_model(self, model: nn.Module) -> None:
+        state_dict = getattr(self, "pretrained_encoder_state_dict_", None)
+        if state_dict is None and getattr(self, "pretrained_state_path", None):
+            self.load_pretrained_encoder(self.pretrained_state_path)
+            state_dict = getattr(self, "pretrained_encoder_state_dict_", None)
+        if state_dict is None:
+            return
+        current_state = model.state_dict()
+        compatible_state = {
+            key: value
+            for key, value in state_dict.items()
+            if key in current_state and tuple(current_state[key].shape) == tuple(value.shape)
+        }
+        if not compatible_state:
+            raise ValueError("No compatible pretrained encoder weights matched the current model architecture")
+        model.load_state_dict(compatible_state, strict=False)
+        self.pretrained_loaded_keys_ = sorted(compatible_state)
+
+    def _set_encoder_trainable(self, model: nn.Module, *, trainable: bool) -> None:
+        for name, parameter in model.named_parameters():
+            if name.startswith(_HEAD_PREFIXES):
+                parameter.requires_grad = True
+            else:
+                parameter.requires_grad = bool(trainable)
 
 
 class TimeChannel3DCNNClassifier(
@@ -160,6 +256,7 @@ class TimeChannel3DCNNClassifier(
 
 
 class CommutativeCNNClassifier(
+    _CommutativePretrainingMixin,
     _SharedMultitaskEstimatorMixin,
     BaseEstimator,
     ClassifierMixin,
@@ -218,6 +315,8 @@ class CommutativeCNNClassifier(
         model_config: CommutativeCNNConfig | None = None,
         optimization_config: OptimizationConfig | None = None,
         loss_weight_config: LossWeightConfig | None = None,
+        pretrained_state_path: str | Path | None = None,
+        freeze_backbone: bool = False,
     ) -> None:
         self.spatial_conv_channels = spatial_conv_channels
         self.spatial_kernel_size_z = spatial_kernel_size_z
@@ -269,6 +368,8 @@ class CommutativeCNNClassifier(
         self.model_config = model_config
         self.optimization_config = optimization_config
         self.loss_weight_config = loss_weight_config
+        self.pretrained_state_path = pretrained_state_path
+        self.freeze_backbone = freeze_backbone
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _PureCNNDualPathwayNetwork:
@@ -375,6 +476,7 @@ class CommutativeCNNClassifier(
 
 
 class CommutativeTransformerClassifier(
+    _CommutativePretrainingMixin,
     _SharedMultitaskEstimatorMixin,
     BaseEstimator,
     ClassifierMixin,
@@ -420,6 +522,8 @@ class CommutativeTransformerClassifier(
         model_config: CommutativeTransformerConfig | None = None,
         optimization_config: OptimizationConfig | None = None,
         loss_weight_config: LossWeightConfig | None = None,
+        pretrained_state_path: str | Path | None = None,
+        freeze_backbone: bool = False,
     ) -> None:
         self.spatial_patch_size_st = spatial_patch_size_st
         self.spatial_patch_size_ts = spatial_patch_size_ts
@@ -458,6 +562,8 @@ class CommutativeTransformerClassifier(
         self.model_config = model_config
         self.optimization_config = optimization_config
         self.loss_weight_config = loss_weight_config
+        self.pretrained_state_path = pretrained_state_path
+        self.freeze_backbone = freeze_backbone
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _CommutativeTransformerNetwork:

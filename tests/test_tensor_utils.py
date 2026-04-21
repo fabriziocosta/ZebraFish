@@ -149,6 +149,65 @@ class CacheRetentionTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Insufficient free space to save dataset artifact"):
                 tensor_utils.save_labeled_tensor_dataset(self._build_dataset(), self.root / "external.pt")
 
+    def test_build_unlabeled_tensor_dataset_filters_and_loads_selected_rows(self) -> None:
+        condition_df = pd.DataFrame(
+            [
+                {
+                    "condition_folder_status": "active",
+                    "mechanism_of_action": "A",
+                    "condition_kind": "treatment",
+                    "compound": "c1",
+                    "concentration_band": "high",
+                    "concentration_label": "10 uM",
+                    "image_condition_dir": "/tmp/a",
+                },
+                {
+                    "condition_folder_status": "active",
+                    "mechanism_of_action": "B",
+                    "condition_kind": "treatment",
+                    "compound": "c2",
+                    "concentration_band": "low",
+                    "concentration_label": "1 uM",
+                    "image_condition_dir": "/tmp/b",
+                },
+                {
+                    "condition_folder_status": "active",
+                    "mechanism_of_action": "A",
+                    "condition_kind": "control",
+                    "compound": "c1",
+                    "concentration_band": "control",
+                    "concentration_label": "water",
+                    "image_condition_dir": "/tmp/c",
+                },
+            ]
+        )
+
+        with patch.object(tensor_utils, "describe_condition_tensor_source", return_value="test"), patch.object(
+            tensor_utils,
+            "load_image_condition_tensor",
+            side_effect=lambda **_: torch.zeros((2, 1, 4, 4), dtype=torch.float32),
+        ):
+            dataset = tensor_utils.build_unlabeled_tensor_dataset(
+                condition_df,
+                output_size=(2, 1, 4, 4),
+                selected_mechanisms=["A"],
+                selected_concentrations=["high"],
+                verbose=False,
+            )
+
+        self.assertEqual(tuple(dataset["tensors"].shape), (2, 2, 1, 4, 4))
+        self.assertEqual(dataset["metadata"]["image_condition_dir"].tolist(), ["/tmp/c", "/tmp/a"])
+
+    def test_save_and_load_unlabeled_tensor_dataset(self) -> None:
+        dataset = {
+            "tensors": torch.zeros((2, 2, 1, 4, 4), dtype=torch.float32),
+            "metadata": pd.DataFrame([{"image_condition_dir": "/tmp/a"}, {"image_condition_dir": "/tmp/b"}]),
+        }
+        path = tensor_utils.save_unlabeled_tensor_dataset(dataset, self.root / "unlabeled.pt")
+        loaded = tensor_utils.load_unlabeled_tensor_dataset(path)
+        self.assertEqual(tuple(loaded["tensors"].shape), (2, 2, 1, 4, 4))
+        self.assertEqual(loaded["metadata"]["image_condition_dir"].tolist(), ["/tmp/a", "/tmp/b"])
+
 
 if __name__ == "__main__":
     unittest.main()

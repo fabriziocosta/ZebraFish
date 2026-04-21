@@ -34,6 +34,11 @@ from src.training.workflow import (
     plot_holdout_embedding_projection,
     prepare_multitask_experiment_data,
 )
+from src.tensor_utils import (
+    build_unlabeled_tensor_dataset,
+    load_unlabeled_tensor_dataset,
+    save_unlabeled_tensor_dataset,
+)
 
 __all__ = [
     "CommutativeCNNConfig",
@@ -62,4 +67,7 @@ __all__ = [
     "plot_holdout_embedding_projection",
     "plot_training_history",
     "prepare_multitask_experiment_data",
+    "build_unlabeled_tensor_dataset",
+    "load_unlabeled_tensor_dataset",
+    "save_unlabeled_tensor_dataset",
 ]

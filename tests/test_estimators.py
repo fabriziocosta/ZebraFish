@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+import tempfile
+from pathlib import Path
 
 import numpy as np
 
@@ -85,6 +87,46 @@ class EstimatorSmokeTests(unittest.TestCase):
         self.assertIsInstance(params["optimization_config"], OptimizationConfig)
         self.assertIsInstance(params["model_config"], CommutativeCNNConfig)
         self._run_estimator(estimator)
+
+    def test_commutative_cnn_pretrain_save_load_and_frozen_head_fit(self) -> None:
+        model_config = CommutativeCNNConfig(
+            spatial_conv_channels=(4,),
+            temporal_st_channels=(4,),
+            temporal_ts_channels=(4,),
+            spatial_agg_channels=(4,),
+            patch_size_z=1,
+            patch_size_xy=8,
+            embedding_dim=4,
+            num_prototypes=4,
+        )
+        estimator = CommutativeCNNClassifier(
+            model_config=model_config,
+            optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+            loss_weight_config=LossWeightConfig(consistency_weight=0.2, feature_weight=0.05),
+        )
+        estimator.pretrain(self.X, epochs=1)
+        self.assertTrue(hasattr(estimator, "pretrain_history_"))
+        self.assertTrue(hasattr(estimator, "pretrained_encoder_state_dict_"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint_path = estimator.save_pretrained_encoder(Path(tmpdir) / "encoder.pt")
+            fine_tune_estimator = CommutativeCNNClassifier(
+                model_config=model_config,
+                optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+                loss_weight_config=LossWeightConfig(consistency_weight=0.2, feature_weight=0.0),
+                pretrained_state_path=checkpoint_path,
+                freeze_backbone=True,
+            )
+            fine_tune_estimator.fit(self.X, self.y)
+            self.assertTrue(hasattr(fine_tune_estimator, "pretrained_loaded_keys_"))
+            self.assertGreater(len(fine_tune_estimator.pretrained_loaded_keys_), 0)
+            frozen_parameters = [
+                parameter.requires_grad
+                for name, parameter in fine_tune_estimator.model_.named_parameters()
+                if not name.startswith(("classifier.", "compound_classifier.", "concentration_classifier."))
+            ]
+            self.assertTrue(frozen_parameters)
+            self.assertFalse(any(frozen_parameters))
 
     def test_commutative_transformer_estimator_with_configs(self) -> None:
         estimator = CommutativeTransformerClassifier(

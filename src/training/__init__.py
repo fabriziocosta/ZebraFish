@@ -13,6 +13,7 @@ from src.training.workflow import (
     plot_holdout_embedding_projection,
     prepare_multitask_experiment_data,
 )
+from src.training.pretraining import _pretrain_commutative_estimator
 
 __all__ = [
     "ExperimentArtifacts",
@@ -33,4 +34,5 @@ __all__ = [
     "plot_holdout_embedding_projection",
     "plot_training_history",
     "prepare_multitask_experiment_data",
+    "_pretrain_commutative_estimator",
 ]

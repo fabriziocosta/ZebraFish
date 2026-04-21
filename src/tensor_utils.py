@@ -714,6 +714,45 @@ def load_labeled_tensor_dataset(path: str | Path) -> dict[str, object]:
     return dataset
 
 
+def save_unlabeled_tensor_dataset(
+    dataset: dict[str, object],
+    path: str | Path,
+) -> Path:
+    dataset_path = Path(path)
+    if not dataset_path.is_absolute():
+        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+
+    metadata = dataset["metadata"]
+    if not isinstance(metadata, pd.DataFrame):
+        raise TypeError("dataset['metadata'] must be a pandas DataFrame")
+    tensors = dataset["tensors"]
+    if not isinstance(tensors, torch.Tensor):
+        raise TypeError("dataset['tensors'] must be a torch.Tensor")
+
+    payload = {
+        "tensors": tensors.detach().cpu(),
+        "metadata_records": metadata.to_dict(orient="records"),
+    }
+    _validate_dataset_save_capacity(
+        dataset_path,
+        estimated_size_bytes=_estimate_dataset_payload_size_bytes({"tensors": tensors, "metadata": metadata}),
+    )
+    torch.save(payload, dataset_path)
+    return dataset_path
+
+
+def load_unlabeled_tensor_dataset(path: str | Path) -> dict[str, object]:
+    dataset_path = Path(path)
+    if not dataset_path.is_absolute():
+        dataset_path = DATASET_CACHE_DIR / dataset_path
+    payload = torch.load(dataset_path, map_location="cpu")
+    return {
+        "tensors": payload["tensors"],
+        "metadata": pd.DataFrame(payload["metadata_records"]),
+    }
+
+
 def select_evenly_spaced_indices(n_total: int, n_keep: int) -> list[int]:
     if n_total <= 0:
         return []
@@ -1212,6 +1251,137 @@ def build_moa_labeled_tensor_dataset(
         "label_map": label_map,
         "compound_label_map": compound_label_map,
         "concentration_label_map": concentration_label_map,
+    }
+
+
+def build_unlabeled_tensor_dataset(
+    condition_df: pd.DataFrame,
+    output_size: tuple[int | None, int | None, int | None, int | None],
+    *,
+    selected_mechanisms: list[str] | None = None,
+    selected_concentrations: list[str] | None = None,
+    include_treatments: bool = True,
+    include_controls: bool = True,
+    max_tensors_per_compound: int | None = None,
+    max_tensors_total: int | None = None,
+    only_active: bool = True,
+    normalize_global_drift: bool = True,
+    loess_frac: float = 0.25,
+    use_cache: bool = True,
+    use_tiff_cache: bool = True,
+    skip_failed_conditions: bool = True,
+    verbose: bool = True,
+) -> dict[str, object]:
+    """Build an unlabeled tensor dataset for representation pretraining."""
+    if not include_treatments and not include_controls:
+        raise ValueError("At least one of include_treatments or include_controls must be True")
+    if max_tensors_per_compound is not None and max_tensors_per_compound <= 0:
+        raise ValueError("max_tensors_per_compound must be positive when provided")
+    if max_tensors_total is not None and max_tensors_total <= 0:
+        raise ValueError("max_tensors_total must be positive when provided")
+
+    working_df = condition_df.copy()
+    if only_active:
+        working_df = working_df[working_df["condition_folder_status"] == "active"].copy()
+    if selected_mechanisms is not None:
+        working_df = working_df[working_df["mechanism_of_action"].isin(selected_mechanisms)].copy()
+
+    kinds: list[str] = []
+    if include_treatments:
+        kinds.append("treatment")
+    if include_controls:
+        kinds.append("control")
+    working_df = working_df[working_df["condition_kind"].isin(kinds)].copy()
+    if selected_concentrations is not None:
+        is_selected_treatment = (working_df["condition_kind"] == "treatment") & working_df["concentration_band"].isin(
+            selected_concentrations
+        )
+        is_control = working_df["condition_kind"] == "control"
+        working_df = working_df[is_selected_treatment | is_control].copy()
+
+    working_df = (
+        working_df.drop_duplicates(subset=["image_condition_dir"])
+        .sort_values(["mechanism_of_action", "compound", "condition_kind", "concentration_band", "image_condition_dir"])
+        .reset_index(drop=True)
+    )
+    if max_tensors_per_compound is not None:
+        working_df = (
+            working_df.groupby(["compound", "condition_kind"], sort=False, group_keys=False)
+            .head(int(max_tensors_per_compound))
+            .reset_index(drop=True)
+        )
+    if max_tensors_total is not None:
+        working_df = working_df.head(int(max_tensors_total)).reset_index(drop=True)
+    if working_df.empty:
+        raise ValueError("No unlabeled dataset examples were selected with the provided filters")
+
+    tensors: list[torch.Tensor] = []
+    rows: list[dict[str, object]] = []
+    build_start = time.perf_counter()
+    total_conditions = int(len(working_df))
+    attempted_conditions = 0
+    for original_instance_id, row in working_df.iterrows():
+        attempted_conditions += 1
+        try:
+            source = describe_condition_tensor_source(
+                condition_dir=row["image_condition_dir"],
+                output_size=output_size,
+                normalize_global_drift=normalize_global_drift,
+                loess_frac=loess_frac,
+                use_cache=use_cache,
+                use_tiff_cache=use_tiff_cache,
+            )
+            if verbose:
+                elapsed = time.perf_counter() - build_start
+                avg_seconds = elapsed / max(attempted_conditions, 1)
+                eta = _format_eta(avg_seconds * (total_conditions - attempted_conditions))
+                print(
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"[{attempted_conditions:03d}/{total_conditions:03d}] "
+                    f"kind={str(row['condition_kind']):<9} "
+                    f"source={source:<12} "
+                    f"conc={str(row['concentration_band']):<8} "
+                    f"elapsed={_format_eta(elapsed)} "
+                    f"eta={eta} "
+                    f"mechanism={row['mechanism_of_action']} "
+                    f"compound={row['compound']}"
+                )
+            tensor = load_image_condition_tensor(
+                condition_dir=row["image_condition_dir"],
+                output_size=output_size,
+                normalize_global_drift=normalize_global_drift,
+                loess_frac=loess_frac,
+                use_cache=use_cache,
+                use_tiff_cache=use_tiff_cache,
+            )
+        except Exception as exc:
+            message = (
+                "Failed to build unlabeled tensor dataset example "
+                f"for compound={row['compound']!r}, image_condition_dir={row['image_condition_dir']!r}"
+            )
+            if skip_failed_conditions:
+                warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                continue
+            raise RuntimeError(message) from exc
+
+        tensors.append(tensor)
+        rows.append(
+            {
+                "original_instance_id": int(original_instance_id),
+                "mechanism_of_action": row["mechanism_of_action"],
+                "compound": row["compound"],
+                "condition_kind": row["condition_kind"],
+                "concentration_band": row["concentration_band"],
+                "concentration_label": row["concentration_label"],
+                "image_condition_dir": row["image_condition_dir"],
+            }
+        )
+
+    if not tensors:
+        raise ValueError("No unlabeled dataset examples were created with the provided filters")
+    return {
+        "tensors": torch.stack(tensors, dim=0),
+        "metadata": pd.DataFrame(rows),
     }
 
 
