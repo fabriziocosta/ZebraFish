@@ -295,6 +295,15 @@ def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
     return pinned_paths
 
 
+def _resolve_dataset_artifact_path(path: str | Path) -> Path:
+    dataset_path = Path(path)
+    if dataset_path.is_absolute():
+        return dataset_path
+    if dataset_path.parts and dataset_path.parts[0] == DATASET_CACHE_DIR.name:
+        return DATASET_CACHE_DIR.parent / dataset_path
+    return DATASET_CACHE_DIR / dataset_path
+
+
 def _list_cache_files(cache_dir: Path) -> list[Path]:
     if not cache_dir.exists():
         return []
@@ -303,6 +312,13 @@ def _list_cache_files(cache_dir: Path) -> list[Path]:
         for path in cache_dir.rglob("*")
         if path.is_file() and not _is_cache_metadata_file(path.resolve(), cache_dir.resolve())
     ]
+
+
+def _stat_cache_file(path: Path) -> os.stat_result | None:
+    try:
+        return path.stat()
+    except FileNotFoundError:
+        return None
 
 
 def _remove_cache_entry(cache_dir: Path, path: Path) -> None:
@@ -350,7 +366,10 @@ def _prune_cache_entries(
     file_rows: list[dict[str, object]] = []
     dirty_index = False
     for path in _list_cache_files(resolved_cache_dir):
-        stat = path.stat()
+        stat = _stat_cache_file(path)
+        if stat is None:
+            dirty_index = True
+            continue
         relative_key = path.relative_to(resolved_cache_dir).as_posix()
         metadata = entries.get(relative_key)
         last_used_ns = stat.st_mtime_ns if metadata is None else metadata["last_used_ns"]
@@ -382,7 +401,9 @@ def _prune_cache_entries(
 
     file_rows = []
     for path in _list_cache_files(resolved_cache_dir):
-        stat = path.stat()
+        stat = _stat_cache_file(path)
+        if stat is None:
+            continue
         relative_key = path.relative_to(resolved_cache_dir).as_posix()
         metadata = _read_cache_index(resolved_cache_dir).get(
             relative_key,
@@ -647,9 +668,7 @@ def save_labeled_tensor_dataset(
     dataset: dict[str, object],
     path: str | Path,
 ) -> Path:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
     metadata = dataset["metadata"]
@@ -691,9 +710,7 @@ def save_labeled_tensor_dataset(
 
 
 def load_labeled_tensor_dataset(path: str | Path) -> dict[str, object]:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
     if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
         _prune_cache_entries(DATASET_CACHE_DIR)
     payload = torch.load(dataset_path, map_location="cpu")
@@ -718,9 +735,7 @@ def save_unlabeled_tensor_dataset(
     dataset: dict[str, object],
     path: str | Path,
 ) -> Path:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
     metadata = dataset["metadata"]
@@ -743,9 +758,24 @@ def save_unlabeled_tensor_dataset(
 
 
 def load_unlabeled_tensor_dataset(path: str | Path) -> dict[str, object]:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
+    if dataset_path.is_dir():
+        manifest_path = dataset_path / "manifest.json"
+        if manifest_path.exists():
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+            chunk_paths = [dataset_path / chunk_name for chunk_name in manifest["chunks"]]
+        else:
+            chunk_paths = sorted(dataset_path.glob("*.pt"))
+        if not chunk_paths:
+            raise ValueError(f"No unlabeled tensor dataset chunks found in {dataset_path}")
+
+        chunk_payloads = [load_unlabeled_tensor_dataset(chunk_path) for chunk_path in chunk_paths]
+        return {
+            "tensors": torch.cat([payload["tensors"] for payload in chunk_payloads], dim=0),
+            "metadata": pd.concat([payload["metadata"] for payload in chunk_payloads], ignore_index=True),
+        }
+
     payload = torch.load(dataset_path, map_location="cpu")
     return {
         "tensors": payload["tensors"],
@@ -1270,6 +1300,10 @@ def build_unlabeled_tensor_dataset(
     use_cache: bool = True,
     use_tiff_cache: bool = True,
     skip_failed_conditions: bool = True,
+    chunk_output_dir: str | Path | None = None,
+    chunk_size: int | None = None,
+    chunk_prefix: str = "unlabeled_chunk",
+    overwrite_chunks: bool = False,
     verbose: bool = True,
 ) -> dict[str, object]:
     """Build an unlabeled tensor dataset for representation pretraining."""
@@ -1279,6 +1313,13 @@ def build_unlabeled_tensor_dataset(
         raise ValueError("max_tensors_per_compound must be positive when provided")
     if max_tensors_total is not None and max_tensors_total <= 0:
         raise ValueError("max_tensors_total must be positive when provided")
+    if chunk_output_dir is not None:
+        if chunk_size is None:
+            raise ValueError("chunk_size must be provided when chunk_output_dir is provided")
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive when provided")
+    elif chunk_size is not None:
+        raise ValueError("chunk_output_dir must be provided when chunk_size is provided")
 
     working_df = condition_df.copy()
     if only_active:
@@ -1315,11 +1356,54 @@ def build_unlabeled_tensor_dataset(
     if working_df.empty:
         raise ValueError("No unlabeled dataset examples were selected with the provided filters")
 
+    chunk_dir: Path | None = None
+    chunk_paths: list[Path] = []
+    chunk_index = 0
+    if chunk_output_dir is not None:
+        chunk_dir = _resolve_dataset_artifact_path(chunk_output_dir)
+        chunk_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = chunk_dir / "manifest.json"
+        existing_chunks = sorted(chunk_dir.glob(f"{chunk_prefix}_*.pt"))
+        if overwrite_chunks:
+            for chunk_path in existing_chunks:
+                chunk_path.unlink()
+            if manifest_path.exists():
+                manifest_path.unlink()
+        elif existing_chunks or manifest_path.exists():
+            raise FileExistsError(
+                f"Chunk output directory already contains {chunk_prefix!r} chunks or a manifest: {chunk_dir}"
+            )
+
     tensors: list[torch.Tensor] = []
     rows: list[dict[str, object]] = []
+    chunk_tensors: list[torch.Tensor] = []
+    chunk_rows: list[dict[str, object]] = []
     build_start = time.perf_counter()
     total_conditions = int(len(working_df))
     attempted_conditions = 0
+
+    def flush_chunk(*, final: bool = False) -> None:
+        nonlocal chunk_index, chunk_tensors, chunk_rows
+        if chunk_dir is None or not chunk_tensors:
+            return
+        chunk_index += 1
+        chunk_dataset = {
+            "tensors": torch.stack(chunk_tensors, dim=0),
+            "metadata": pd.DataFrame(chunk_rows),
+        }
+        chunk_path = chunk_dir / f"{chunk_prefix}_{chunk_index:04d}.pt"
+        save_unlabeled_tensor_dataset(chunk_dataset, chunk_path)
+        chunk_paths.append(chunk_path)
+        if verbose:
+            suffix = "final " if final else ""
+            print(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                f"saved {suffix}chunk {chunk_index:04d} "
+                f"n={len(chunk_rows)} path={chunk_path}"
+            )
+        chunk_tensors = []
+        chunk_rows = []
+
     for original_instance_id, row in working_df.iterrows():
         attempted_conditions += 1
         try:
@@ -1364,7 +1448,6 @@ def build_unlabeled_tensor_dataset(
                 continue
             raise RuntimeError(message) from exc
 
-        tensors.append(tensor)
         rows.append(
             {
                 "original_instance_id": int(original_instance_id),
@@ -1376,6 +1459,34 @@ def build_unlabeled_tensor_dataset(
                 "image_condition_dir": row["image_condition_dir"],
             }
         )
+        if chunk_dir is None:
+            tensors.append(tensor)
+        else:
+            chunk_tensors.append(tensor)
+            chunk_rows.append(rows[-1])
+            if len(chunk_tensors) >= int(chunk_size):
+                flush_chunk()
+
+    if chunk_dir is not None:
+        flush_chunk(final=True)
+        if not chunk_paths:
+            raise ValueError("No unlabeled dataset examples were created with the provided filters")
+        manifest_path = chunk_dir / "manifest.json"
+        manifest = {
+            "chunks": [chunk_path.name for chunk_path in chunk_paths],
+            "chunk_size": int(chunk_size),
+            "total_examples": int(len(rows)),
+            "output_size": list(output_size),
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        with manifest_path.open("w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, indent=2)
+        return {
+            "chunk_dir": chunk_dir,
+            "chunk_paths": chunk_paths,
+            "manifest_path": manifest_path,
+            "metadata": pd.DataFrame(rows),
+        }
 
     if not tensors:
         raise ValueError("No unlabeled dataset examples were created with the provided filters")

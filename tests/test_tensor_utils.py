@@ -208,6 +208,65 @@ class CacheRetentionTests(unittest.TestCase):
         self.assertEqual(tuple(loaded["tensors"].shape), (2, 2, 1, 4, 4))
         self.assertEqual(loaded["metadata"]["image_condition_dir"].tolist(), ["/tmp/a", "/tmp/b"])
 
+    def test_build_unlabeled_tensor_dataset_writes_and_loads_chunks(self) -> None:
+        os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1M"
+        condition_df = pd.DataFrame(
+            [
+                {
+                    "condition_folder_status": "active",
+                    "mechanism_of_action": "A",
+                    "condition_kind": "treatment",
+                    "compound": f"c{index}",
+                    "concentration_band": "high",
+                    "concentration_label": "10 uM",
+                    "image_condition_dir": f"/tmp/{index}",
+                }
+                for index in range(5)
+            ]
+        )
+
+        with patch.object(tensor_utils, "describe_condition_tensor_source", return_value="test"), patch.object(
+            tensor_utils,
+            "load_image_condition_tensor",
+            side_effect=[
+                torch.full((2, 1, 4, 4), fill_value=index, dtype=torch.float32)
+                for index in range(5)
+            ],
+        ):
+            chunked = tensor_utils.build_unlabeled_tensor_dataset(
+                condition_df,
+                output_size=(2, 1, 4, 4),
+                chunk_output_dir=".dataset_cache/unlabeled_chunks",
+                chunk_size=2,
+                verbose=False,
+            )
+
+        self.assertEqual(len(chunked["chunk_paths"]), 3)
+        self.assertTrue((self.dataset_cache_dir / "unlabeled_chunks" / "manifest.json").exists())
+
+        loaded = tensor_utils.load_unlabeled_tensor_dataset(".dataset_cache/unlabeled_chunks")
+        self.assertEqual(tuple(loaded["tensors"].shape), (5, 2, 1, 4, 4))
+        self.assertEqual(loaded["tensors"][:, 0, 0, 0, 0].tolist(), [0, 1, 2, 3, 4])
+        self.assertEqual(loaded["metadata"]["image_condition_dir"].tolist(), [f"/tmp/{index}" for index in range(5)])
+
+    def test_dataset_cache_relative_path_is_not_double_prefixed(self) -> None:
+        os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1M"
+        dataset = {
+            "tensors": torch.zeros((1, 2, 1, 4, 4), dtype=torch.float32),
+            "metadata": pd.DataFrame([{"image_condition_dir": "/tmp/a"}]),
+        }
+        path = tensor_utils.save_unlabeled_tensor_dataset(dataset, ".dataset_cache/unlabeled.pt")
+        self.assertEqual(path, self.root / ".dataset_cache" / "unlabeled.pt")
+
+        loaded = tensor_utils.load_unlabeled_tensor_dataset(".dataset_cache/unlabeled.pt")
+        self.assertEqual(tuple(loaded["tensors"].shape), (1, 2, 1, 4, 4))
+        self.assertEqual(loaded["metadata"]["image_condition_dir"].tolist(), ["/tmp/a"])
+
+    def test_prune_cache_entries_ignores_files_removed_during_scan(self) -> None:
+        missing_path = self.tiff_cache_dir / "missing.ome.tiff"
+        with patch.object(tensor_utils, "_list_cache_files", return_value=[missing_path]):
+            tensor_utils._prune_cache_entries(self.tiff_cache_dir, force=True)
+
 
 if __name__ == "__main__":
     unittest.main()
