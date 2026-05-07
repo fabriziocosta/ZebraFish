@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import time
 import unittest
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -207,6 +208,67 @@ class CacheRetentionTests(unittest.TestCase):
         loaded = tensor_utils.load_unlabeled_tensor_dataset(path)
         self.assertEqual(tuple(loaded["tensors"].shape), (2, 2, 1, 4, 4))
         self.assertEqual(loaded["metadata"]["image_condition_dir"].tolist(), ["/tmp/a", "/tmp/b"])
+
+    def test_load_image_condition_tensor_reports_tiff_cause_chain(self) -> None:
+        condition_dir = self.root / "condition"
+        tiff_path = condition_dir / "spim_TL001_Angle0.ome.tiff"
+        self._write_bytes(tiff_path, 20)
+
+        def fail_load(*_, **__):
+            try:
+                raise ValueError("bad page shape")
+            except ValueError as exc:
+                raise RuntimeError("reader failed") from exc
+
+        with patch.object(tensor_utils, "load_tiff_as_tzyx", side_effect=fail_load):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Failed to load TIFF timepoint 1/1.*source_size=20 B.*RuntimeError: reader failed.*ValueError: bad page shape",
+            ):
+                tensor_utils.load_image_condition_tensor(
+                    condition_dir,
+                    output_size=(1, 1, 4, 4),
+                    use_cache=False,
+                    use_tiff_cache=False,
+                )
+
+    def test_build_unlabeled_tensor_dataset_warning_reports_cause_chain(self) -> None:
+        condition_df = pd.DataFrame(
+            [
+                {
+                    "condition_folder_status": "active",
+                    "mechanism_of_action": "A",
+                    "condition_kind": "treatment",
+                    "compound": "c1",
+                    "concentration_band": "high",
+                    "concentration_label": "10 uM",
+                    "image_condition_dir": "/tmp/a",
+                }
+            ]
+        )
+
+        def fail_load(*_, **__):
+            try:
+                raise ValueError("bad page shape")
+            except ValueError as exc:
+                raise RuntimeError("reader failed") from exc
+
+        with patch.object(tensor_utils, "describe_condition_tensor_source", return_value="test"), patch.object(
+            tensor_utils,
+            "load_image_condition_tensor",
+            side_effect=fail_load,
+        ):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                with self.assertRaisesRegex(ValueError, "No unlabeled dataset examples were created"):
+                    tensor_utils.build_unlabeled_tensor_dataset(
+                        condition_df,
+                        output_size=(1, 1, 4, 4),
+                        verbose=False,
+                    )
+
+        self.assertIn("RuntimeError: reader failed", str(caught[0].message))
+        self.assertIn("ValueError: bad page shape", str(caught[0].message))
 
     def test_save_unlabeled_tensor_dataset_prunes_tensor_cache_before_dataset_save(self) -> None:
         os.environ["ZF_TENSOR_CACHE_MAX_BYTES"] = "1"

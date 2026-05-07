@@ -214,6 +214,17 @@ def _format_bytes(num_bytes: int) -> str:
     return f"{int(num_bytes)} B"
 
 
+def _format_exception_chain(exc: BaseException) -> str:
+    parts: list[str] = []
+    current: BaseException | None = exc
+    while current is not None:
+        rendered = f"{type(current).__name__}: {current}"
+        if rendered not in parts:
+            parts.append(rendered)
+        current = current.__cause__ or current.__context__
+    return " <- ".join(parts)
+
+
 def _validate_dataset_save_capacity(
     dataset_path: Path,
     *,
@@ -953,15 +964,33 @@ def load_image_condition_tensor(
         if cached_tensor is not None:
             return cached_tensor
 
-    load_paths = ensure_cached_tiffs(timepoint_files) if use_tiff_cache else timepoint_files
+    try:
+        load_paths = ensure_cached_tiffs(timepoint_files) if use_tiff_cache else timepoint_files
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to prepare TIFF cache for condition directory {condition_dir}. "
+            f"Selected {len(timepoint_files)} timepoints; first files: "
+            f"{[str(path) for path in timepoint_files[:5]]}. "
+            f"Root cause: {_format_exception_chain(exc)}"
+        ) from exc
 
     tensors = []
-    for path in load_paths:
+    for timepoint_index, (source_path, path) in enumerate(zip(timepoint_files, load_paths), start=1):
         try:
             tensors.append(load_tiff_as_tzyx(path, output_size=output_size))
         except Exception as exc:
+            source_detail = f"source={source_path}"
+            cached_detail = f", cached={path}" if Path(path) != Path(source_path) else ""
+            size_details: list[str] = []
+            for label, detail_path in (("source_size", source_path), ("cached_size", path)):
+                try:
+                    size_details.append(f"{label}={_format_bytes(Path(detail_path).stat().st_size)}")
+                except OSError:
+                    size_details.append(f"{label}=unavailable")
             raise RuntimeError(
-                f"Failed to load TIFF timepoint {path} for condition directory {condition_dir}"
+                f"Failed to load TIFF timepoint {timepoint_index}/{len(load_paths)} "
+                f"for condition directory {condition_dir}: {source_detail}{cached_detail}; "
+                f"{', '.join(size_details)}. Root cause: {_format_exception_chain(exc)}"
             ) from exc
     reference_shape = tensors[0].shape[1:]
     mismatched = [str(path) for path, tensor in zip(load_paths, tensors) if tensor.shape[1:] != reference_shape]
@@ -1244,7 +1273,7 @@ def build_moa_labeled_tensor_dataset(
                         f"image_condition_dir={row['image_condition_dir']!r}"
                     )
                     if skip_failed_conditions:
-                        warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                        warnings.warn(f"{message}. Skipping this example. Root cause: {_format_exception_chain(exc)}")
                         continue
                     raise RuntimeError(message) from exc
                 add_example(
@@ -1284,7 +1313,7 @@ def build_moa_labeled_tensor_dataset(
                         f"image_condition_dir={row['image_condition_dir']!r}"
                     )
                     if skip_failed_conditions:
-                        warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                        warnings.warn(f"{message}. Skipping this example. Root cause: {_format_exception_chain(exc)}")
                         continue
                     raise RuntimeError(message) from exc
                 add_example(
@@ -1544,7 +1573,7 @@ def build_unlabeled_tensor_dataset(
                 f"for compound={row['compound']!r}, image_condition_dir={row['image_condition_dir']!r}"
             )
             if skip_failed_conditions:
-                warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                warnings.warn(f"{message}. Skipping this example. Root cause: {_format_exception_chain(exc)}")
                 continue
             raise RuntimeError(message) from exc
 
