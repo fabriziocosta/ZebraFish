@@ -295,6 +295,21 @@ def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
     return pinned_paths
 
 
+def _is_pinned_cache_path(path: Path, pinned_paths: set[Path]) -> bool:
+    resolved_path = path.resolve()
+    for pinned_path in pinned_paths:
+        if resolved_path == pinned_path:
+            return True
+        if pinned_path.is_dir():
+            try:
+                resolved_path.relative_to(pinned_path)
+            except ValueError:
+                pass
+            else:
+                return True
+    return False
+
+
 def _resolve_dataset_artifact_path(path: str | Path) -> Path:
     dataset_path = Path(path)
     if dataset_path.is_absolute():
@@ -381,7 +396,7 @@ def _prune_cache_entries(
                 "path": path,
                 "size": int(stat.st_size),
                 "last_used_ns": int(last_used_ns),
-                "pinned": path.resolve() in pinned_paths,
+                "pinned": _is_pinned_cache_path(path, pinned_paths),
             }
         )
 
@@ -414,7 +429,7 @@ def _prune_cache_entries(
                 "path": path,
                 "size": int(stat.st_size),
                 "last_used_ns": int(metadata["last_used_ns"]),
-                "pinned": path.resolve() in pinned_paths,
+                "pinned": _is_pinned_cache_path(path, pinned_paths),
             }
         )
 
@@ -695,6 +710,11 @@ def save_labeled_tensor_dataset(
 
     if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
         _prune_cache_entries(
+            TENSOR_CACHE_DIR,
+            incoming_bytes=estimated_size_bytes,
+            force=True,
+        )
+        _prune_cache_entries(
             DATASET_CACHE_DIR,
             incoming_bytes=estimated_size_bytes,
             force=True,
@@ -744,16 +764,25 @@ def save_unlabeled_tensor_dataset(
     tensors = dataset["tensors"]
     if not isinstance(tensors, torch.Tensor):
         raise TypeError("dataset['tensors'] must be a torch.Tensor")
+    estimated_size_bytes = _estimate_dataset_payload_size_bytes({"tensors": tensors, "metadata": metadata})
 
     payload = {
         "tensors": tensors.detach().cpu(),
         "metadata_records": metadata.to_dict(orient="records"),
     }
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _prune_cache_entries(
+            TENSOR_CACHE_DIR,
+            incoming_bytes=estimated_size_bytes,
+            force=True,
+        )
     _validate_dataset_save_capacity(
         dataset_path,
-        estimated_size_bytes=_estimate_dataset_payload_size_bytes({"tensors": tensors, "metadata": metadata}),
+        estimated_size_bytes=estimated_size_bytes,
     )
     torch.save(payload, dataset_path)
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _touch_cache_entry(DATASET_CACHE_DIR, dataset_path)
     return dataset_path
 
 
@@ -1359,6 +1388,8 @@ def build_unlabeled_tensor_dataset(
     chunk_dir: Path | None = None
     chunk_paths: list[Path] = []
     chunk_index = 0
+    rows: list[dict[str, object]] = []
+    resume_from_condition_index = 0
     if chunk_output_dir is not None:
         chunk_dir = _resolve_dataset_artifact_path(chunk_output_dir)
         chunk_dir.mkdir(parents=True, exist_ok=True)
@@ -1369,13 +1400,80 @@ def build_unlabeled_tensor_dataset(
                 chunk_path.unlink()
             if manifest_path.exists():
                 manifest_path.unlink()
-        elif existing_chunks or manifest_path.exists():
+        elif manifest_path.exists():
             raise FileExistsError(
-                f"Chunk output directory already contains {chunk_prefix!r} chunks or a manifest: {chunk_dir}"
+                f"Chunk output directory already contains a manifest: {chunk_dir}. "
+                "Set overwrite_chunks=True to rebuild it."
             )
+        elif existing_chunks:
+            chunk_name_pattern = re.compile(rf"^{re.escape(chunk_prefix)}_(\d+)\.pt$")
+            expected_chunk_names = [f"{chunk_prefix}_{index:04d}.pt" for index in range(1, len(existing_chunks) + 1)]
+            existing_chunk_names = [chunk_path.name for chunk_path in existing_chunks]
+            if existing_chunk_names != expected_chunk_names:
+                raise FileExistsError(
+                    f"Chunk output directory contains non-contiguous {chunk_prefix!r} chunks: {chunk_dir}. "
+                    "Set overwrite_chunks=True to rebuild it."
+                )
+
+            existing_rows: list[dict[str, object]] = []
+            existing_chunk_lengths: list[int] = []
+            for chunk_path in existing_chunks:
+                match = chunk_name_pattern.match(chunk_path.name)
+                if match is None:
+                    raise FileExistsError(
+                        f"Chunk output directory contains an unexpected chunk name {chunk_path.name!r}: {chunk_dir}. "
+                        "Set overwrite_chunks=True to rebuild it."
+                    )
+                chunk_dataset = load_unlabeled_tensor_dataset(chunk_path)
+                chunk_metadata = chunk_dataset["metadata"]
+                if not isinstance(chunk_metadata, pd.DataFrame):
+                    raise TypeError(f"Chunk metadata must be a pandas DataFrame: {chunk_path}")
+                existing_chunk_lengths.append(int(len(chunk_metadata)))
+                existing_rows.extend(chunk_metadata.to_dict(orient="records"))
+
+            full_chunks_before_last = existing_chunk_lengths[:-1]
+            if any(length != int(chunk_size) for length in full_chunks_before_last):
+                raise FileExistsError(
+                    f"Chunk output directory contains a short chunk before the final chunk: {chunk_dir}. "
+                    "Set overwrite_chunks=True to rebuild it."
+                )
+            if existing_chunk_lengths[-1] < int(chunk_size) and sum(existing_chunk_lengths) < len(working_df):
+                raise FileExistsError(
+                    f"Chunk output directory contains a partial final chunk but no manifest: {chunk_dir}. "
+                    "Set overwrite_chunks=True to rebuild it."
+                )
+
+            expected_existing_df = working_df.head(len(existing_rows)).reset_index()
+            expected_records = [
+                {
+                    "original_instance_id": int(row["index"]),
+                    "mechanism_of_action": row["mechanism_of_action"],
+                    "compound": row["compound"],
+                    "condition_kind": row["condition_kind"],
+                    "concentration_band": row["concentration_band"],
+                    "concentration_label": row["concentration_label"],
+                    "image_condition_dir": row["image_condition_dir"],
+                }
+                for _, row in expected_existing_df.iterrows()
+            ]
+            if existing_rows != expected_records:
+                raise FileExistsError(
+                    f"Existing chunks do not match the current unlabeled dataset filters: {chunk_dir}. "
+                    "Set overwrite_chunks=True to rebuild them."
+                )
+
+            rows = existing_rows
+            chunk_paths = existing_chunks.copy()
+            chunk_index = len(existing_chunks)
+            resume_from_condition_index = len(existing_rows)
+            if verbose:
+                print(
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"resuming unlabeled chunk build from {resume_from_condition_index} existing examples "
+                    f"across {len(existing_chunks)} chunks"
+                )
 
     tensors: list[torch.Tensor] = []
-    rows: list[dict[str, object]] = []
     chunk_tensors: list[torch.Tensor] = []
     chunk_rows: list[dict[str, object]] = []
     build_start = time.perf_counter()
@@ -1404,8 +1502,10 @@ def build_unlabeled_tensor_dataset(
         chunk_tensors = []
         chunk_rows = []
 
-    for original_instance_id, row in working_df.iterrows():
-        attempted_conditions += 1
+    for attempted_conditions, (original_instance_id, row) in enumerate(
+        working_df.iloc[resume_from_condition_index:].iterrows(),
+        start=resume_from_condition_index + 1,
+    ):
         try:
             source = describe_condition_tensor_source(
                 condition_dir=row["image_condition_dir"],
