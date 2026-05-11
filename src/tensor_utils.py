@@ -42,6 +42,7 @@ TENSOR_CACHE_DIR = PROJECT_ROOT / ".tensor_cache"
 TIFF_CACHE_DIR = PROJECT_ROOT / ".tiff_cache"
 DATASET_CACHE_DIR = PROJECT_ROOT / ".dataset_cache"
 CACHE_INDEX_FILENAME = ".cache_index.json"
+UNLABELED_FAILURES_FILENAME = "failed_conditions.json"
 DEFAULT_CACHE_BUDGETS = {
     TENSOR_CACHE_DIR.resolve(): 5 * 1024**3,
     TIFF_CACHE_DIR.resolve(): 30 * 1024**3,
@@ -590,10 +591,10 @@ def timepoint_sort_key(path: Path):
 
 def list_timepoint_files(condition_dir: str | Path) -> list[Path]:
     condition_dir = Path(condition_dir)
-    direct_files = sorted(condition_dir.glob("*.tif*"), key=timepoint_sort_key)
+    direct_files = sorted((path for path in condition_dir.glob("*.tif*") if path.is_file()), key=timepoint_sort_key)
     if direct_files:
         return direct_files
-    return sorted(condition_dir.rglob("*.tif*"), key=timepoint_sort_key)
+    return sorted((path for path in condition_dir.rglob("*.tif*") if path.is_file()), key=timepoint_sort_key)
 
 
 def build_tiff_cache_path(path: str | Path) -> Path:
@@ -885,6 +886,51 @@ def _tensor_matches_output_size(
     if tensor.ndim != 4:
         return False
     return all(expected is None or int(actual) == int(expected) for actual, expected in zip(tensor.shape, output_size))
+
+
+def _unlabeled_row_record(original_instance_id: int, row: pd.Series) -> dict[str, object]:
+    return {
+        "original_instance_id": int(original_instance_id),
+        "mechanism_of_action": row["mechanism_of_action"],
+        "compound": row["compound"],
+        "condition_kind": row["condition_kind"],
+        "concentration_band": row["concentration_band"],
+        "concentration_label": row["concentration_label"],
+        "image_condition_dir": row["image_condition_dir"],
+    }
+
+
+def _unlabeled_record_matches_row(record: dict[str, object], row: pd.Series) -> bool:
+    return all(
+        record.get(key) == value
+        for key, value in {
+            "mechanism_of_action": row["mechanism_of_action"],
+            "compound": row["compound"],
+            "condition_kind": row["condition_kind"],
+            "concentration_band": row["concentration_band"],
+            "concentration_label": row["concentration_label"],
+            "image_condition_dir": row["image_condition_dir"],
+        }.items()
+    )
+
+
+def _read_unlabeled_failure_records(path: Path) -> list[dict[str, object]]:
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    failures = payload.get("failures")
+    if not isinstance(failures, list):
+        return []
+    return [failure for failure in failures if isinstance(failure, dict)]
+
+
+def _write_unlabeled_failure_records(path: Path, failures: list[dict[str, object]]) -> None:
+    payload = {"failures": sorted(failures, key=lambda failure: int(failure["original_instance_id"]))}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def loess_smooth_1d(values: np.ndarray, frac: float = 0.25) -> np.ndarray:
@@ -1377,6 +1423,7 @@ def build_unlabeled_tensor_dataset(
     use_cache: bool = True,
     use_tiff_cache: bool = True,
     skip_failed_conditions: bool = True,
+    retry_failed_conditions: bool = False,
     chunk_output_dir: str | Path | None = None,
     chunk_size: int | None = None,
     chunk_prefix: str = "unlabeled_chunk",
@@ -1440,16 +1487,21 @@ def build_unlabeled_tensor_dataset(
     resume_from_condition_index = 0
     existing_original_instance_ids: set[int] = set()
     existing_chunk_indices: set[int] = set()
+    failed_condition_records: dict[int, dict[str, object]] = {}
+    failure_log_path: Path | None = None
     if chunk_output_dir is not None:
         chunk_dir = _resolve_dataset_artifact_path(chunk_output_dir)
         chunk_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = chunk_dir / "manifest.json"
+        failure_log_path = chunk_dir / UNLABELED_FAILURES_FILENAME
         existing_chunks = sorted(chunk_dir.glob(f"{chunk_prefix}_*.pt"))
         if overwrite_chunks:
             for chunk_path in existing_chunks:
                 chunk_path.unlink()
             if manifest_path.exists():
                 manifest_path.unlink()
+            if failure_log_path.exists():
+                failure_log_path.unlink()
         elif manifest_path.exists():
             raise FileExistsError(
                 f"Chunk output directory already contains a manifest: {chunk_dir}. "
@@ -1526,6 +1578,25 @@ def build_unlabeled_tensor_dataset(
                     f"across {len(existing_chunks)} chunks{gap_suffix}"
                 )
 
+        if not retry_failed_conditions:
+            for failure_record in _read_unlabeled_failure_records(failure_log_path):
+                try:
+                    original_instance_id = int(failure_record["original_instance_id"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if original_instance_id < 0 or original_instance_id >= len(working_df):
+                    continue
+                expected_row = working_df.iloc[original_instance_id]
+                if not _unlabeled_record_matches_row(failure_record, expected_row):
+                    continue
+                failed_condition_records[original_instance_id] = failure_record
+            if verbose and failed_condition_records:
+                print(
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"skipping {len(failed_condition_records)} previously failed unlabeled examples "
+                    f"from {failure_log_path}"
+                )
+
     tensors: list[torch.Tensor] = []
     chunk_tensors: list[torch.Tensor] = []
     chunk_rows: list[dict[str, object]] = []
@@ -1567,6 +1638,8 @@ def build_unlabeled_tensor_dataset(
     ):
         if int(original_instance_id) in existing_original_instance_ids:
             continue
+        if int(original_instance_id) in failed_condition_records:
+            continue
         try:
             source = describe_condition_tensor_source(
                 condition_dir=row["image_condition_dir"],
@@ -1605,7 +1678,17 @@ def build_unlabeled_tensor_dataset(
                 f"for compound={row['compound']!r}, image_condition_dir={row['image_condition_dir']!r}"
             )
             if skip_failed_conditions:
-                warnings.warn(f"{message}. Skipping this example. Root cause: {_format_exception_chain(exc)}")
+                root_cause = _format_exception_chain(exc)
+                warnings.warn(f"{message}. Skipping this example. Root cause: {root_cause}")
+                if failure_log_path is not None:
+                    failure_record = _unlabeled_row_record(int(original_instance_id), row)
+                    failure_record["failed_at"] = datetime.now().isoformat(timespec="seconds")
+                    failure_record["root_cause"] = root_cause
+                    failed_condition_records[int(original_instance_id)] = failure_record
+                    _write_unlabeled_failure_records(
+                        failure_log_path,
+                        list(failed_condition_records.values()),
+                    )
                 continue
             raise RuntimeError(message) from exc
 
@@ -1642,6 +1725,7 @@ def build_unlabeled_tensor_dataset(
             "chunks": [chunk_path.name for chunk_path in chunk_paths],
             "chunk_size": int(chunk_size),
             "total_examples": int(len(rows)),
+            "failed_examples": int(len(failed_condition_records)),
             "output_size": list(output_size),
             "created_at": datetime.now().isoformat(timespec="seconds"),
         }
@@ -1800,20 +1884,25 @@ def plot_tensor_embedding_2d(
     svm_gamma: str | float = "scale",
 ):
     class_palette = [
-        "#A0C2E7",
-        "#F58518",
-        "#E45756",
-        "#36852D",
-        "#66EE8F",
-        "#B279A2",
-        "#E1B0FE",
+        "#4E79A7",  # blue
+        "#F28E2B",  # orange
+        "#E15759",  # red
+        "#59A14F",  # green
+        "#B07AA1",  # purple
+        "#EDC948",  # yellow
+        "#76B7B2",  # teal
+        "#FF9DA7",  # pink
+        "#9C755F",  # brown
+        "#BAB0AC",  # gray
     ]
     class_color_overrides = {
-        "Water": "#A0C2E7",
-        "GABAAR_Antagonist": "#F58518",
+        "Water": "#4E79A7",
+        "GABAAR_Antagonist": "#F28E2B",
         "GABAAR_NegativeAllostericModulator": "#E45756",
-        "NMDAR_Activation": "#36852D",
-        "NMDAR_Antagonist": "#66EE8F",
+        "NMDAR_Activation": "#59A14F",
+        "NMDAR_Antagonist": "#B07AA1",
+        "AChE_Inhibitor_Reversible": "#B07AA1",
+        "mAChR_Agonist_NonSelective": "#76B7B2",
     }
     marker_cycle = ["o", "s", "^", "D", "P", "X", "v", "<", ">", "*", "h", "8"]
 

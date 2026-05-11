@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pandas as pd
 import torch
+from matplotlib.colors import to_hex
 
 from src import tensor_utils
 from src.dataset_config import write_current_dataset_config
@@ -232,6 +233,15 @@ class CacheRetentionTests(unittest.TestCase):
                     use_tiff_cache=False,
                 )
 
+    def test_list_timepoint_files_ignores_tiff_named_directories(self) -> None:
+        condition_dir = self.root / "condition"
+        tiff_path = condition_dir / "spim_TL001_Angle0.ome.tiff"
+        roi_dir = condition_dir / "spim_TL002_Angle0.ome.tiff_ROIS"
+        self._write_bytes(tiff_path, 20)
+        roi_dir.mkdir()
+
+        self.assertEqual(tensor_utils.list_timepoint_files(condition_dir), [tiff_path])
+
     def test_load_image_condition_tensor_downsamples_time_after_concatenating_tiffs(self) -> None:
         condition_dir = self.root / "condition"
         for index in range(20):
@@ -383,6 +393,64 @@ class CacheRetentionTests(unittest.TestCase):
         self.assertEqual(tuple(loaded["tensors"].shape), (5, 2, 1, 4, 4))
         self.assertEqual(loaded["tensors"][:, 0, 0, 0, 0].tolist(), [0, 1, 2, 3, 4])
         self.assertEqual(loaded["metadata"]["image_condition_dir"].tolist(), [f"/tmp/{index}" for index in range(5)])
+
+    def test_build_unlabeled_tensor_dataset_persists_and_skips_failed_conditions(self) -> None:
+        os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1M"
+        condition_df = pd.DataFrame(
+            [
+                {
+                    "condition_folder_status": "active",
+                    "mechanism_of_action": "A",
+                    "condition_kind": "treatment",
+                    "compound": f"c{index}",
+                    "concentration_band": "high",
+                    "concentration_label": "10 uM",
+                    "image_condition_dir": f"/tmp/{index}",
+                }
+                for index in range(3)
+            ]
+        )
+
+        def load_or_fail(*, condition_dir, **_):
+            index = int(Path(condition_dir).name)
+            if index == 1:
+                raise IsADirectoryError("bad roi directory")
+            return torch.full((2, 1, 4, 4), fill_value=index, dtype=torch.float32)
+
+        with patch.object(tensor_utils, "describe_condition_tensor_source", return_value="test"), patch.object(
+            tensor_utils,
+            "load_image_condition_tensor",
+            side_effect=load_or_fail,
+        ) as first_load:
+            chunked = tensor_utils.build_unlabeled_tensor_dataset(
+                condition_df,
+                output_size=(2, 1, 4, 4),
+                chunk_output_dir=".dataset_cache/unlabeled_chunks",
+                chunk_size=2,
+                verbose=False,
+            )
+
+        failure_log_path = self.dataset_cache_dir / "unlabeled_chunks" / "failed_conditions.json"
+        self.assertTrue(failure_log_path.exists())
+        self.assertEqual(first_load.call_count, 3)
+        self.assertEqual(chunked["metadata"]["image_condition_dir"].tolist(), ["/tmp/0", "/tmp/2"])
+        (self.dataset_cache_dir / "unlabeled_chunks" / "manifest.json").unlink()
+
+        with patch.object(tensor_utils, "describe_condition_tensor_source", return_value="test"), patch.object(
+            tensor_utils,
+            "load_image_condition_tensor",
+            side_effect=AssertionError("previously failed row should not be retried"),
+        ) as second_load:
+            resumed = tensor_utils.build_unlabeled_tensor_dataset(
+                condition_df,
+                output_size=(2, 1, 4, 4),
+                chunk_output_dir=".dataset_cache/unlabeled_chunks",
+                chunk_size=2,
+                verbose=False,
+            )
+
+        self.assertEqual(second_load.call_count, 0)
+        self.assertEqual(resumed["metadata"]["image_condition_dir"].tolist(), ["/tmp/0", "/tmp/2"])
 
     def test_build_unlabeled_tensor_dataset_resumes_existing_chunks_without_manifest(self) -> None:
         os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1M"
@@ -601,6 +669,38 @@ class CacheRetentionTests(unittest.TestCase):
 
         self.assertTrue(pinned_chunk.exists())
         self.assertFalse(unpinned_file.exists())
+
+    def test_plot_tensor_embedding_2d_uses_distinct_current_action_colors(self) -> None:
+        embedding_df = pd.DataFrame(
+            {
+                "embed_x": [0.0, 1.0, 2.0, 3.0, 4.0],
+                "embed_y": [0.0, 1.0, 2.0, 3.0, 4.0],
+                "label": [0, 1, 2, 3, 4],
+                "label_name": [
+                    "Water",
+                    "GABAAR_Antagonist",
+                    "NMDAR_Activation",
+                    "AChE_Inhibitor_Reversible",
+                    "mAChR_Agonist_NonSelective",
+                ],
+                "method": ["pca"] * 5,
+            }
+        )
+
+        fig, ax = tensor_utils.plot_tensor_embedding_2d(
+            embedding_df,
+            marker_column=None,
+        )
+        legend = ax.get_legend()
+        colors = {
+            text.get_text().split(": ", 1)[1]: to_hex(handle.get_markerfacecolor()).upper()
+            for text, handle in zip(legend.get_texts(), legend.legend_handles)
+        }
+
+        self.assertEqual(colors["NMDAR_Activation"], "#59A14F")
+        self.assertEqual(colors["AChE_Inhibitor_Reversible"], "#B07AA1")
+        self.assertNotEqual(colors["NMDAR_Activation"], colors["AChE_Inhibitor_Reversible"])
+        fig.clf()
 
 
 if __name__ == "__main__":
