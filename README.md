@@ -172,7 +172,7 @@ See [docs/preprocessing.md](docs/preprocessing.md) for the full data-pipeline sp
 
 ## Notebooks
 
-The repository provides eight notebooks:
+The repository provides these notebooks:
 
 1. [1_compound_class_moa.ipynb](1_compound_class_moa.ipynb)
    Inspect normalized compound and mechanism metadata.
@@ -186,12 +186,26 @@ The repository provides eight notebooks:
    Build and persist labeled tensor datasets for ML.
 6. [6_train_3d_cnn_classifier.ipynb](6_train_3d_cnn_classifier.ipynb)
    Train the baseline time-as-channels 3D CNN.
-7. [7_train_commutative_cnn_classifier.ipynb](7_train_commutative_cnn_classifier.ipynb)
+7. [7C_train_commutative_cnn_classifier.ipynb](7C_train_commutative_cnn_classifier.ipynb)
    Train the experimental pure-CNN commutative model.
-8. [8_train_commutative_transformer_classifier.ipynb](8_train_commutative_transformer_classifier.ipynb)
+8. [8T_train_commutative_transformer_classifier.ipynb](8T_train_commutative_transformer_classifier.ipynb)
    Train the experimental transformer commutative model.
+9. [9_build_unlabeled_pretraining_dataset.ipynb](9_build_unlabeled_pretraining_dataset.ipynb)
+   Build the shared unlabeled tensor dataset for commutative encoder pretraining.
+10. [10C_pretrain_commutative_cnn_encoder.ipynb](10C_pretrain_commutative_cnn_encoder.ipynb)
+   Pretrain the commutative CNN encoder on the unlabeled dataset.
+11. [11C_train_commutative_cnn_head_classifier.ipynb](11C_train_commutative_cnn_head_classifier.ipynb)
+   Train supervised CNN classification heads on top of a frozen pretrained CNN encoder.
+12. [12T_pretrain_commutative_transformer_encoder.ipynb](12T_pretrain_commutative_transformer_encoder.ipynb)
+   Pretrain the commutative transformer encoder on the unlabeled dataset.
+13. [13C_finetune_pretrained_commutative_cnn_classifier.ipynb](13C_finetune_pretrained_commutative_cnn_classifier.ipynb)
+   Fine-tune the full pretrained commutative CNN classifier.
+14. [14T_train_commutative_transformer_head_classifier.ipynb](14T_train_commutative_transformer_head_classifier.ipynb)
+   Train supervised transformer classification heads on top of a frozen pretrained transformer encoder.
+15. [15T_finetune_pretrained_commutative_transformer_classifier.ipynb](15T_finetune_pretrained_commutative_transformer_classifier.ipynb)
+   Fine-tune the full pretrained commutative transformer classifier.
 
-Notebooks 6 to 8 are intentionally thin and delegate split preparation, fitting, reporting, plotting, and artifact persistence to shared utilities in `src.ml`.
+Training notebooks are intentionally thin and delegate split preparation, fitting, reporting, plotting, and artifact persistence to shared utilities in `src.ml`.
 
 ## Typical Workflow
 
@@ -200,7 +214,8 @@ Notebooks 6 to 8 are intentionally thin and delegate split preparation, fitting,
 3. Use notebook 4 to inspect raw condition tensors.
 4. Use notebook 5 to build and persist a labeled tensor dataset artifact.
 5. Use notebook 6 to establish the supervised baseline.
-6. Use notebooks 7 and 8 to compare the experimental commutative models against that baseline.
+6. Use notebooks 7C and 8T to compare the experimental commutative models against that baseline.
+7. Use notebook 9 to build unlabeled pretraining data, then run the C/T pretraining, head-only, and fine-tuning notebooks as needed.
 
 ## Testing
 

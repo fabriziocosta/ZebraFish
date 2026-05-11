@@ -232,6 +232,60 @@ class CacheRetentionTests(unittest.TestCase):
                     use_tiff_cache=False,
                 )
 
+    def test_load_image_condition_tensor_downsamples_time_after_concatenating_tiffs(self) -> None:
+        condition_dir = self.root / "condition"
+        for index in range(20):
+            self._write_bytes(condition_dir / f"spim_TL{index:03d}_Angle0.ome.tiff", 20)
+
+        with patch.object(
+            tensor_utils,
+            "load_tiff_as_tzyx",
+            side_effect=lambda *_, **__: torch.zeros((2, 5, 4, 4), dtype=torch.float32),
+        ):
+            tensor = tensor_utils.load_image_condition_tensor(
+                condition_dir,
+                output_size=(20, 5, 4, 4),
+                use_cache=False,
+                use_tiff_cache=False,
+            )
+
+        self.assertEqual(tuple(tensor.shape), (20, 5, 4, 4))
+
+    def test_load_image_condition_tensor_ignores_cached_tensor_with_wrong_shape(self) -> None:
+        condition_dir = self.root / "condition"
+        for index in range(20):
+            self._write_bytes(condition_dir / f"spim_TL{index:03d}_Angle0.ome.tiff", 20)
+        timepoint_files = tensor_utils.list_timepoint_files(condition_dir)
+        output_size = (20, 5, 4, 4)
+        cache_key = tensor_utils.build_tensor_cache_key(
+            condition_dir=condition_dir,
+            timepoint_files=timepoint_files,
+            output_size=output_size,
+            normalize_global_drift=False,
+            loess_frac=0.25,
+        )
+        bad_cache_path = self.tensor_cache_dir / f"{cache_key}.pt"
+        bad_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(torch.zeros((269, 5, 4, 4), dtype=torch.float32), bad_cache_path)
+
+        with patch.object(
+            tensor_utils,
+            "load_tiff_as_tzyx",
+            side_effect=lambda *_, **__: torch.ones((1, 5, 4, 4), dtype=torch.float32),
+        ):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                tensor = tensor_utils.load_image_condition_tensor(
+                    condition_dir,
+                    output_size=output_size,
+                    normalize_global_drift=False,
+                    use_cache=True,
+                    use_tiff_cache=False,
+                )
+
+        self.assertEqual(tuple(tensor.shape), output_size)
+        self.assertTrue(any("Ignoring cached tensor with unexpected shape" in str(item.message) for item in caught))
+
     def test_build_unlabeled_tensor_dataset_warning_reports_cause_chain(self) -> None:
         condition_df = pd.DataFrame(
             [
@@ -395,6 +449,73 @@ class CacheRetentionTests(unittest.TestCase):
         loaded = tensor_utils.load_unlabeled_tensor_dataset(".dataset_cache/unlabeled_chunks")
         self.assertEqual(loaded["tensors"][:, 0, 0, 0, 0].tolist(), [0, 1, 2, 3, 4])
         self.assertEqual(loaded["metadata"]["image_condition_dir"].tolist(), [f"/tmp/{index}" for index in range(5)])
+
+    def test_build_unlabeled_tensor_dataset_fills_missing_chunk_numbers(self) -> None:
+        os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1M"
+        condition_df = pd.DataFrame(
+            [
+                {
+                    "condition_folder_status": "active",
+                    "mechanism_of_action": "A",
+                    "condition_kind": "treatment",
+                    "compound": f"c{index}",
+                    "concentration_band": "high",
+                    "concentration_label": "10 uM",
+                    "image_condition_dir": f"/tmp/{index}",
+                }
+                for index in range(8)
+            ]
+        )
+        chunk_dir = self.dataset_cache_dir / "unlabeled_chunks"
+        chunk_dir.mkdir(parents=True)
+        existing_dataset = {
+            "tensors": torch.stack(
+                [torch.full((2, 1, 4, 4), fill_value=index, dtype=torch.float32) for index in range(4, 6)],
+                dim=0,
+            ),
+            "metadata": pd.DataFrame(
+                [
+                    {
+                        "original_instance_id": index,
+                        "mechanism_of_action": "A",
+                        "compound": f"c{index}",
+                        "condition_kind": "treatment",
+                        "concentration_band": "high",
+                        "concentration_label": "10 uM",
+                        "image_condition_dir": f"/tmp/{index}",
+                    }
+                    for index in range(4, 6)
+                ]
+            ),
+        }
+        tensor_utils.save_unlabeled_tensor_dataset(existing_dataset, chunk_dir / "unlabeled_chunk_0003.pt")
+
+        def load_tensor(*, condition_dir, **_):
+            index = int(Path(condition_dir).name)
+            return torch.full((2, 1, 4, 4), fill_value=index, dtype=torch.float32)
+
+        with patch.object(tensor_utils, "describe_condition_tensor_source", return_value="test"), patch.object(
+            tensor_utils,
+            "load_image_condition_tensor",
+            side_effect=load_tensor,
+        ) as load_tensor_mock:
+            chunked = tensor_utils.build_unlabeled_tensor_dataset(
+                condition_df,
+                output_size=(2, 1, 4, 4),
+                chunk_output_dir=".dataset_cache/unlabeled_chunks",
+                chunk_size=2,
+                verbose=False,
+            )
+
+        self.assertEqual(load_tensor_mock.call_count, 6)
+        self.assertEqual([path.name for path in chunked["chunk_paths"]], [
+            "unlabeled_chunk_0001.pt",
+            "unlabeled_chunk_0002.pt",
+            "unlabeled_chunk_0003.pt",
+            "unlabeled_chunk_0004.pt",
+        ])
+        loaded = tensor_utils.load_unlabeled_tensor_dataset(".dataset_cache/unlabeled_chunks")
+        self.assertEqual(loaded["tensors"][:, 0, 0, 0, 0].tolist(), list(range(8)))
 
     def test_build_unlabeled_tensor_dataset_writes_manifest_when_chunks_are_complete(self) -> None:
         os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1M"
