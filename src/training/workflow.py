@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from IPython.display import display
+import numpy as np
 import pandas as pd
 import torch
+from sklearn.model_selection import train_test_split
 
 from src.training.data import augment_training_tensors_with_rotations, split_labeled_tensor_dataset_by_instance
 from src.training.reporting import (
@@ -28,6 +30,18 @@ class MultitaskExperimentData:
     y_true_holdout: dict[str, Any]
     label_maps: dict[str, dict[int, str]]
     class_labels: dict[str, list[int]]
+
+
+@dataclass
+class BinaryWaterVsOtherPretrainingData:
+    X_train: torch.Tensor
+    y_train: pd.Series
+    X_val: torch.Tensor
+    y_val: np.ndarray
+    train_metadata: pd.DataFrame
+    val_metadata: pd.DataFrame
+    label_map: dict[int, str]
+    excluded_holdout_count: int
 
 
 @dataclass
@@ -130,6 +144,83 @@ def prepare_multitask_experiment_data(
         y_true_holdout=y_true_holdout,
         label_maps=label_maps,
         class_labels=class_labels,
+    )
+
+
+def prepare_water_vs_other_pretraining_data(
+    unlabeled_dataset: dict[str, object],
+    *,
+    holdout_metadata: pd.DataFrame,
+    validation_fraction: float,
+    train_num_random_rotations: int = 0,
+    rotation_range_degrees: float = 5.0,
+    random_state: int = 0,
+) -> BinaryWaterVsOtherPretrainingData:
+    tensors = unlabeled_dataset["tensors"]
+    metadata = unlabeled_dataset["metadata"]
+    if not isinstance(tensors, torch.Tensor):
+        raise TypeError("unlabeled_dataset['tensors'] must be a torch.Tensor")
+    if not isinstance(metadata, pd.DataFrame):
+        raise TypeError("unlabeled_dataset['metadata'] must be a pandas DataFrame")
+    if "image_condition_dir" not in metadata.columns:
+        raise KeyError("unlabeled dataset metadata must contain 'image_condition_dir'")
+    if "condition_kind" not in metadata.columns:
+        raise KeyError("unlabeled dataset metadata must contain 'condition_kind'")
+    if "image_condition_dir" not in holdout_metadata.columns:
+        raise KeyError("holdout_metadata must contain 'image_condition_dir'")
+    if len(tensors) != len(metadata):
+        raise ValueError("unlabeled tensors and metadata must have the same number of rows")
+
+    metadata_df = metadata.reset_index(drop=True).copy()
+    holdout_dirs = set(holdout_metadata["image_condition_dir"].astype(str))
+    is_holdout = metadata_df["image_condition_dir"].astype(str).isin(holdout_dirs).to_numpy()
+    keep_indices = np.flatnonzero(~is_holdout)
+    if len(keep_indices) == 0:
+        raise ValueError("No unlabeled examples remain after excluding supervised holdout image_condition_dir values")
+
+    selected_tensors = tensors[keep_indices]
+    selected_metadata = metadata_df.iloc[keep_indices].reset_index(drop=True)
+    labels = np.where(selected_metadata["condition_kind"].astype(str).eq("control"), 0, 1).astype(int)
+    if len(np.unique(labels)) < 2:
+        raise ValueError("Water-vs-other pretraining requires both control and treatment examples")
+
+    indices = np.arange(len(labels))
+    stratify = labels if len(np.unique(labels)) > 1 else None
+    try:
+        train_indices, val_indices = train_test_split(
+            indices,
+            test_size=validation_fraction,
+            random_state=random_state,
+            stratify=stratify,
+        )
+    except ValueError:
+        train_indices, val_indices = train_test_split(
+            indices,
+            test_size=validation_fraction,
+            random_state=random_state,
+            stratify=None,
+        )
+
+    X_train, y_train, train_metadata = augment_training_tensors_with_rotations(
+        selected_tensors[train_indices],
+        labels[train_indices],
+        metadata=selected_metadata.iloc[train_indices].reset_index(drop=True),
+        num_random_rotations=train_num_random_rotations,
+        rotation_range_degrees=rotation_range_degrees,
+        random_state=random_state,
+    )
+    if train_metadata is None:
+        train_metadata = pd.DataFrame()
+
+    return BinaryWaterVsOtherPretrainingData(
+        X_train=X_train,
+        y_train=pd.Series(y_train),
+        X_val=selected_tensors[val_indices],
+        y_val=labels[val_indices],
+        train_metadata=train_metadata,
+        val_metadata=selected_metadata.iloc[val_indices].reset_index(drop=True),
+        label_map={0: "Water", 1: "Other"},
+        excluded_holdout_count=int(is_holdout.sum()),
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import tempfile
@@ -668,6 +669,24 @@ class CacheRetentionTests(unittest.TestCase):
         tensor_utils._prune_cache_entries(self.dataset_cache_dir, incoming_bytes=30, force=True)
 
         self.assertTrue(pinned_chunk.exists())
+        self.assertFalse(unpinned_file.exists())
+
+    def test_dataset_cache_manifest_keeps_chunk_files(self) -> None:
+        os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "10"
+        chunk_dir = self.dataset_cache_dir / "unlabeled_chunks"
+        pinned_chunk = chunk_dir / "unlabeled_chunk_0001.pt"
+        unpinned_file = self.dataset_cache_dir / "old.pt"
+        self._write_bytes(pinned_chunk, 30)
+        self._write_bytes(unpinned_file, 30)
+        (chunk_dir / "manifest.json").write_text(
+            json.dumps({"chunks": ["unlabeled_chunk_0001.pt"]}),
+            encoding="utf-8",
+        )
+
+        tensor_utils._prune_cache_entries(self.dataset_cache_dir, incoming_bytes=30, force=True)
+
+        self.assertTrue(pinned_chunk.exists())
+        self.assertTrue((chunk_dir / "manifest.json").exists())
         self.assertFalse(unpinned_file.exists())
 
     def test_plot_tensor_embedding_2d_uses_distinct_current_action_colors(self) -> None:

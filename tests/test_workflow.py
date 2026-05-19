@@ -16,6 +16,7 @@ from src.ml import (
     evaluate_multitask_estimator,
     persist_experiment_artifacts,
     prepare_multitask_experiment_data,
+    prepare_water_vs_other_pretraining_data,
 )
 
 
@@ -116,6 +117,53 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNotNone(experiment.train_metadata)
         assert experiment.train_metadata is not None
         self.assertIn("original_instance_id", experiment.train_metadata.columns)
+
+    def test_prepare_water_vs_other_pretraining_data_excludes_holdout_and_augments_train_only(self) -> None:
+        rows = []
+        labels = []
+        for index in range(10):
+            condition_kind = "control" if index % 2 == 0 else "treatment"
+            rows.append(
+                {
+                    "condition_kind": condition_kind,
+                    "image_condition_dir": f"/tmp/pretrain_{index}",
+                }
+            )
+            labels.append(0 if condition_kind == "control" else 1)
+        unlabeled_dataset = {
+            "tensors": torch.randn(10, 4, 2, 8, 8),
+            "metadata": pd.DataFrame(rows),
+        }
+        holdout_metadata = pd.DataFrame(
+            {
+                "image_condition_dir": [
+                    "/tmp/pretrain_0",
+                    "/tmp/pretrain_1",
+                    "/tmp/supervised_only",
+                ]
+            }
+        )
+
+        binary_data = prepare_water_vs_other_pretraining_data(
+            unlabeled_dataset,
+            holdout_metadata=holdout_metadata,
+            validation_fraction=0.25,
+            train_num_random_rotations=1,
+            rotation_range_degrees=5.0,
+            random_state=0,
+        )
+
+        self.assertEqual(binary_data.excluded_holdout_count, 2)
+        self.assertEqual(binary_data.label_map, {0: "Water", 1: "Other"})
+        self.assertEqual(len(binary_data.X_val), 2)
+        self.assertEqual(len(binary_data.X_train), 12)
+        self.assertEqual(sorted(binary_data.y_val.tolist()), [0, 1])
+        self.assertEqual(sorted(binary_data.y_train.value_counts().tolist()), [6, 6])
+        excluded_dirs = set(holdout_metadata["image_condition_dir"])
+        self.assertFalse(set(binary_data.train_metadata["image_condition_dir"]).intersection(excluded_dirs))
+        self.assertFalse(set(binary_data.val_metadata["image_condition_dir"]).intersection(excluded_dirs))
+        self.assertIn("augmentation_index", binary_data.train_metadata.columns)
+        self.assertNotIn("augmentation_index", binary_data.val_metadata.columns)
 
 
 if __name__ == "__main__":

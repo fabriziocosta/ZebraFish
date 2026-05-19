@@ -278,7 +278,8 @@ def _validate_dataset_save_capacity(
 
 
 def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
-    if cache_dir.resolve() != DATASET_CACHE_DIR.resolve():
+    resolved_cache_dir = cache_dir.resolve()
+    if resolved_cache_dir != DATASET_CACHE_DIR.resolve():
         return set()
     pinned_paths: set[Path] = set()
     try:
@@ -289,18 +290,29 @@ def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
         current_dataset_path = None
     if current_dataset_path is not None:
         try:
-            current_dataset_path.relative_to(cache_dir.resolve())
+            current_dataset_path.relative_to(resolved_cache_dir)
         except ValueError:
             pass
         else:
             pinned_paths.add(current_dataset_path)
+    for manifest_path in resolved_cache_dir.rglob("manifest.json"):
+        try:
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            continue
+        chunks = manifest.get("chunks")
+        if not isinstance(chunks, list) or not chunks:
+            continue
+        if all(isinstance(chunk_name, str) for chunk_name in chunks):
+            pinned_paths.add(manifest_path.parent.resolve())
     extra_pins = os.environ.get("ZF_PINNED_DATASET_PATHS", "")
     for raw_path in extra_pins.split(os.pathsep):
         if not raw_path.strip():
             continue
         candidate = Path(raw_path).expanduser().resolve()
         try:
-            candidate.relative_to(cache_dir.resolve())
+            candidate.relative_to(resolved_cache_dir)
         except ValueError:
             continue
         pinned_paths.add(candidate)

@@ -155,13 +155,43 @@ def _format_epoch_log_row(
     return " ".join(parts)
 
 
+def _load_compatible_state_dict(
+    model: nn.Module,
+    state_dict: dict[str, torch.Tensor],
+) -> tuple[list[str], list[str]]:
+    current_state = model.state_dict()
+    compatible_state = {
+        key: value.detach().cpu()
+        for key, value in state_dict.items()
+        if key in current_state and tuple(current_state[key].shape) == tuple(value.shape)
+    }
+    skipped_keys = sorted(key for key in state_dict if key not in compatible_state)
+    if compatible_state:
+        model.load_state_dict(compatible_state, strict=False)
+    return sorted(compatible_state), skipped_keys
+
+
 def _fit_multitask_estimator(estimator, prepared: _PreparedData):
+    hot_start_state = None
+    if getattr(estimator, "hot_start", False) and hasattr(estimator, "model_"):
+        hot_start_state = {
+            key: value.detach().cpu()
+            for key, value in estimator.model_.state_dict().items()
+        }
+
     estimator.model_ = estimator._build_model_from_prepared(prepared)
     estimator.device_ = estimator._device()
     estimator.model_.to(estimator.device_)
     estimator.input_shape_ = tuple(int(size) for size in prepared.X_train.shape[1:])
     if hasattr(estimator, "_load_pretrained_weights_into_model"):
         estimator._load_pretrained_weights_into_model(estimator.model_)
+    if hot_start_state is not None:
+        loaded_keys, skipped_keys = _load_compatible_state_dict(estimator.model_, hot_start_state)
+        estimator.hot_start_loaded_keys_ = loaded_keys
+        estimator.hot_start_skipped_keys_ = skipped_keys
+    elif getattr(estimator, "hot_start", False):
+        estimator.hot_start_loaded_keys_ = []
+        estimator.hot_start_skipped_keys_ = []
     if getattr(estimator, "freeze_backbone", False) and hasattr(estimator, "_set_encoder_trainable"):
         estimator._set_encoder_trainable(estimator.model_, trainable=False)
 

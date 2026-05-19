@@ -317,6 +317,7 @@ class CommutativeCNNClassifier(
         loss_weight_config: LossWeightConfig | None = None,
         pretrained_state_path: str | Path | None = None,
         freeze_backbone: bool = False,
+        hot_start: bool = False,
     ) -> None:
         self.spatial_conv_channels = spatial_conv_channels
         self.spatial_kernel_size_z = spatial_kernel_size_z
@@ -370,6 +371,7 @@ class CommutativeCNNClassifier(
         self.loss_weight_config = loss_weight_config
         self.pretrained_state_path = pretrained_state_path
         self.freeze_backbone = freeze_backbone
+        self.hot_start = hot_start
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _PureCNNDualPathwayNetwork:
@@ -524,6 +526,7 @@ class CommutativeTransformerClassifier(
         loss_weight_config: LossWeightConfig | None = None,
         pretrained_state_path: str | Path | None = None,
         freeze_backbone: bool = False,
+        hot_start: bool = False,
     ) -> None:
         self.spatial_patch_size_st = spatial_patch_size_st
         self.spatial_patch_size_ts = spatial_patch_size_ts
@@ -564,6 +567,7 @@ class CommutativeTransformerClassifier(
         self.loss_weight_config = loss_weight_config
         self.pretrained_state_path = pretrained_state_path
         self.freeze_backbone = freeze_backbone
+        self.hot_start = hot_start
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _CommutativeTransformerNetwork:

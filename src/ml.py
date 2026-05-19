@@ -22,6 +22,7 @@ from src.training.reporting import (
     plot_training_history,
 )
 from src.training.workflow import (
+    BinaryWaterVsOtherPretrainingData,
     ExperimentArtifacts,
     MultitaskExperimentData,
     MultitaskEvaluationResult,
@@ -33,6 +34,7 @@ from src.training.workflow import (
     plot_holdout_branch_embedding_projections,
     plot_holdout_embedding_projection,
     prepare_multitask_experiment_data,
+    prepare_water_vs_other_pretraining_data,
 )
 from src.tensor_utils import (
     build_unlabeled_tensor_dataset,
@@ -45,6 +47,7 @@ __all__ = [
     "CommutativeCNNClassifier",
     "CommutativeTransformerConfig",
     "CommutativeTransformerClassifier",
+    "BinaryWaterVsOtherPretrainingData",
     "ExperimentArtifacts",
     "LossWeightConfig",
     "MultitaskExperimentData",
@@ -67,6 +70,7 @@ __all__ = [
     "plot_holdout_embedding_projection",
     "plot_training_history",
     "prepare_multitask_experiment_data",
+    "prepare_water_vs_other_pretraining_data",
     "build_unlabeled_tensor_dataset",
     "load_unlabeled_tensor_dataset",
     "save_unlabeled_tensor_dataset",

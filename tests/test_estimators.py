@@ -152,6 +152,72 @@ class EstimatorSmokeTests(unittest.TestCase):
         self.assertIsInstance(params["model_config"], CommutativeTransformerConfig)
         self._run_estimator(estimator)
 
+    def _assert_commutative_hot_start_reuses_compatible_weights(self, estimator) -> None:
+        binary_y = np.array([0, 1, 0, 1, 0, 1, 0, 1])
+        multiclass_y = np.array([0, 1, 2, 0, 1, 2, 0, 1])
+
+        estimator.fit(self.X, binary_y)
+        self.assertEqual(len(estimator.history_), 1)
+
+        estimator.fit(
+            self.X,
+            multiclass_y,
+            compound_y=self.compound,
+            concentration_y=self.concentration,
+        )
+
+        self.assertEqual(len(estimator.history_), 1)
+        self.assertIn("classifier.weight", estimator.hot_start_skipped_keys_)
+        self.assertIn("classifier.bias", estimator.hot_start_skipped_keys_)
+        self.assertGreater(len(estimator.hot_start_loaded_keys_), 0)
+        loaded_non_head_keys = [
+            key
+            for key in estimator.hot_start_loaded_keys_
+            if not key.startswith(("classifier.", "compound_classifier.", "concentration_classifier."))
+        ]
+        self.assertTrue(loaded_non_head_keys)
+
+    def test_commutative_cnn_hot_start_reuses_compatible_weights(self) -> None:
+        estimator = CommutativeCNNClassifier(
+            model_config=CommutativeCNNConfig(
+                spatial_conv_channels=(4, 8),
+                temporal_st_channels=(8,),
+                temporal_ts_channels=(8,),
+                spatial_agg_channels=(8,),
+                patch_size_z=1,
+                patch_size_xy=8,
+                embedding_dim=8,
+                num_prototypes=4,
+            ),
+            optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+            loss_weight_config=self.losses,
+            hot_start=True,
+        )
+
+        self._assert_commutative_hot_start_reuses_compatible_weights(estimator)
+
+    def test_commutative_transformer_hot_start_reuses_compatible_weights(self) -> None:
+        estimator = CommutativeTransformerClassifier(
+            model_config=CommutativeTransformerConfig(
+                spatial_patch_size_st=(1, 8, 8),
+                spatial_patch_size_ts=(1, 8, 8),
+                temporal_patch_size_ts=2,
+                embed_dim=16,
+                num_heads=4,
+                st_spatial_depth=1,
+                st_temporal_depth=1,
+                ts_temporal_depth=1,
+                ts_spatial_depth=1,
+                embedding_dim=8,
+                num_prototypes=4,
+            ),
+            optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+            loss_weight_config=self.losses,
+            hot_start=True,
+        )
+
+        self._assert_commutative_hot_start_reuses_compatible_weights(estimator)
+
 
 if __name__ == "__main__":
     unittest.main()
