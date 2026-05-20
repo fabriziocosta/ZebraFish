@@ -5,6 +5,16 @@ from src.models.configs import (
     OptimizationConfig,
     TimeChannel3DCNNConfig,
 )
+from src.commutative_cnn_pretraining_config import (
+    CommutativeCNNPretrainingConfig,
+    load_commutative_cnn_pretraining_config,
+    write_commutative_cnn_pretraining_config,
+)
+from src.commutative_transformer_pretraining_config import (
+    CommutativeTransformerPretrainingConfig,
+    load_commutative_transformer_pretraining_config,
+    write_commutative_transformer_pretraining_config,
+)
 from src.models.estimators import (
     CommutativeCNNClassifier,
     CommutativeTransformerClassifier,
@@ -44,8 +54,10 @@ from src.tensor_utils import (
 
 __all__ = [
     "CommutativeCNNConfig",
+    "CommutativeCNNPretrainingConfig",
     "CommutativeCNNClassifier",
     "CommutativeTransformerConfig",
+    "CommutativeTransformerPretrainingConfig",
     "CommutativeTransformerClassifier",
     "BinaryWaterVsOtherPretrainingData",
     "ExperimentArtifacts",
@@ -74,4 +86,8 @@ __all__ = [
     "build_unlabeled_tensor_dataset",
     "load_unlabeled_tensor_dataset",
     "save_unlabeled_tensor_dataset",
+    "load_commutative_cnn_pretraining_config",
+    "write_commutative_cnn_pretraining_config",
+    "load_commutative_transformer_pretraining_config",
+    "write_commutative_transformer_pretraining_config",
 ]

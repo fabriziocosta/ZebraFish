@@ -283,8 +283,8 @@ def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
         return set()
     pinned_paths: set[Path] = set()
     try:
-        current_dataset_path = load_current_dataset_artifact_path(
-            config_path=DEFAULT_CURRENT_DATASET_CONFIG_PATH
+        current_dataset_path = _resolve_dataset_artifact_path(
+            load_current_dataset_artifact_path(config_path=DEFAULT_CURRENT_DATASET_CONFIG_PATH)
         ).resolve()
     except (FileNotFoundError, KeyError, json.JSONDecodeError, OSError):
         current_dataset_path = None
@@ -337,6 +337,13 @@ def _is_pinned_cache_path(path: Path, pinned_paths: set[Path]) -> bool:
 def _resolve_dataset_artifact_path(path: str | Path) -> Path:
     dataset_path = Path(path)
     if dataset_path.is_absolute():
+        local_cache_path = DATASET_CACHE_DIR / dataset_path.name
+        if (
+            not dataset_path.exists()
+            and DATASET_CACHE_DIR.name in dataset_path.parts
+            and local_cache_path.exists()
+        ):
+            return local_cache_path
         return dataset_path
     if dataset_path.parts and dataset_path.parts[0] == DATASET_CACHE_DIR.name:
         return DATASET_CACHE_DIR.parent / dataset_path
@@ -755,6 +762,12 @@ def save_labeled_tensor_dataset(
 
 def load_labeled_tensor_dataset(path: str | Path) -> dict[str, object]:
     dataset_path = _resolve_dataset_artifact_path(path)
+    if not dataset_path.exists():
+        raise FileNotFoundError(
+            f"Labeled tensor dataset artifact does not exist: {dataset_path}. "
+            "Regenerate it with the dataset preparation notebook or update "
+            f"{DEFAULT_CURRENT_DATASET_CONFIG_PATH} to point at an existing artifact."
+        )
     if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
         _prune_cache_entries(DATASET_CACHE_DIR)
     payload = torch.load(dataset_path, map_location="cpu")

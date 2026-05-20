@@ -1,0 +1,45 @@
+unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+pretrained_encoder_path: artifacts/pretrained_commutative_transformer/encoder_state.pt
+model_config:
+  spatial_patch_size_st:
+  - 1
+  - 32
+  - 32
+  spatial_patch_size_ts:
+  - 1
+  - 32
+  - 32
+  temporal_patch_size_ts: 2
+  embed_dim: 32
+  num_heads: 2
+  mlp_ratio: 2.0
+  dropout: 0.3
+  attention_dropout: 0.1
+  st_spatial_depth: 1
+  st_temporal_depth: 1
+  ts_temporal_depth: 1
+  ts_spatial_depth: 1
+  embedding_dim: 16
+  num_prototypes: 8
+optimization_config:
+  batch_size: 8
+  epochs: 75
+  learning_rate: 0.0001
+  weight_decay: 0.003
+  early_stopping_patience: 8
+  early_stopping_min_delta: 0.0
+  scheduler_patience: 3
+  scheduler_factor: 0.7
+  scheduler_min_lr: 1.0e-06
+  validation_split: 0.0
+  random_state: 0
+  standardize: true
+  device: null
+  verbose: true
+loss_weight_config:
+  action_weight: 1.0
+  compound_weight: 0.2
+  concentration_weight: 0.2
+  consistency_weight: 1.0
+  feature_weight: 0.05
+  prototype_temperature: 0.1

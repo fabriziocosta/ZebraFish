@@ -138,6 +138,28 @@ class CacheRetentionTests(unittest.TestCase):
         self.assertTrue(pinned_file.exists())
         self.assertFalse(stale_file.exists())
 
+    def test_prune_cache_entries_preserves_current_dataset_from_moved_cache_path(self) -> None:
+        pinned_file = self.dataset_cache_dir / "current.pt"
+        stale_file = self.dataset_cache_dir / "stale.pt"
+        self._write_bytes(pinned_file, 20)
+        self._write_bytes(stale_file, 20)
+        stale_mount_path = Path("/missing/mount/ZebraFish") / tensor_utils.DATASET_CACHE_DIR.name / "current.pt"
+        config_path = self.root / "artifacts" / "current_dataset.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(json.dumps({"dataset_artifact_path": str(stale_mount_path)}), encoding="utf-8")
+        tensor_utils._write_cache_index(
+            self.dataset_cache_dir,
+            {
+                "current.pt": {"size": 20, "last_used_ns": 1},
+                "stale.pt": {"size": 20, "last_used_ns": 2},
+            },
+        )
+
+        tensor_utils._prune_cache_entries(self.dataset_cache_dir, incoming_bytes=10, force=True)
+
+        self.assertTrue(pinned_file.exists())
+        self.assertFalse(stale_file.exists())
+
     def test_save_labeled_tensor_dataset_fails_early_when_dataset_exceeds_budget(self) -> None:
         os.environ["ZF_DATASET_CACHE_MAX_BYTES"] = "1"
 
@@ -151,6 +173,17 @@ class CacheRetentionTests(unittest.TestCase):
         with patch.object(tensor_utils.shutil, "disk_usage", return_value=fake_disk_usage):
             with self.assertRaisesRegex(RuntimeError, "Insufficient free space to save dataset artifact"):
                 tensor_utils.save_labeled_tensor_dataset(self._build_dataset(), self.root / "external.pt")
+
+    def test_resolve_dataset_artifact_path_falls_back_for_moved_cache_artifact(self) -> None:
+        cached_dataset_path = self.dataset_cache_dir / "current.pt"
+        self._write_bytes(cached_dataset_path, 1)
+        stale_mount_path = (
+            Path("/missing/mount/home/fabrizio/code/ZebraFish") / tensor_utils.DATASET_CACHE_DIR.name / "current.pt"
+        )
+
+        resolved_path = tensor_utils._resolve_dataset_artifact_path(stale_mount_path)
+
+        self.assertEqual(resolved_path, cached_dataset_path)
 
     def test_build_unlabeled_tensor_dataset_filters_and_loads_selected_rows(self) -> None:
         condition_df = pd.DataFrame(
