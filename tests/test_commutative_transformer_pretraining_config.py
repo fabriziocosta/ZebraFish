@@ -26,10 +26,8 @@ class CommutativeTransformerPretrainingConfigTests(unittest.TestCase):
                 embed_dim=32,
                 num_heads=2,
                 embedding_dim=16,
-                num_prototypes=8,
             ),
             optimization_config=OptimizationConfig(batch_size=8, epochs=75, learning_rate=1e-4),
-            loss_weight_config=LossWeightConfig(consistency_weight=1.0, feature_weight=0.05),
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:

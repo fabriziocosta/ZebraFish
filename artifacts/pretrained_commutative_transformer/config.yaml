@@ -20,7 +20,6 @@ model_config:
   ts_temporal_depth: 1
   ts_spatial_depth: 1
   embedding_dim: 16
-  num_prototypes: 8
 optimization_config:
   batch_size: 8
   epochs: 75
@@ -40,6 +39,3 @@ loss_weight_config:
   action_weight: 1.0
   compound_weight: 0.2
   concentration_weight: 0.2
-  consistency_weight: 1.0
-  feature_weight: 0.05
-  prototype_temperature: 0.1

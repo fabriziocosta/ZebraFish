@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 import json
 from pathlib import Path
 from typing import Any
@@ -34,10 +34,13 @@ _COMMUTATIVE_CNN_TUPLE_FIELDS = {
     "temporal_ts_channels",
     "spatial_agg_channels",
 }
+def _keep_dataclass_keys(config_class, values: dict[str, Any]) -> dict[str, Any]:
+    valid_keys = {field.name for field in fields(config_class)}
+    return {key: value for key, value in values.items() if key in valid_keys}
 
 
 def _tupleify_config_values(config_class, values: dict[str, Any]) -> dict[str, Any]:
-    coerced = dict(values)
+    coerced = _keep_dataclass_keys(config_class, dict(values))
     tuple_fields = set(_COMMUTATIVE_CNN_TUPLE_FIELDS)
     if config_class is CommutativeCNNConfig:
         tuple_fields.update(
@@ -128,5 +131,7 @@ def load_commutative_cnn_pretraining_config(
             **_tupleify_config_values(CommutativeCNNConfig, dict(payload["model_config"]))
         ),
         optimization_config=OptimizationConfig(**dict(payload["optimization_config"])),
-        loss_weight_config=LossWeightConfig(**dict(payload["loss_weight_config"])),
+        loss_weight_config=LossWeightConfig(
+            **_keep_dataclass_keys(LossWeightConfig, dict(payload["loss_weight_config"]))
+        ),
     )

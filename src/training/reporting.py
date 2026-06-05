@@ -88,7 +88,6 @@ def plot_training_history(
             [
                 "loss",
                 "action_loss",
-                "commutative_consistency_loss",
                 "feature_alignment_loss",
                 "compound_loss",
                 "concentration_loss",
@@ -97,7 +96,6 @@ def plot_training_history(
             in {
                 "loss",
                 "action_loss",
-                "commutative_consistency_loss",
                 "feature_alignment_loss",
                 "compound_loss",
                 "concentration_loss",

@@ -334,7 +334,7 @@ $$
 + \mathcal L_{\text{aux}}.
 $$
 
-Prototype consistency and the old feature-tie term are not used by supervised `fit()`. This avoids applying a direct branch-alignment objective after masked-probe pretraining.
+Supervised `fit()` does not add a separate branch-consistency objective. This avoids applying a direct branch-alignment objective after masked-probe pretraining.
 
 At inference time, the estimator returns target-keyed prediction and probability dictionaries for `action`, `compound`, and `concentration`.
 
@@ -359,8 +359,6 @@ Temporal-first branch:
 Shared heads:
 
 - `embedding_dim`
-- `num_prototypes`
-- `prototype_temperature`
 - `probe_local_count`
 - `probe_region_grid`
 - `probe_time_bins`
@@ -553,8 +551,6 @@ Transformer capacity:
 Shared heads:
 
 - `embedding_dim`
-- `num_prototypes`
-- `prototype_temperature`
 
 ### 3.6 Engineering constraints
 

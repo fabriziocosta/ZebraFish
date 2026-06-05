@@ -22,7 +22,6 @@ COMMUTATIVE_HEAD_PREFIXES = (
     "classifier.",
     "compound_classifier.",
     "concentration_classifier.",
-    "prototype_layer.",
     "st_self_probe_decoder.",
     "ts_self_probe_decoder.",
     "st_cross_probe_decoder.",
@@ -47,8 +46,6 @@ class EstimatorSmokeTests(unittest.TestCase):
             action_weight=1.0,
             compound_weight=0.1,
             concentration_weight=0.1,
-            consistency_weight=0.2,
-            feature_weight=0.05,
         )
 
     def _run_estimator(self, estimator) -> None:
@@ -89,7 +86,6 @@ class EstimatorSmokeTests(unittest.TestCase):
                 patch_size_z=1,
                 patch_size_xy=8,
                 embedding_dim=8,
-                num_prototypes=4,
             ),
             optimization_config=self.optimization,
             loss_weight_config=self.losses,
@@ -109,12 +105,10 @@ class EstimatorSmokeTests(unittest.TestCase):
             patch_size_z=1,
             patch_size_xy=8,
             embedding_dim=4,
-            num_prototypes=4,
         )
         estimator = CommutativeCNNClassifier(
             model_config=model_config,
             optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
-            loss_weight_config=LossWeightConfig(consistency_weight=0.2, feature_weight=0.05),
         )
         estimator.pretrain(self.X, epochs=1)
         self.assertTrue(hasattr(estimator, "pretrain_history_"))
@@ -130,7 +124,6 @@ class EstimatorSmokeTests(unittest.TestCase):
             fine_tune_estimator = CommutativeCNNClassifier(
                 model_config=model_config,
                 optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
-                loss_weight_config=LossWeightConfig(consistency_weight=0.2, feature_weight=0.0),
                 pretrained_state_path=checkpoint_path,
                 freeze_backbone=True,
             )
@@ -158,7 +151,6 @@ class EstimatorSmokeTests(unittest.TestCase):
                 ts_temporal_depth=1,
                 ts_spatial_depth=1,
                 embedding_dim=8,
-                num_prototypes=4,
             ),
             optimization_config=self.optimization,
             loss_weight_config=self.losses,
@@ -204,7 +196,6 @@ class EstimatorSmokeTests(unittest.TestCase):
                 patch_size_z=1,
                 patch_size_xy=8,
                 embedding_dim=8,
-                num_prototypes=4,
             ),
             optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
             loss_weight_config=self.losses,
@@ -226,7 +217,6 @@ class EstimatorSmokeTests(unittest.TestCase):
                 ts_temporal_depth=1,
                 ts_spatial_depth=1,
                 embedding_dim=8,
-                num_prototypes=4,
             ),
             optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
             loss_weight_config=self.losses,

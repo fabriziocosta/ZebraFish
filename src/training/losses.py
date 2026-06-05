@@ -4,21 +4,6 @@ import torch
 from torch import nn
 
 
-def commutative_consistency_loss(
-    st_logits: torch.Tensor,
-    ts_logits: torch.Tensor,
-    *,
-    temperature: float,
-) -> torch.Tensor:
-    st_targets = torch.softmax(st_logits.detach() / temperature, dim=1)
-    ts_targets = torch.softmax(ts_logits.detach() / temperature, dim=1)
-    st_log_probs = torch.log_softmax(st_logits / temperature, dim=1)
-    ts_log_probs = torch.log_softmax(ts_logits / temperature, dim=1)
-    loss_st = -(st_targets * ts_log_probs).sum(dim=1).mean()
-    loss_ts = -(ts_targets * st_log_probs).sum(dim=1).mean()
-    return 0.5 * (loss_st + loss_ts)
-
-
 def apply_auxiliary_head_losses(
     *,
     total_loss: torch.Tensor,

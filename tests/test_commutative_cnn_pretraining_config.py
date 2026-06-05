@@ -33,7 +33,6 @@ class CommutativeCNNPretrainingConfigTests(unittest.TestCase):
                 spatial_agg_kernel_size_z=(3, 3),
                 spatial_agg_stride_z=(1, 1),
                 embedding_dim=48,
-                num_prototypes=64,
             ),
             optimization_config=OptimizationConfig(
                 batch_size=8,
@@ -41,7 +40,6 @@ class CommutativeCNNPretrainingConfigTests(unittest.TestCase):
                 learning_rate=3e-4,
                 early_stopping_patience=10,
             ),
-            loss_weight_config=LossWeightConfig(consistency_weight=1.0, feature_weight=0.02),
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
