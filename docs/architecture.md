@@ -294,7 +294,7 @@ Commutative encoder pretraining uses a fixed masked-probe ontology instead of re
 - `frequency`: low-frequency magnitude summaries of region traces
 - `correlation`: pairwise correlations between coarse region traces
 
-Every probe type is present in the output dictionary for every batch. A binary mask selects which entries are supervised at a given training step.
+Every probe type is present in the output dictionary for every batch. A binary mask selects which entries are supervised at a given training step; training masks guarantee at least one observed entry per probe type, while validation uses full masks for deterministic model selection.
 
 ### 2.7 Pretraining losses
 
@@ -315,31 +315,26 @@ $$
 + \lambda_{\text{align}} \mathcal L_{\text{align}}.
 $$
 
-In the default configuration, `lambda_align = 0`, while `lambda_cross` starts at zero and ramps upward during warm-up.
+In the default configuration, `lambda_align = 0`. `lambda_cross` is held at zero for `cross_warmup_epochs`, then ramps upward over `cross_ramp_epochs`.
 
 ### 2.8 Supervised losses
 
-For supervised classifier training and fine-tuning, the model currently uses three loss components:
+For supervised classifier training and fine-tuning, the model uses the fused embedding for classification. The default supervised objective is:
 
 1. supervised classification loss on the fused logits
-2. prototype-consistency loss between the two branches
-3. feature-alignment loss between $z^{ST}$ and $z^{TS}$
+2. optional auxiliary classification losses for compound and concentration
+3. optional weak latent alignment controlled by `lambda_align`
 
 The implemented total loss is
 
 $$
 \mathcal L =
 \mathcal L_{\text{cls}}
- + \alpha \mathcal L_{\text{swap}}
- + \beta \mathcal L_{\text{feat}}.
++ \lambda_{\text{align}} \mathcal L_{\text{align}}
++ \mathcal L_{\text{aux}}.
 $$
 
-The weights correspond to:
-
-- `consistency_weight = \alpha`
-- `feature_weight = \beta`
-
-In the repository implementation, optional auxiliary cross-entropy losses for compound and concentration classification are added on top of this total objective using the same fused embedding.
+Prototype consistency and the old feature-tie term are not used by supervised `fit()`. This avoids applying a direct branch-alignment objective after masked-probe pretraining.
 
 At inference time, the estimator returns target-keyed prediction and probability dictionaries for `action`, `compound`, and `concentration`.
 
@@ -379,6 +374,7 @@ Shared heads:
 - `lambda_cross`
 - `lambda_align`
 - `cross_warmup_epochs`
+- `cross_ramp_epochs`
 - `teacher_student_warmup_epochs`
 - `dropout`
 
@@ -607,7 +603,7 @@ For supervised training, it uses the fused embedding for:
 - optional compound classification
 - optional concentration classification
 
-while currently keeping branch-consistency and feature-alignment losses as the supervised commutative regularizers.
+with optional weak latent alignment controlled by `lambda_align`.
 
 ## 4. Choosing between the three
 

@@ -32,6 +32,7 @@ class LossWeightConfig:
     lambda_cross: float = 1.0
     lambda_align: float = 0.0
     cross_warmup_epochs: int = 5
+    cross_ramp_epochs: int = 5
     teacher_student_warmup_epochs: int = 0
     probe_mask_probability: float = 0.25
     probe_alpha_local: float = 1.0

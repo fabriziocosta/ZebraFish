@@ -151,14 +151,22 @@ def build_probe_masks(
     targets: Mapping[str, torch.Tensor],
     *,
     observe_probability: float,
+    full: bool = False,
 ) -> dict[str, torch.Tensor]:
     probability = float(observe_probability)
     if probability <= 0.0 or probability > 1.0:
         raise ValueError("observe_probability must be in (0, 1]")
-    return {
-        probe_type: (torch.rand(target.shape, device=target.device, dtype=target.dtype) < probability).to(dtype=target.dtype)
-        for probe_type, target in targets.items()
-    }
+    masks: dict[str, torch.Tensor] = {}
+    for probe_type, target in targets.items():
+        if full:
+            masks[probe_type] = torch.ones_like(target)
+            continue
+        mask = (torch.rand(target.shape, device=target.device, dtype=target.dtype) < probability).to(dtype=target.dtype)
+        if not bool(mask.any().item()):
+            flat = mask.reshape(-1)
+            flat[torch.randint(flat.numel(), (1,), device=target.device)] = 1
+        masks[probe_type] = mask
+    return masks
 
 
 def masked_probe_loss(

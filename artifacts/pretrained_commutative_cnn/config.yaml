@@ -72,6 +72,13 @@ model_config:
   patch_size_xy: 16
   embedding_dim: 32
   num_prototypes: 32
+  probe_local_count: 32
+  probe_region_grid:
+  - 1
+  - 2
+  - 2
+  probe_time_bins: 8
+  probe_frequency_bins: 4
   dropout: 0.1
 optimization_config:
   batch_size: 8
@@ -92,6 +99,17 @@ loss_weight_config:
   action_weight: 1.0
   compound_weight: 0.2
   concentration_weight: 0.2
-  consistency_weight: 1.0
-  feature_weight: 0.05
-  prototype_temperature: 0.2
+  consistency_weight: 0.5
+  feature_weight: 0.1
+  prototype_temperature: 0.1
+  lambda_cross: 1.0
+  lambda_align: 0.0
+  cross_warmup_epochs: 5
+  cross_ramp_epochs: 5
+  teacher_student_warmup_epochs: 0
+  probe_mask_probability: 0.25
+  probe_alpha_local: 1.0
+  probe_alpha_region_time: 1.0
+  probe_alpha_derivative: 1.0
+  probe_alpha_frequency: 1.0
+  probe_alpha_correlation: 1.0

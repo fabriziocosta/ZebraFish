@@ -26,9 +26,13 @@ def _probe_alpha_weights(estimator) -> dict[str, float]:
 def _cross_weight_for_epoch(estimator, epoch: int) -> float:
     target = float(getattr(estimator, "lambda_cross", 1.0))
     warmup_epochs = int(getattr(estimator, "cross_warmup_epochs", 0))
-    if warmup_epochs <= 0:
+    ramp_epochs = int(getattr(estimator, "cross_ramp_epochs", 0))
+    if int(epoch) <= warmup_epochs:
+        return 0.0
+    if ramp_epochs <= 0:
         return target
-    return target * min(max((int(epoch) - 1) / warmup_epochs, 0.0), 1.0)
+    ramp_step = int(epoch) - warmup_epochs
+    return target * min(max(ramp_step / ramp_epochs, 0.0), 1.0)
 
 
 def _compute_commutative_pretraining_loss(
@@ -37,11 +41,13 @@ def _compute_commutative_pretraining_loss(
     outputs: dict[str, torch.Tensor],
     *,
     epoch: int,
+    full_probe_mask: bool = False,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     probe_targets = build_probe_targets(X, getattr(estimator.model_, "probe_spec"))
     probe_masks = build_probe_masks(
         probe_targets,
         observe_probability=float(getattr(estimator, "probe_mask_probability", 0.25)),
+        full=full_probe_mask,
     )
 
     alpha_weights = _probe_alpha_weights(estimator)
@@ -214,7 +220,13 @@ def _pretrain_commutative_estimator(
                 for (X_batch,) in val_loader:
                     X_batch = X_batch.to(estimator.device_, non_blocking=True)
                     outputs = estimator.model_(X_batch)
-                    loss, components = _compute_commutative_pretraining_loss(estimator, X_batch, outputs, epoch=epoch)
+                    loss, components = _compute_commutative_pretraining_loss(
+                        estimator,
+                        X_batch,
+                        outputs,
+                        epoch=epoch,
+                        full_probe_mask=True,
+                    )
                     batch_size_value = int(X_batch.shape[0])
                     val_loss_sum += float(loss.item()) * batch_size_value
                     for key, value in components.items():

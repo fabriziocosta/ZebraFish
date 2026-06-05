@@ -21,7 +21,7 @@ from src.models.configs import (
 )
 from src.models.probes import ProbeSpec
 from src.models.common import _PreparedData, _SharedMultitaskEstimatorMixin, _expand_per_block
-from src.training.losses import apply_auxiliary_head_losses, commutative_consistency_loss
+from src.training.losses import apply_auxiliary_head_losses
 from src.training.loop import _collect_output_batches
 from src.training.pretraining import _pretrain_commutative_estimator
 
@@ -30,6 +30,7 @@ _HEAD_PREFIXES = (
     "classifier.",
     "compound_classifier.",
     "concentration_classifier.",
+    "prototype_layer.",
     "st_self_probe_decoder.",
     "ts_self_probe_decoder.",
     "st_cross_probe_decoder.",
@@ -310,6 +311,7 @@ class CommutativeCNNClassifier(
         lambda_cross: float = 1.0,
         lambda_align: float = 0.0,
         cross_warmup_epochs: int = 5,
+        cross_ramp_epochs: int = 5,
         teacher_student_warmup_epochs: int = 0,
         probe_mask_probability: float = 0.25,
         probe_alpha_local: float = 1.0,
@@ -378,6 +380,7 @@ class CommutativeCNNClassifier(
         self.lambda_cross = lambda_cross
         self.lambda_align = lambda_align
         self.cross_warmup_epochs = cross_warmup_epochs
+        self.cross_ramp_epochs = cross_ramp_epochs
         self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
         self.probe_mask_probability = probe_mask_probability
         self.probe_alpha_local = probe_alpha_local
@@ -483,17 +486,8 @@ class CommutativeCNNClassifier(
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
         action_loss = criterion(outputs["logits"], targets)
-        consistency = commutative_consistency_loss(
-            outputs["st_prototypes"],
-            outputs["ts_prototypes"],
-            temperature=float(self.prototype_temperature),
-        )
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-        total_loss = (
-            float(self.action_weight) * action_loss
-            + float(self.consistency_weight) * consistency
-            + float(self.feature_weight) * feature_alignment_loss
-        )
+        total_loss = float(self.action_weight) * action_loss + float(self.lambda_align) * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
@@ -505,7 +499,6 @@ class CommutativeCNNClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
-            "commutative_consistency_loss": float(consistency.item()),
             "feature_alignment_loss": float(feature_alignment_loss.item()),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
@@ -554,6 +547,7 @@ class CommutativeTransformerClassifier(
         lambda_cross: float = 1.0,
         lambda_align: float = 0.0,
         cross_warmup_epochs: int = 5,
+        cross_ramp_epochs: int = 5,
         teacher_student_warmup_epochs: int = 0,
         probe_mask_probability: float = 0.25,
         probe_alpha_local: float = 1.0,
@@ -609,6 +603,7 @@ class CommutativeTransformerClassifier(
         self.lambda_cross = lambda_cross
         self.lambda_align = lambda_align
         self.cross_warmup_epochs = cross_warmup_epochs
+        self.cross_ramp_epochs = cross_ramp_epochs
         self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
         self.probe_mask_probability = probe_mask_probability
         self.probe_alpha_local = probe_alpha_local
@@ -680,17 +675,8 @@ class CommutativeTransformerClassifier(
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
         action_loss = criterion(outputs["logits"], targets)
-        consistency = commutative_consistency_loss(
-            outputs["st_prototypes"],
-            outputs["ts_prototypes"],
-            temperature=float(self.prototype_temperature),
-        )
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-        total_loss = (
-            float(self.action_weight) * action_loss
-            + float(self.consistency_weight) * consistency
-            + float(self.feature_weight) * feature_alignment_loss
-        )
+        total_loss = float(self.action_weight) * action_loss + float(self.lambda_align) * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
@@ -702,7 +688,6 @@ class CommutativeTransformerClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
-            "commutative_consistency_loss": float(consistency.item()),
             "feature_alignment_loss": float(feature_alignment_loss.item()),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,

@@ -30,6 +30,17 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(targets["correlation"].shape, (2, 6))
         for probe_type in PROBE_TYPES:
             self.assertEqual(masks[probe_type].shape, targets[probe_type].shape)
+            self.assertGreaterEqual(float(masks[probe_type].sum().item()), 1.0)
+
+    def test_probe_masks_can_use_full_validation_mask(self) -> None:
+        targets = {
+            "local": torch.zeros(2, 3),
+            "region_time": torch.zeros(2, 4, 3),
+        }
+        masks = build_probe_masks(targets, observe_probability=0.25, full=True)
+
+        for probe_type, target in targets.items():
+            self.assertTrue(torch.equal(masks[probe_type], torch.ones_like(target)))
 
     def test_masked_probe_loss_normalizes_by_observed_entries(self) -> None:
         targets = {"local": torch.tensor([[1.0, 3.0]])}

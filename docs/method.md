@@ -91,11 +91,13 @@ Define a fixed probe ontology. For every input sample, the implementation comput
 - `frequency`: low-frequency magnitude summaries of region traces
 - `correlation`: pairwise correlations between coarse region traces
 
-Every probe type is present in every batch. Randomness enters only through binary masks over entries within those tensors:
+Every probe type is present in every batch. During training, randomness enters only through binary masks over entries within those tensors:
 
 $$
 \{m_{\text{local}}, m_{\text{region\_time}}, m_{\text{derivative}}, m_{\text{frequency}}, m_{\text{correlation}}\}.
 $$
+
+Each random training mask guarantees at least one observed entry per probe type. Validation uses full masks, so scheduler and early-stopping decisions are not driven by stochastic mask samples.
 
 Each pathway has a self decoder and a cross decoder. In path notation:
 
@@ -137,7 +139,7 @@ $$
 + \lambda_{\text{align}} \lVert z^{ST} - z^{TS} \rVert_2^2.
 $$
 
-By default, `lambda_align` is zero and `lambda_cross` is ramped from zero during warm-up. This keeps the objective centered on structured probe prediction rather than full input reconstruction or direct latent matching.
+By default, `lambda_align` is zero. `lambda_cross` is held at zero for `cross_warmup_epochs`, then ramped over `cross_ramp_epochs`. This keeps the objective centered on structured probe prediction rather than full input reconstruction or direct latent matching.
 
 ### 2.3 Interpretation
 

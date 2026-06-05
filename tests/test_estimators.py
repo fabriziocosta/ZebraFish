@@ -18,6 +18,18 @@ from src.ml import (
 )
 
 
+COMMUTATIVE_HEAD_PREFIXES = (
+    "classifier.",
+    "compound_classifier.",
+    "concentration_classifier.",
+    "prototype_layer.",
+    "st_self_probe_decoder.",
+    "ts_self_probe_decoder.",
+    "st_cross_probe_decoder.",
+    "ts_cross_probe_decoder.",
+)
+
+
 class EstimatorSmokeTests(unittest.TestCase):
     def setUp(self) -> None:
         rng = np.random.default_rng(0)
@@ -111,6 +123,7 @@ class EstimatorSmokeTests(unittest.TestCase):
         self.assertIn("train_cross_probe_loss", estimator.pretrain_history_.columns)
         self.assertIn("train_self_probe_local_loss", estimator.pretrain_history_.columns)
         self.assertIn("train_cross_probe_correlation_loss", estimator.pretrain_history_.columns)
+        self.assertEqual(float(estimator.pretrain_history_["train_lambda_cross"].iloc[0]), 0.0)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             checkpoint_path = estimator.save_pretrained_encoder(Path(tmpdir) / "encoder.pt")
@@ -127,7 +140,7 @@ class EstimatorSmokeTests(unittest.TestCase):
             frozen_parameters = [
                 parameter.requires_grad
                 for name, parameter in fine_tune_estimator.model_.named_parameters()
-                if not name.startswith(("classifier.", "compound_classifier.", "concentration_classifier."))
+                if not name.startswith(COMMUTATIVE_HEAD_PREFIXES)
             ]
             self.assertTrue(frozen_parameters)
             self.assertFalse(any(frozen_parameters))
@@ -177,7 +190,7 @@ class EstimatorSmokeTests(unittest.TestCase):
         loaded_non_head_keys = [
             key
             for key in estimator.hot_start_loaded_keys_
-            if not key.startswith(("classifier.", "compound_classifier.", "concentration_classifier."))
+            if not key.startswith(COMMUTATIVE_HEAD_PREFIXES)
         ]
         self.assertTrue(loaded_non_head_keys)
 
