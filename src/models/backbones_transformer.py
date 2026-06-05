@@ -7,6 +7,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from src.models.probes import ProbeDecoder, ProbeSpec
+
 
 def _sinusoidal_positional_encoding(
     length: int,
@@ -120,6 +122,7 @@ class _CommutativeTransformerNetwork(nn.Module):
         ts_spatial_depth: int,
         embedding_dim: int,
         num_prototypes: int,
+        probe_spec: ProbeSpec | None = None,
         num_compound_classes: int = 0,
         num_concentration_classes: int = 0,
     ) -> None:
@@ -183,6 +186,27 @@ class _CommutativeTransformerNetwork(nn.Module):
         )
 
         self.prototype_layer = nn.Linear(embedding_dim, num_prototypes, bias=False)
+        self.probe_spec = probe_spec or ProbeSpec()
+        self.ts_self_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
+        self.st_self_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
+        self.ts_cross_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
+        self.st_cross_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
         self.classifier = nn.Linear(embedding_dim, num_classes)
         self.compound_classifier = nn.Linear(embedding_dim, num_compound_classes) if num_compound_classes > 0 else None
         self.concentration_classifier = (
@@ -274,6 +298,10 @@ class _CommutativeTransformerNetwork(nn.Module):
             "embedding": fused_embedding,
             "st_prototypes": self.prototype_layer(st_embedding),
             "ts_prototypes": self.prototype_layer(ts_embedding),
+            "pred_A_self": self.ts_self_probe_decoder(ts_embedding),
+            "pred_B_self": self.st_self_probe_decoder(st_embedding),
+            "pred_A_to_B": self.st_cross_probe_decoder(ts_embedding),
+            "pred_B_to_A": self.ts_cross_probe_decoder(st_embedding),
         }
 
     def forward(self, X: torch.Tensor) -> dict[str, torch.Tensor]:

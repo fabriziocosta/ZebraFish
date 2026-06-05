@@ -29,7 +29,7 @@ class CommutativeTransformerPretrainingConfig:
 
 def _tupleify_config_values(values: dict[str, Any]) -> dict[str, Any]:
     coerced = dict(values)
-    for field_name in ("spatial_patch_size_st", "spatial_patch_size_ts"):
+    for field_name in ("spatial_patch_size_st", "spatial_patch_size_ts", "probe_region_grid"):
         value = coerced.get(field_name)
         if isinstance(value, list):
             coerced[field_name] = tuple(value)

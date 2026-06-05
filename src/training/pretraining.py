@@ -9,25 +9,92 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
 from src.models.common import _ensure_tensor_5d
-from src.training.losses import commutative_consistency_loss
+from src.models.probes import PROBE_TYPES, build_probe_masks, build_probe_targets, masked_probe_loss
 from src.training.loop import _format_eta
 
 
-def _compute_commutative_pretraining_loss(estimator, outputs: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
-    consistency = commutative_consistency_loss(
-        outputs["st_prototypes"],
-        outputs["ts_prototypes"],
-        temperature=float(estimator.prototype_temperature),
-    )
-    feature_alignment = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-    total_loss = (
-        float(estimator.consistency_weight) * consistency
-        + float(estimator.feature_weight) * feature_alignment
-    )
-    return total_loss, {
-        "commutative_consistency_loss": float(consistency.item()),
-        "feature_alignment_loss": float(feature_alignment.item()),
+def _probe_alpha_weights(estimator) -> dict[str, float]:
+    return {
+        "local": float(getattr(estimator, "probe_alpha_local", 1.0)),
+        "region_time": float(getattr(estimator, "probe_alpha_region_time", 1.0)),
+        "derivative": float(getattr(estimator, "probe_alpha_derivative", 1.0)),
+        "frequency": float(getattr(estimator, "probe_alpha_frequency", 1.0)),
+        "correlation": float(getattr(estimator, "probe_alpha_correlation", 1.0)),
     }
+
+
+def _cross_weight_for_epoch(estimator, epoch: int) -> float:
+    target = float(getattr(estimator, "lambda_cross", 1.0))
+    warmup_epochs = int(getattr(estimator, "cross_warmup_epochs", 0))
+    if warmup_epochs <= 0:
+        return target
+    return target * min(max((int(epoch) - 1) / warmup_epochs, 0.0), 1.0)
+
+
+def _compute_commutative_pretraining_loss(
+    estimator,
+    X: torch.Tensor,
+    outputs: dict[str, torch.Tensor],
+    *,
+    epoch: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    probe_targets = build_probe_targets(X, getattr(estimator.model_, "probe_spec"))
+    probe_masks = build_probe_masks(
+        probe_targets,
+        observe_probability=float(getattr(estimator, "probe_mask_probability", 0.25)),
+    )
+
+    alpha_weights = _probe_alpha_weights(estimator)
+    loss_A_self, per_A_self = masked_probe_loss(
+        outputs["pred_A_self"],
+        probe_targets,
+        probe_masks,
+        alpha_weights=alpha_weights,
+    )
+    loss_B_self, per_B_self = masked_probe_loss(
+        outputs["pred_B_self"],
+        probe_targets,
+        probe_masks,
+        alpha_weights=alpha_weights,
+    )
+    self_loss = loss_A_self + loss_B_self
+
+    teacher_student_warmup_epochs = int(getattr(estimator, "teacher_student_warmup_epochs", 0))
+    if teacher_student_warmup_epochs > 0 and int(epoch) <= teacher_student_warmup_epochs:
+        cross_targets_A_to_B = {key: value.detach() for key, value in outputs["pred_B_self"].items()}
+        cross_targets_B_to_A = {key: value.detach() for key, value in outputs["pred_A_self"].items()}
+    else:
+        cross_targets_A_to_B = probe_targets
+        cross_targets_B_to_A = probe_targets
+
+    loss_A_to_B, per_A_to_B = masked_probe_loss(
+        outputs["pred_A_to_B"],
+        cross_targets_A_to_B,
+        probe_masks,
+        alpha_weights=alpha_weights,
+    )
+    loss_B_to_A, per_B_to_A = masked_probe_loss(
+        outputs["pred_B_to_A"],
+        cross_targets_B_to_A,
+        probe_masks,
+        alpha_weights=alpha_weights,
+    )
+    cross_loss = loss_A_to_B + loss_B_to_A
+    lambda_cross = _cross_weight_for_epoch(estimator, epoch)
+
+    alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
+    total_loss = self_loss + lambda_cross * cross_loss + float(getattr(estimator, "lambda_align", 0.0)) * alignment_loss
+
+    components = {
+        "self_probe_loss": float(self_loss.item()),
+        "cross_probe_loss": float(cross_loss.item()),
+        "lambda_cross": float(lambda_cross),
+        "feature_alignment_loss": float(alignment_loss.item()),
+    }
+    for probe_type in PROBE_TYPES:
+        components[f"self_probe_{probe_type}_loss"] = float((per_A_self[probe_type] + per_B_self[probe_type]).item())
+        components[f"cross_probe_{probe_type}_loss"] = float((per_A_to_B[probe_type] + per_B_to_A[probe_type]).item())
+    return total_loss, components
 
 
 def _pretrain_commutative_estimator(
@@ -97,13 +164,22 @@ def _pretrain_commutative_estimator(
     training_start = time.perf_counter()
 
     if estimator.verbose:
-        print("cols:\n    ep=epoch\n    lr=learning_rate\n    eta=estimated_time_remaining\n    trL=train_loss\n    trCC=train_commutative_consistency_loss\n    trFA=train_feature_alignment_loss")
+        print(
+            "cols:\n"
+            "    ep=epoch\n"
+            "    lr=learning_rate\n"
+            "    eta=estimated_time_remaining\n"
+            "    trL=train_loss\n"
+            "    trS=train_self_probe_loss\n"
+            "    trX=train_cross_probe_loss\n"
+            "    trFA=train_feature_alignment_loss"
+        )
         if val_loader is None:
-            print(f"{'ep':>7} {'lr':>8} {'eta':>9} | {'trL':>8} {'trCC':>8} {'trFA':>8}")
+            print(f"{'ep':>7} {'lr':>8} {'eta':>9} | {'trL':>8} {'trS':>8} {'trX':>8} {'trFA':>8}")
         else:
             print(
-                f"{'ep':>7} {'lr':>8} {'eta':>9} | {'trL':>8} {'trCC':>8} {'trFA':>8} | "
-                f"{'vaL':>8} {'vaCC':>8} {'vaFA':>8}"
+                f"{'ep':>7} {'lr':>8} {'eta':>9} | {'trL':>8} {'trS':>8} {'trX':>8} {'trFA':>8} | "
+                f"{'vaL':>8} {'vaS':>8} {'vaX':>8} {'vaFA':>8}"
             )
 
     for epoch in range(1, n_epochs + 1):
@@ -115,7 +191,7 @@ def _pretrain_commutative_estimator(
             X_batch = X_batch.to(estimator.device_, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
             outputs = estimator.model_(X_batch)
-            loss, components = _compute_commutative_pretraining_loss(estimator, outputs)
+            loss, components = _compute_commutative_pretraining_loss(estimator, X_batch, outputs, epoch=epoch)
             loss.backward()
             optimizer.step()
 
@@ -138,7 +214,7 @@ def _pretrain_commutative_estimator(
                 for (X_batch,) in val_loader:
                     X_batch = X_batch.to(estimator.device_, non_blocking=True)
                     outputs = estimator.model_(X_batch)
-                    loss, components = _compute_commutative_pretraining_loss(estimator, outputs)
+                    loss, components = _compute_commutative_pretraining_loss(estimator, X_batch, outputs, epoch=epoch)
                     batch_size_value = int(X_batch.shape[0])
                     val_loss_sum += float(loss.item()) * batch_size_value
                     for key, value in components.items():
@@ -171,13 +247,15 @@ def _pretrain_commutative_estimator(
             current_lr = optimizer.param_groups[0]["lr"]
             train_parts = (
                 f"{float(row['train_loss']):8.4f} "
-                f"{float(row.get('train_commutative_consistency_loss', 0.0)):8.4f} "
+                f"{float(row.get('train_self_probe_loss', 0.0)):8.4f} "
+                f"{float(row.get('train_cross_probe_loss', 0.0)):8.4f} "
                 f"{float(row.get('train_feature_alignment_loss', 0.0)):8.4f}"
             )
             if "val_loss" in row:
                 val_parts = (
                     f"{float(row['val_loss']):8.4f} "
-                    f"{float(row.get('val_commutative_consistency_loss', 0.0)):8.4f} "
+                    f"{float(row.get('val_self_probe_loss', 0.0)):8.4f} "
+                    f"{float(row.get('val_cross_probe_loss', 0.0)):8.4f} "
                     f"{float(row.get('val_feature_alignment_loss', 0.0)):8.4f}"
                 )
                 print(f"{epoch:03d}/{n_epochs:03d} {current_lr:8.2e} {eta:>9} | {train_parts} | {val_parts}")

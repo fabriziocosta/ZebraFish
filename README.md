@@ -55,6 +55,8 @@ The public ML surface in [src/ml.py](src/ml.py) is implemented internally as:
   Baseline 3D CNN and pure-CNN commutative backbones.
 - [src/models/backbones_transformer.py](src/models/backbones_transformer.py)
   Transformer patch embedding and commutative transformer backbones.
+- [src/models/probes.py](src/models/probes.py)
+  Fixed masked-probe ontology, probe-target construction, decoder heads, and masked probe losses.
 - [src/models/estimators.py](src/models/estimators.py)
   Public scikit-style estimators.
 - [src/training/data.py](src/training/data.py)
@@ -149,6 +151,14 @@ Current estimator behavior:
   - `concentration`
 - `transform(...)` returns the shared embedding
 - commutative models also expose `transform_branches(...)`
+
+Commutative encoder pretraining uses a fixed masked-probe ontology rather than full-volume reconstruction. The probe types are:
+
+- `local`
+- `region_time`
+- `derivative`
+- `frequency`
+- `correlation`
 
 ## Dataset and Training Conventions
 

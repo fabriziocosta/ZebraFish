@@ -29,6 +29,16 @@ class LossWeightConfig:
     consistency_weight: float = 0.5
     feature_weight: float = 0.1
     prototype_temperature: float = 0.1
+    lambda_cross: float = 1.0
+    lambda_align: float = 0.0
+    cross_warmup_epochs: int = 5
+    teacher_student_warmup_epochs: int = 0
+    probe_mask_probability: float = 0.25
+    probe_alpha_local: float = 1.0
+    probe_alpha_region_time: float = 1.0
+    probe_alpha_derivative: float = 1.0
+    probe_alpha_frequency: float = 1.0
+    probe_alpha_correlation: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -74,6 +84,10 @@ class CommutativeCNNConfig:
     patch_size_xy: int = 16
     embedding_dim: int = 128
     num_prototypes: int = 64
+    probe_local_count: int = 32
+    probe_region_grid: tuple[int, int, int] = (1, 2, 2)
+    probe_time_bins: int = 8
+    probe_frequency_bins: int = 4
     dropout: float = 0.2
 
 
@@ -93,6 +107,10 @@ class CommutativeTransformerConfig:
     ts_spatial_depth: int = 2
     embedding_dim: int = 96
     num_prototypes: int = 32
+    probe_local_count: int = 32
+    probe_region_grid: tuple[int, int, int] = (1, 2, 2)
+    probe_time_bins: int = 8
+    probe_frequency_bins: int = 4
 
 
 def config_as_dict(config) -> dict[str, object]:

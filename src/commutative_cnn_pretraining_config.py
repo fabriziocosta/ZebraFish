@@ -60,6 +60,7 @@ def _tupleify_config_values(config_class, values: dict[str, Any]) -> dict[str, A
                 "spatial_agg_pool_kernel_xy",
                 "spatial_agg_pool_stride_z",
                 "spatial_agg_pool_stride_xy",
+                "probe_region_grid",
             }
         )
     for field_name in tuple_fields:

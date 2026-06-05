@@ -182,6 +182,8 @@ $$
 The network then produces:
 
 - branch prototype logits from $z^{ST}$ and $z^{TS}$
+- structured self probe predictions from each branch embedding
+- structured cross probe predictions from the opposite branch embedding
 - action logits from the fused embedding $z$
 - optional compound logits from the fused embedding $z$
 - optional concentration logits from the fused embedding $z$
@@ -282,9 +284,42 @@ Global average pool
 Projection -> z^(TS): (N, d)
 ```
 
-### 2.6 Losses
+### 2.6 Probe ontology
 
-The model uses three loss components:
+Commutative encoder pretraining uses a fixed masked-probe ontology instead of reconstructing the full input volume. The probe types are:
+
+- `local`: fixed local voxel/time samples from the input tensor
+- `region_time`: coarse region-level temporal summaries
+- `derivative`: temporal derivatives of the region-level summaries
+- `frequency`: low-frequency magnitude summaries of region traces
+- `correlation`: pairwise correlations between coarse region traces
+
+Every probe type is present in the output dictionary for every batch. A binary mask selects which entries are supervised at a given training step.
+
+### 2.7 Pretraining losses
+
+During unlabeled commutative pretraining, each branch predicts the same probe-target dictionary through self and cross heads:
+
+- `pred_A_self`: Path A embedding decoded by the Path A self head
+- `pred_B_self`: Path B embedding decoded by the Path B self head
+- `pred_A_to_B`: Path A embedding decoded by the Path B cross head
+- `pred_B_to_A`: Path B embedding decoded by the Path A cross head
+
+For each probe type, loss is normalized by the number of observed mask entries. The total pretraining loss is:
+
+$$
+\mathcal L
+=
+\mathcal L_{\text{self}}
++ \lambda_{\text{cross}} \mathcal L_{\text{cross}}
++ \lambda_{\text{align}} \mathcal L_{\text{align}}.
+$$
+
+In the default configuration, `lambda_align = 0`, while `lambda_cross` starts at zero and ramps upward during warm-up.
+
+### 2.8 Supervised losses
+
+For supervised classifier training and fine-tuning, the model currently uses three loss components:
 
 1. supervised classification loss on the fused logits
 2. prototype-consistency loss between the two branches
@@ -308,7 +343,7 @@ In the repository implementation, optional auxiliary cross-entropy losses for co
 
 At inference time, the estimator returns target-keyed prediction and probability dictionaries for `action`, `compound`, and `concentration`.
 
-### 2.7 Main hyperparameters
+### 2.9 Main hyperparameters
 
 Spatial-first branch:
 
@@ -331,9 +366,23 @@ Shared heads:
 - `embedding_dim`
 - `num_prototypes`
 - `prototype_temperature`
+- `probe_local_count`
+- `probe_region_grid`
+- `probe_time_bins`
+- `probe_frequency_bins`
+- `probe_mask_probability`
+- `probe_alpha_local`
+- `probe_alpha_region_time`
+- `probe_alpha_derivative`
+- `probe_alpha_frequency`
+- `probe_alpha_correlation`
+- `lambda_cross`
+- `lambda_align`
+- `cross_warmup_epochs`
+- `teacher_student_warmup_epochs`
 - `dropout`
 
-### 2.8 Strengths and limitations
+### 2.10 Strengths and limitations
 
 Strengths:
 
@@ -353,7 +402,7 @@ Implemented as `CommutativeTransformerClassifier` in [`src/ml.py`](../src/ml.py)
 
 ### 3.1 Purpose
 
-This model keeps the same commutative training objective as the pure-CNN version, but replaces the branch aggregators with factorized transformer stacks.
+This model keeps the same commutative pretraining objective and supervised loss structure as the pure-CNN version, but replaces the branch aggregators with factorized transformer stacks.
 
 It is a more expressive model family, but also substantially heavier. Token count is the critical engineering constraint.
 
@@ -542,15 +591,23 @@ Limitations:
 - patch-size choices strongly affect tractability
 - more exposed to overfitting on small supervised datasets
 
-### 3.8 Multi-head supervision
+### 3.8 Probe pretraining and multi-head supervision
 
-Like the pure-CNN commutative model, the transformer variant uses the fused embedding for:
+Like the pure-CNN commutative model, the transformer variant uses the same fixed probe ontology during unlabeled pretraining:
+
+- `local`
+- `region_time`
+- `derivative`
+- `frequency`
+- `correlation`
+
+For supervised training, it uses the fused embedding for:
 
 - action classification
 - optional compound classification
 - optional concentration classification
 
-while keeping the branch-consistency and feature-alignment losses as the commutative part of the training objective.
+while currently keeping branch-consistency and feature-alignment losses as the supervised commutative regularizers.
 
 ## 4. Choosing between the three
 

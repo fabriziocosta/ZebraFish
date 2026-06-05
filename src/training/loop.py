@@ -368,6 +368,8 @@ def _collect_output_batches(estimator, X: torch.Tensor | np.ndarray) -> dict[str
             X_batch = X_batch.to(estimator.device_, non_blocking=True)
             outputs = estimator.model_(X_batch)
             for key, value in outputs.items():
+                if not isinstance(value, torch.Tensor):
+                    continue
                 collected.setdefault(key, []).append(value.detach().cpu().numpy())
     return {key: np.concatenate(values, axis=0) for key, values in collected.items()}
 

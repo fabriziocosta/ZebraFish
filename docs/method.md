@@ -73,7 +73,7 @@ $$
 
 This does not require the intermediate computations to be identical. Instead, it requires the two admissible factorizations of the same signal to preserve the same semantic content.
 
-### 2.2 Prototype-consistent semantic alignment
+### 2.2 Masked probe prediction
 
 Let
 
@@ -81,52 +81,69 @@ $$
 z_i^{ST}, z_i^{TS} \in \mathbb{R}^d
 $$
 
-be the embeddings produced by the two pathways for sample $i$, and let
+be the embeddings produced by the two pathways for sample $i$. The current self-supervised pretraining objective does not require these embeddings to match directly. Instead, both embeddings must answer the same fixed set of structured questions about the input tensor.
+
+Define a fixed probe ontology. For every input sample, the implementation computes the following probe-target tensors:
+
+- `local`: fixed local voxel/time samples from the input tensor
+- `region_time`: coarse region-level temporal summaries
+- `derivative`: temporal derivatives of the region-level summaries
+- `frequency`: low-frequency magnitude summaries of region traces
+- `correlation`: pairwise correlations between coarse region traces
+
+Every probe type is present in every batch. Randomness enters only through binary masks over entries within those tensors:
 
 $$
-C \in \mathbb{R}^{d \times K}
+\{m_{\text{local}}, m_{\text{region\_time}}, m_{\text{derivative}}, m_{\text{frequency}}, m_{\text{correlation}}\}.
 $$
 
-be a learnable prototype matrix with $K$ prototypes. Following the SwAV paradigm, each embedding is mapped to prototype logits
+Each pathway has a self decoder and a cross decoder. In path notation:
 
 $$
-p_i^{ST} = C^\top z_i^{ST}, \qquad p_i^{TS} = C^\top z_i^{TS},
+\hat y_{A,\text{self}} = D_{A,\text{self}}(z_A), \quad
+\hat y_{B,\text{self}} = D_{B,\text{self}}(z_B),
 $$
 
-and then to soft prototype assignments
+and
 
 $$
-q_i^{ST} = \operatorname{softmax}(p_i^{ST}/\tau), \qquad
-q_i^{TS} = \operatorname{softmax}(p_i^{TS}/\tau).
+\hat y_{A \rightarrow B} = D_{B,\text{cross}}(z_A), \quad
+\hat y_{B \rightarrow A} = D_{A,\text{cross}}(z_B).
 $$
 
-The commutative consistency loss is defined as a swapped-assignment consistency term
+For a probe type $p$, the masked probe loss is
 
 $$
-\mathcal L_{\text{swap}} = H(q_i^{ST}, \operatorname{softmax}(p_i^{TS}/\tau)) + H(q_i^{TS}, \operatorname{softmax}(p_i^{ST}/\tau)).
+\mathcal L_p(\hat y, y, m)
+=
+\frac{\sum_j m_j \ell(\hat y_j, y_j)}{\sum_j m_j + \epsilon}.
 $$
 
-This commutative consistency loss enforces semantic agreement in prototype space rather than exact equality of latent vectors. Equivalently, if $\pi$ denotes the prototype-assignment map, then the method encourages
+Probe types are weighted separately:
 
 $$
-\pi(ST(X)) \approx \pi(TS(X)).
+\mathcal L_{\text{probe}}
+=
+\sum_p \alpha_p \mathcal L_p.
 $$
 
-An optional feature-alignment term may be added:
+The pretraining objective combines self and cross prediction:
 
 $$
-\mathcal L_{\text{feat}} = \lVert z_i^{ST} - z_i^{TS} \rVert_2^2.
+\mathcal L
+=
+\mathcal L_{\text{self}}
++ \lambda_{\text{cross}} \mathcal L_{\text{cross}}
++ \lambda_{\text{align}} \lVert z^{ST} - z^{TS} \rVert_2^2.
 $$
 
-The full commutative consistency loss is then
-
-$$
-\mathcal L_{\text{comm}} = \mathcal L_{\text{swap}} + \lambda \mathcal L_{\text{feat}}.
-$$
+By default, `lambda_align` is zero and `lambda_cross` is ramped from zero during warm-up. This keeps the objective centered on structured probe prediction rather than full input reconstruction or direct latent matching.
 
 ### 2.3 Interpretation
 
-The method is not an augmentation-invariance objective in the usual sense. Instead, it is an operator-invariance objective: the representation should be stable under alternative valid decompositions of the same spatiotemporal structure. Prototype consistency provides the quotient space in which this relaxed form of commutativity is enforced. ([arXiv][2])
+The method is not an augmentation-invariance objective in the usual sense. Instead, it is an operator-invariance objective: the representation should preserve enough information to answer a shared set of structured questions under alternative valid decompositions of the same spatiotemporal signal.
+
+The decoder heads provide the prediction machinery associated with each factorization. Cross heads then test whether the embedding from one pathway is usable by the probe decoder associated with the other pathway.
 
 ## 3. Practical implementation and architecture options
 
@@ -149,7 +166,7 @@ The recommended first version is fully convolutional:
 - spatial-then-temporal branch: shared 3D CNN per timepoint followed by a temporal 1D CNN over the sequence of frame embeddings
 - temporal-then-spatial branch: shared temporal 1D CNN per spatial patch followed by a 3D CNN spatial aggregator
 - shared projection head to latent dimension $d$
-- shared prototype matrix $C$
+- self and cross probe decoder heads for the fixed probe ontology
 
 This design is compatible with the repository preprocessing assumptions and with the practical constraint that full voxelwise tokenization is too expensive at the working resolutions above.
 

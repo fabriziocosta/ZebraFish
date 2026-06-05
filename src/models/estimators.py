@@ -19,13 +19,22 @@ from src.models.configs import (
     TimeChannel3DCNNConfig,
     config_as_dict,
 )
+from src.models.probes import ProbeSpec
 from src.models.common import _PreparedData, _SharedMultitaskEstimatorMixin, _expand_per_block
 from src.training.losses import apply_auxiliary_head_losses, commutative_consistency_loss
 from src.training.loop import _collect_output_batches
 from src.training.pretraining import _pretrain_commutative_estimator
 
 
-_HEAD_PREFIXES = ("classifier.", "compound_classifier.", "concentration_classifier.")
+_HEAD_PREFIXES = (
+    "classifier.",
+    "compound_classifier.",
+    "concentration_classifier.",
+    "st_self_probe_decoder.",
+    "ts_self_probe_decoder.",
+    "st_cross_probe_decoder.",
+    "ts_cross_probe_decoder.",
+)
 
 
 def _apply_config(obj, *configs) -> None:
@@ -291,9 +300,23 @@ class CommutativeCNNClassifier(
         patch_size_xy: int = 16,
         embedding_dim: int = 128,
         num_prototypes: int = 64,
+        probe_local_count: int = 32,
+        probe_region_grid: tuple[int, int, int] = (1, 2, 2),
+        probe_time_bins: int = 8,
+        probe_frequency_bins: int = 4,
         consistency_weight: float = 0.5,
         feature_weight: float = 0.1,
         prototype_temperature: float = 0.1,
+        lambda_cross: float = 1.0,
+        lambda_align: float = 0.0,
+        cross_warmup_epochs: int = 5,
+        teacher_student_warmup_epochs: int = 0,
+        probe_mask_probability: float = 0.25,
+        probe_alpha_local: float = 1.0,
+        probe_alpha_region_time: float = 1.0,
+        probe_alpha_derivative: float = 1.0,
+        probe_alpha_frequency: float = 1.0,
+        probe_alpha_correlation: float = 1.0,
         dropout: float = 0.2,
         batch_size: int = 16,
         epochs: int = 20,
@@ -345,9 +368,23 @@ class CommutativeCNNClassifier(
         self.patch_size_xy = patch_size_xy
         self.embedding_dim = embedding_dim
         self.num_prototypes = num_prototypes
+        self.probe_local_count = probe_local_count
+        self.probe_region_grid = probe_region_grid
+        self.probe_time_bins = probe_time_bins
+        self.probe_frequency_bins = probe_frequency_bins
         self.consistency_weight = consistency_weight
         self.feature_weight = feature_weight
         self.prototype_temperature = prototype_temperature
+        self.lambda_cross = lambda_cross
+        self.lambda_align = lambda_align
+        self.cross_warmup_epochs = cross_warmup_epochs
+        self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
+        self.probe_mask_probability = probe_mask_probability
+        self.probe_alpha_local = probe_alpha_local
+        self.probe_alpha_region_time = probe_alpha_region_time
+        self.probe_alpha_derivative = probe_alpha_derivative
+        self.probe_alpha_frequency = probe_alpha_frequency
+        self.probe_alpha_correlation = probe_alpha_correlation
         self.dropout = dropout
         self.batch_size = batch_size
         self.epochs = epochs
@@ -424,6 +461,12 @@ class CommutativeCNNClassifier(
             embedding_dim=self.embedding_dim,
             num_prototypes=self.num_prototypes,
             dropout=self.dropout,
+            probe_spec=ProbeSpec(
+                local_count=int(self.probe_local_count),
+                region_grid=tuple(int(size) for size in self.probe_region_grid),
+                time_bins=int(self.probe_time_bins),
+                frequency_bins=int(self.probe_frequency_bins),
+            ),
             num_compound_classes=0 if self.compound_classes_ is None else len(self.compound_classes_),
             num_concentration_classes=0 if self.concentration_classes_ is None else len(self.concentration_classes_),
         )
@@ -501,9 +544,23 @@ class CommutativeTransformerClassifier(
         ts_spatial_depth: int = 2,
         embedding_dim: int = 96,
         num_prototypes: int = 32,
+        probe_local_count: int = 32,
+        probe_region_grid: tuple[int, int, int] = (1, 2, 2),
+        probe_time_bins: int = 8,
+        probe_frequency_bins: int = 4,
         consistency_weight: float = 0.5,
         feature_weight: float = 0.1,
         prototype_temperature: float = 0.1,
+        lambda_cross: float = 1.0,
+        lambda_align: float = 0.0,
+        cross_warmup_epochs: int = 5,
+        teacher_student_warmup_epochs: int = 0,
+        probe_mask_probability: float = 0.25,
+        probe_alpha_local: float = 1.0,
+        probe_alpha_region_time: float = 1.0,
+        probe_alpha_derivative: float = 1.0,
+        probe_alpha_frequency: float = 1.0,
+        probe_alpha_correlation: float = 1.0,
         batch_size: int = 8,
         epochs: int = 20,
         learning_rate: float = 2e-4,
@@ -542,9 +599,23 @@ class CommutativeTransformerClassifier(
         self.ts_spatial_depth = ts_spatial_depth
         self.embedding_dim = embedding_dim
         self.num_prototypes = num_prototypes
+        self.probe_local_count = probe_local_count
+        self.probe_region_grid = probe_region_grid
+        self.probe_time_bins = probe_time_bins
+        self.probe_frequency_bins = probe_frequency_bins
         self.consistency_weight = consistency_weight
         self.feature_weight = feature_weight
         self.prototype_temperature = prototype_temperature
+        self.lambda_cross = lambda_cross
+        self.lambda_align = lambda_align
+        self.cross_warmup_epochs = cross_warmup_epochs
+        self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
+        self.probe_mask_probability = probe_mask_probability
+        self.probe_alpha_local = probe_alpha_local
+        self.probe_alpha_region_time = probe_alpha_region_time
+        self.probe_alpha_derivative = probe_alpha_derivative
+        self.probe_alpha_frequency = probe_alpha_frequency
+        self.probe_alpha_correlation = probe_alpha_correlation
         self.batch_size = batch_size
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -587,6 +658,12 @@ class CommutativeTransformerClassifier(
             ts_spatial_depth=self.ts_spatial_depth,
             embedding_dim=self.embedding_dim,
             num_prototypes=self.num_prototypes,
+            probe_spec=ProbeSpec(
+                local_count=int(self.probe_local_count),
+                region_grid=tuple(int(size) for size in self.probe_region_grid),
+                time_bins=int(self.probe_time_bins),
+                frequency_bins=int(self.probe_frequency_bins),
+            ),
             num_compound_classes=0 if self.compound_classes_ is None else len(self.compound_classes_),
             num_concentration_classes=0 if self.concentration_classes_ is None else len(self.concentration_classes_),
         )

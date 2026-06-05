@@ -107,6 +107,10 @@ class EstimatorSmokeTests(unittest.TestCase):
         estimator.pretrain(self.X, epochs=1)
         self.assertTrue(hasattr(estimator, "pretrain_history_"))
         self.assertTrue(hasattr(estimator, "pretrained_encoder_state_dict_"))
+        self.assertIn("train_self_probe_loss", estimator.pretrain_history_.columns)
+        self.assertIn("train_cross_probe_loss", estimator.pretrain_history_.columns)
+        self.assertIn("train_self_probe_local_loss", estimator.pretrain_history_.columns)
+        self.assertIn("train_cross_probe_correlation_loss", estimator.pretrain_history_.columns)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             checkpoint_path = estimator.save_pretrained_encoder(Path(tmpdir) / "encoder.pt")
