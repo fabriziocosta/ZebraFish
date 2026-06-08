@@ -28,6 +28,7 @@ optimization_config:
   weight_decay: 0.003
   early_stopping_patience: 14
   early_stopping_min_delta: 0.0
+  early_stopping_start_epoch: 24
   scheduler_patience: 5
   scheduler_factor: 0.85
   scheduler_min_lr: 1.0e-06

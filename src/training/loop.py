@@ -228,6 +228,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
+    early_stopping_start_epoch = max(1, int(getattr(estimator, "early_stopping_start_epoch", None) or 1))
     training_start = time.perf_counter()
     if estimator.verbose:
         _, legend, header = _build_epoch_log_layout(include_val=val_loader is not None)
@@ -307,16 +308,19 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
         else:
             metric = float(row["train_loss"])
 
-        improved = metric < (best_metric - float(estimator.early_stopping_min_delta))
-        if improved:
-            best_metric = metric
-            best_epoch = epoch
-            epochs_without_improvement = 0
-            best_state = deepcopy(estimator.model_.state_dict())
-        else:
-            epochs_without_improvement += 1
+        should_monitor = epoch >= early_stopping_start_epoch
+        improved = False
+        if should_monitor:
+            improved = metric < (best_metric - float(estimator.early_stopping_min_delta))
+            if improved:
+                best_metric = metric
+                best_epoch = epoch
+                epochs_without_improvement = 0
+                best_state = deepcopy(estimator.model_.state_dict())
+            else:
+                epochs_without_improvement += 1
 
-        if scheduler is not None:
+        if scheduler is not None and should_monitor:
             scheduler.step(metric)
 
         history_rows.append(row)
@@ -335,7 +339,11 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
                 )
             )
 
-        if estimator.early_stopping_patience is not None and epochs_without_improvement >= estimator.early_stopping_patience:
+        if (
+            should_monitor
+            and estimator.early_stopping_patience is not None
+            and epochs_without_improvement >= estimator.early_stopping_patience
+        ):
             if estimator.verbose:
                 print(
                     f"early_stop epoch={epoch:03d} best_epoch={best_epoch:03d} "

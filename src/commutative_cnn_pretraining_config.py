@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 import json
 from pathlib import Path
 from typing import Any
@@ -25,7 +25,7 @@ class CommutativeCNNPretrainingConfig:
     rotation_range_degrees: float
     model_config: CommutativeCNNConfig
     optimization_config: OptimizationConfig
-    loss_weight_config: LossWeightConfig
+    loss_weight_config: LossWeightConfig = field(default_factory=LossWeightConfig)
 
 
 _COMMUTATIVE_CNN_TUPLE_FIELDS = {
@@ -132,6 +132,6 @@ def load_commutative_cnn_pretraining_config(
         ),
         optimization_config=OptimizationConfig(**dict(payload["optimization_config"])),
         loss_weight_config=LossWeightConfig(
-            **_keep_dataclass_keys(LossWeightConfig, dict(payload["loss_weight_config"]))
+            **_keep_dataclass_keys(LossWeightConfig, dict(payload.get("loss_weight_config", {})))
         ),
     )

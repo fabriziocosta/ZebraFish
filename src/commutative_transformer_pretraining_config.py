@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 import json
 from pathlib import Path
 from typing import Any
@@ -24,7 +24,7 @@ class CommutativeTransformerPretrainingConfig:
     pretrained_encoder_path: Path
     model_config: CommutativeTransformerConfig
     optimization_config: OptimizationConfig
-    loss_weight_config: LossWeightConfig
+    loss_weight_config: LossWeightConfig = field(default_factory=LossWeightConfig)
 
 
 def _keep_dataclass_keys(config_class, values: dict[str, Any]) -> dict[str, Any]:
@@ -92,6 +92,6 @@ def load_commutative_transformer_pretraining_config(
         model_config=CommutativeTransformerConfig(**_tupleify_config_values(dict(payload["model_config"]))),
         optimization_config=OptimizationConfig(**dict(payload["optimization_config"])),
         loss_weight_config=LossWeightConfig(
-            **_keep_dataclass_keys(LossWeightConfig, dict(payload["loss_weight_config"]))
+            **_keep_dataclass_keys(LossWeightConfig, dict(payload.get("loss_weight_config", {})))
         ),
     )

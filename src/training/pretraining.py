@@ -35,6 +35,17 @@ def _cross_weight_for_epoch(estimator, epoch: int) -> float:
     return target * min(max(ramp_step / ramp_epochs, 0.0), 1.0)
 
 
+def _early_stopping_start_epoch_for_pretraining(estimator) -> int:
+    configured_start = getattr(estimator, "early_stopping_start_epoch", None)
+    if configured_start is not None:
+        return max(1, int(configured_start))
+    if float(getattr(estimator, "lambda_cross", 0.0)) <= 0.0:
+        return 1
+    warmup_epochs = max(0, int(getattr(estimator, "cross_warmup_epochs", 0)))
+    ramp_epochs = max(0, int(getattr(estimator, "cross_ramp_epochs", 0)))
+    return max(1, warmup_epochs + max(1, ramp_epochs // 2))
+
+
 def _compute_commutative_pretraining_loss(
     estimator,
     X: torch.Tensor,
@@ -167,6 +178,7 @@ def _pretrain_commutative_estimator(
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
+    early_stopping_start_epoch = _early_stopping_start_epoch_for_pretraining(estimator)
     training_start = time.perf_counter()
 
     if estimator.verbose:
@@ -239,16 +251,19 @@ def _pretrain_commutative_estimator(
         else:
             metric = float(row["train_loss"])
 
-        improved = metric < (best_metric - float(estimator.early_stopping_min_delta))
-        if improved:
-            best_metric = metric
-            best_epoch = epoch
-            epochs_without_improvement = 0
-            best_state = deepcopy(estimator.model_.state_dict())
-        else:
-            epochs_without_improvement += 1
+        should_monitor = epoch >= early_stopping_start_epoch
+        improved = False
+        if should_monitor:
+            improved = metric < (best_metric - float(estimator.early_stopping_min_delta))
+            if improved:
+                best_metric = metric
+                best_epoch = epoch
+                epochs_without_improvement = 0
+                best_state = deepcopy(estimator.model_.state_dict())
+            else:
+                epochs_without_improvement += 1
 
-        if scheduler is not None:
+        if scheduler is not None and should_monitor:
             scheduler.step(metric)
 
         history_rows.append(row)
@@ -274,7 +289,11 @@ def _pretrain_commutative_estimator(
             else:
                 print(f"{epoch:03d}/{n_epochs:03d} {current_lr:8.2e} {eta:>9} | {train_parts}")
 
-        if estimator.early_stopping_patience is not None and epochs_without_improvement >= estimator.early_stopping_patience:
+        if (
+            should_monitor
+            and estimator.early_stopping_patience is not None
+            and epochs_without_improvement >= estimator.early_stopping_patience
+        ):
             if estimator.verbose:
                 print(f"early_stop epoch={epoch:03d} best_epoch={best_epoch:03d} best_metric={best_metric:.4f}")
             break

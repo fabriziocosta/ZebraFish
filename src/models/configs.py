@@ -11,6 +11,7 @@ class OptimizationConfig:
     weight_decay: float = 1e-4
     early_stopping_patience: int | None = None
     early_stopping_min_delta: float = 0.0
+    early_stopping_start_epoch: int | None = None
     scheduler_patience: int | None = None
     scheduler_factor: float = 0.5
     scheduler_min_lr: float = 1e-6

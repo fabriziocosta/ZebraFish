@@ -181,6 +181,7 @@ class TimeChannel3DCNNClassifier(
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = None,
         early_stopping_min_delta: float = 0.0,
+        early_stopping_start_epoch: int | None = None,
         scheduler_patience: int | None = None,
         scheduler_factor: float = 0.5,
         scheduler_min_lr: float = 1e-6,
@@ -213,6 +214,7 @@ class TimeChannel3DCNNClassifier(
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
+        self.early_stopping_start_epoch = early_stopping_start_epoch
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
         self.scheduler_min_lr = scheduler_min_lr
@@ -340,6 +342,7 @@ class CommutativeCNNClassifier(
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = None,
         early_stopping_min_delta: float = 0.0,
+        early_stopping_start_epoch: int | None = None,
         scheduler_patience: int | None = None,
         scheduler_factor: float = 0.5,
         scheduler_min_lr: float = 1e-6,
@@ -405,6 +408,7 @@ class CommutativeCNNClassifier(
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
+        self.early_stopping_start_epoch = early_stopping_start_epoch
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
         self.scheduler_min_lr = scheduler_min_lr
@@ -569,6 +573,7 @@ class CommutativeTransformerClassifier(
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = 4,
         early_stopping_min_delta: float = 0.0,
+        early_stopping_start_epoch: int | None = None,
         scheduler_patience: int | None = 1,
         scheduler_factor: float = 0.5,
         scheduler_min_lr: float = 1e-6,
@@ -621,6 +626,7 @@ class CommutativeTransformerClassifier(
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
+        self.early_stopping_start_epoch = early_stopping_start_epoch
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
         self.scheduler_min_lr = scheduler_min_lr
