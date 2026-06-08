@@ -55,6 +55,22 @@ def _load_state_payload(path_or_state: str | Path | Mapping[str, torch.Tensor]) 
     return {str(key): value.detach().cpu() for key, value in payload.items()}
 
 
+def _print_model_size(model: nn.Module, label: str) -> None:
+    total_params = sum(parameter.numel() for parameter in model.parameters())
+    trainable_params = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    param_bytes = sum(parameter.numel() * parameter.element_size() for parameter in model.parameters())
+    buffer_bytes = sum(buffer.numel() * buffer.element_size() for buffer in model.buffers())
+    total_mb = (param_bytes + buffer_bytes) / (1024**2)
+    print(
+        f"{label}: parameters={total_params:,} "
+        f"trainable={trainable_params:,} size={total_mb:.2f} MB"
+    )
+
+
+def _model_config_verbose(config) -> bool:
+    return bool(getattr(config, "verbose", False))
+
+
 class _CommutativePretrainingMixin:
     def pretrain(
         self,
@@ -426,7 +442,7 @@ class CommutativeCNNClassifier(
         spatial_agg_pool_stride_xy = (
             self.spatial_agg_pool_kernel_xy if self.spatial_agg_pool_stride_xy is None else self.spatial_agg_pool_stride_xy
         )
-        return _PureCNNDualPathwayNetwork(
+        model = _PureCNNDualPathwayNetwork(
             num_classes=num_classes,
             spatial_conv_channels=self.spatial_conv_channels,
             spatial_kernel_size_z=_expand_per_block(self.spatial_kernel_size_z, n_spatial_blocks, "spatial_kernel_size_z"),
@@ -463,6 +479,9 @@ class CommutativeCNNClassifier(
             num_compound_classes=0 if self.compound_classes_ is None else len(self.compound_classes_),
             num_concentration_classes=0 if self.concentration_classes_ is None else len(self.concentration_classes_),
         )
+        if _model_config_verbose(self.model_config):
+            _print_model_size(model, "Commutative CNN model")
+        return model
 
     def _build_model_from_prepared(self, prepared: _PreparedData) -> nn.Module:
         return self._build_model(num_classes=len(self.classes_))
@@ -619,7 +638,7 @@ class CommutativeTransformerClassifier(
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _CommutativeTransformerNetwork:
-        return _CommutativeTransformerNetwork(
+        model = _CommutativeTransformerNetwork(
             num_classes=num_classes,
             spatial_patch_size_st=self.spatial_patch_size_st,
             spatial_patch_size_ts=self.spatial_patch_size_ts,
@@ -643,6 +662,9 @@ class CommutativeTransformerClassifier(
             num_compound_classes=0 if self.compound_classes_ is None else len(self.compound_classes_),
             num_concentration_classes=0 if self.concentration_classes_ is None else len(self.concentration_classes_),
         )
+        if _model_config_verbose(self.model_config):
+            _print_model_size(model, "Commutative transformer model")
+        return model
 
     def _build_model_from_prepared(self, prepared: _PreparedData) -> nn.Module:
         return self._build_model(num_classes=len(self.classes_))

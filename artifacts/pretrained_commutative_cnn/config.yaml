@@ -79,15 +79,16 @@ model_config:
   probe_time_bins: 8
   probe_frequency_bins: 4
   dropout: 0.1
+  verbose: true
 optimization_config:
   batch_size: 8
-  epochs: 40
-  learning_rate: 0.0008
-  weight_decay: 5.0e-05
-  early_stopping_patience: 6
+  epochs: 60
+  learning_rate: 0.0004
+  weight_decay: 0.0001
+  early_stopping_patience: 12
   early_stopping_min_delta: 0.0001
-  scheduler_patience: 2
-  scheduler_factor: 0.6
+  scheduler_patience: 4
+  scheduler_factor: 0.8
   scheduler_min_lr: 1.0e-06
   validation_split: 0.0
   random_state: 0
@@ -98,12 +99,12 @@ loss_weight_config:
   action_weight: 1.0
   compound_weight: 0.2
   concentration_weight: 0.2
-  lambda_cross: 1.0
+  lambda_cross: 0.35
   lambda_align: 0.0
-  cross_warmup_epochs: 5
-  cross_ramp_epochs: 5
+  cross_warmup_epochs: 12
+  cross_ramp_epochs: 24
   teacher_student_warmup_epochs: 0
-  probe_mask_probability: 0.25
+  probe_mask_probability: 0.5
   probe_alpha_local: 1.0
   probe_alpha_region_time: 1.0
   probe_alpha_derivative: 1.0

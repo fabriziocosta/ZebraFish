@@ -20,15 +20,16 @@ model_config:
   ts_temporal_depth: 1
   ts_spatial_depth: 1
   embedding_dim: 16
+  verbose: true
 optimization_config:
   batch_size: 8
-  epochs: 75
-  learning_rate: 0.0001
+  epochs: 90
+  learning_rate: 7.5e-05
   weight_decay: 0.003
-  early_stopping_patience: 8
+  early_stopping_patience: 14
   early_stopping_min_delta: 0.0
-  scheduler_patience: 3
-  scheduler_factor: 0.7
+  scheduler_patience: 5
+  scheduler_factor: 0.85
   scheduler_min_lr: 1.0e-06
   validation_split: 0.0
   random_state: 0
@@ -39,3 +40,14 @@ loss_weight_config:
   action_weight: 1.0
   compound_weight: 0.2
   concentration_weight: 0.2
+  lambda_cross: 0.35
+  lambda_align: 0.0
+  cross_warmup_epochs: 12
+  cross_ramp_epochs: 24
+  teacher_student_warmup_epochs: 0
+  probe_mask_probability: 0.5
+  probe_alpha_local: 1.0
+  probe_alpha_region_time: 1.0
+  probe_alpha_derivative: 1.0
+  probe_alpha_frequency: 1.0
+  probe_alpha_correlation: 1.0

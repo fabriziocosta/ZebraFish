@@ -86,6 +86,7 @@ class CommutativeCNNConfig:
     probe_time_bins: int = 8
     probe_frequency_bins: int = 4
     dropout: float = 0.2
+    verbose: bool = True
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,7 @@ class CommutativeTransformerConfig:
     probe_region_grid: tuple[int, int, int] = (1, 2, 2)
     probe_time_bins: int = 8
     probe_frequency_bins: int = 4
+    verbose: bool = True
 
 
 def config_as_dict(config) -> dict[str, object]:
