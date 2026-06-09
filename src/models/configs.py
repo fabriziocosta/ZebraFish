@@ -12,9 +12,15 @@ class OptimizationConfig:
     early_stopping_patience: int | None = None
     early_stopping_min_delta: float = 0.0
     early_stopping_start_epoch: int | None = None
+    early_stopping_monitor: str = "loss"
+    early_stopping_smoothing: str = "none"
+    early_stopping_smoothing_window: int = 1
     scheduler_patience: int | None = None
     scheduler_factor: float = 0.5
     scheduler_min_lr: float = 1e-6
+    training_plot_dir: str | None = None
+    training_plot_every_n_epochs: int = 1
+    training_plot_smoothing_window: int = 5
     validation_split: float = 0.2
     random_state: int = 0
     standardize: bool = True

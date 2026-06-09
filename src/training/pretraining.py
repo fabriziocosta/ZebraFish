@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import os
+from pathlib import Path
+import tempfile
 import time
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -44,6 +48,189 @@ def _early_stopping_start_epoch_for_pretraining(estimator) -> int:
     warmup_epochs = max(0, int(getattr(estimator, "cross_warmup_epochs", 0)))
     ramp_epochs = max(0, int(getattr(estimator, "cross_ramp_epochs", 0)))
     return max(1, warmup_epochs + max(1, ramp_epochs // 2))
+
+
+def _monitor_key_for_row(estimator, row: dict[str, float | int]) -> str:
+    monitor = str(getattr(estimator, "early_stopping_monitor", "loss") or "loss")
+    candidates = [monitor]
+    if not monitor.startswith(("train_", "val_")):
+        candidates = [f"val_{monitor}", f"train_{monitor}", monitor]
+    for candidate in candidates:
+        if candidate in row:
+            return candidate
+    if "val_loss" in row:
+        return "val_loss"
+    return "train_loss"
+
+
+def _smoothed_monitor_value(
+    estimator,
+    history_rows: list[dict[str, float | int]],
+    row: dict[str, float | int],
+    monitor_key: str,
+) -> tuple[float, float]:
+    raw_value = float(row[monitor_key])
+    smoothing = str(getattr(estimator, "early_stopping_smoothing", "none") or "none").lower()
+    window = max(1, int(getattr(estimator, "early_stopping_smoothing_window", 1) or 1))
+    if smoothing in {"none", "raw"} or window <= 1:
+        return raw_value, raw_value
+
+    values = [
+        float(history_row[monitor_key])
+        for history_row in history_rows
+        if monitor_key in history_row and np.isfinite(float(history_row[monitor_key]))
+    ]
+    values.append(raw_value)
+    recent = np.asarray(values[-window:], dtype=float)
+    if smoothing == "median":
+        return raw_value, float(np.median(recent))
+    if smoothing == "mean":
+        return raw_value, float(np.mean(recent))
+    raise ValueError(
+        "early_stopping_smoothing must be one of 'none', 'median', or 'mean', "
+        f"got {smoothing!r}"
+    )
+
+
+def _rolling_median(values: pd.Series, window: int) -> pd.Series:
+    return values.rolling(window=max(1, int(window)), min_periods=1).median()
+
+
+def _plot_loss_group(ax, history_df: pd.DataFrame, columns: list[str], *, title: str, smoothing_window: int) -> None:
+    if not columns:
+        ax.set_visible(False)
+        return
+    epochs = history_df["epoch"].to_numpy(dtype=float)
+    plotted_values = []
+    for column in columns:
+        if column not in history_df.columns:
+            continue
+        values = history_df[column].astype(float)
+        if not values.notna().any():
+            continue
+        plotted_values.append(values.to_numpy())
+        (line,) = ax.plot(epochs, values.to_numpy(), linewidth=1.0, alpha=0.22, label=column)
+        smoothed = _rolling_median(values, smoothing_window)
+        ax.plot(epochs, smoothed.to_numpy(), linewidth=2.0, alpha=0.9, color=line.get_color())
+    ax.set_title(title)
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    if plotted_values and np.nanmax(np.concatenate(plotted_values)) > 0:
+        ax.set_yscale("log", nonpositive="clip")
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.35)
+    ax.legend(fontsize="x-small", ncol=2)
+
+
+def _save_pretraining_loss_pdf(history_rows: list[dict[str, float | int]], output_path: Path, *, smoothing_window: int) -> Path:
+    history_df = pd.DataFrame(history_rows)
+    if history_df.empty:
+        return output_path
+
+    import matplotlib.pyplot as plt
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10), squeeze=False)
+    try:
+        summary_columns = [
+            "train_loss",
+            "val_loss",
+            "train_self_probe_loss",
+            "val_self_probe_loss",
+            "train_cross_probe_loss",
+            "val_cross_probe_loss",
+            "monitor_metric",
+        ]
+        _plot_loss_group(
+            axes[0, 0],
+            history_df,
+            [column for column in summary_columns if column in history_df.columns],
+            title="Summary Losses",
+            smoothing_window=smoothing_window,
+        )
+        _plot_loss_group(
+            axes[0, 1],
+            history_df,
+            [f"val_self_probe_{probe_type}_loss" for probe_type in PROBE_TYPES]
+            + [f"val_cross_probe_{probe_type}_loss" for probe_type in PROBE_TYPES],
+            title="Validation Probe Losses",
+            smoothing_window=smoothing_window,
+        )
+        _plot_loss_group(
+            axes[1, 0],
+            history_df,
+            [f"train_self_probe_{probe_type}_loss" for probe_type in PROBE_TYPES]
+            + [f"train_cross_probe_{probe_type}_loss" for probe_type in PROBE_TYPES],
+            title="Training Probe Losses",
+            smoothing_window=smoothing_window,
+        )
+
+        aux_ax = axes[1, 1]
+        epochs = history_df["epoch"].to_numpy(dtype=float)
+        aux_values = []
+        for column in ["train_feature_alignment_loss", "val_feature_alignment_loss"]:
+            if column in history_df.columns:
+                values = history_df[column].astype(float)
+                aux_values.append(values.to_numpy())
+                (line,) = aux_ax.plot(epochs, values.to_numpy(), linewidth=1.0, alpha=0.22, label=column)
+                aux_ax.plot(
+                    epochs,
+                    _rolling_median(values, smoothing_window).to_numpy(),
+                    linewidth=2.0,
+                    color=line.get_color(),
+                )
+        if "train_lambda_cross" in history_df.columns:
+            lambda_ax = aux_ax.twinx()
+            lambda_ax.plot(
+                epochs,
+                history_df["train_lambda_cross"].astype(float).to_numpy(),
+                color="black",
+                linewidth=2.0,
+                linestyle="--",
+                label="train_lambda_cross",
+            )
+            lambda_ax.set_ylabel("lambda_cross")
+            lambda_ax.legend(fontsize="x-small", loc="upper right")
+        aux_ax.set_title("Alignment And Cross Weight")
+        aux_ax.set_xlabel("Epoch")
+        aux_ax.set_ylabel("Loss")
+        if aux_values and np.nanmax(np.concatenate(aux_values)) > 0:
+            aux_ax.set_yscale("log", nonpositive="clip")
+        aux_ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.35)
+        aux_ax.legend(fontsize="x-small", loc="upper left")
+
+        fig.suptitle("Commutative Pretraining Loss Curves")
+        fig.tight_layout(rect=(0, 0, 1, 0.97))
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=output_path.suffix,
+            prefix=f".{output_path.stem}.",
+            dir=output_path.parent,
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+        try:
+            fig.savefig(temp_path, format="pdf", bbox_inches="tight")
+            os.replace(temp_path, output_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+    finally:
+        plt.close(fig)
+    return output_path
+
+
+def _maybe_save_pretraining_loss_pdfs(estimator, history_rows: list[dict[str, float | int]], epoch: int) -> None:
+    plot_dir = getattr(estimator, "training_plot_dir", None)
+    if not plot_dir:
+        return
+    every_n_epochs = max(1, int(getattr(estimator, "training_plot_every_n_epochs", 1) or 1))
+    if int(epoch) % every_n_epochs != 0:
+        return
+    output_dir = Path(str(plot_dir)).expanduser()
+    smoothing_window = max(1, int(getattr(estimator, "training_plot_smoothing_window", 5) or 5))
+    epoch_path = output_dir / f"epoch_{int(epoch):03d}.loss-curves.pdf"
+    latest_path = output_dir / "latest.loss-curves.pdf"
+    _save_pretraining_loss_pdf(history_rows, epoch_path, smoothing_window=smoothing_window)
+    _save_pretraining_loss_pdf(history_rows, latest_path, smoothing_window=smoothing_window)
 
 
 def _compute_commutative_pretraining_loss(
@@ -251,12 +438,18 @@ def _pretrain_commutative_estimator(
         else:
             metric = float(row["train_loss"])
 
+        monitor_key = _monitor_key_for_row(estimator, row)
+        monitor_raw, monitor_metric = _smoothed_monitor_value(estimator, history_rows, row, monitor_key)
+        row["monitor_metric_raw"] = monitor_raw
+        row["monitor_metric"] = monitor_metric
+        row["monitor_key"] = monitor_key
+
         should_monitor = epoch >= early_stopping_start_epoch
         improved = False
         if should_monitor:
-            improved = metric < (best_metric - float(estimator.early_stopping_min_delta))
+            improved = monitor_metric < (best_metric - float(estimator.early_stopping_min_delta))
             if improved:
-                best_metric = metric
+                best_metric = monitor_metric
                 best_epoch = epoch
                 epochs_without_improvement = 0
                 best_state = deepcopy(estimator.model_.state_dict())
@@ -264,9 +457,10 @@ def _pretrain_commutative_estimator(
                 epochs_without_improvement += 1
 
         if scheduler is not None and should_monitor:
-            scheduler.step(metric)
+            scheduler.step(monitor_metric)
 
         history_rows.append(row)
+        _maybe_save_pretraining_loss_pdfs(estimator, history_rows, epoch)
         if estimator.verbose:
             elapsed = time.perf_counter() - training_start
             avg_epoch_seconds = elapsed / epoch

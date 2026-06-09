@@ -92,9 +92,15 @@ optimization_config:
   early_stopping_patience: 12
   early_stopping_min_delta: 0.0001
   early_stopping_start_epoch: 24
+  early_stopping_monitor: loss
+  early_stopping_smoothing: median
+  early_stopping_smoothing_window: 5
   scheduler_patience: 4
   scheduler_factor: 0.8
   scheduler_min_lr: 1.0e-06
+  training_plot_dir: artifacts/pretrained_commutative_cnn/loss_plots
+  training_plot_every_n_epochs: 1
+  training_plot_smoothing_window: 5
   validation_split: 0.0
   random_state: 0
   standardize: true

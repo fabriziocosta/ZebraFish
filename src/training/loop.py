@@ -104,6 +104,48 @@ def _build_epoch_log_layout(*, include_val: bool) -> tuple[list[tuple[str, str, 
     return columns, legend, header
 
 
+def _monitor_key_for_row(estimator, row: dict[str, float | int]) -> str:
+    monitor = str(getattr(estimator, "early_stopping_monitor", "loss") or "loss")
+    candidates = [monitor]
+    if not monitor.startswith(("train_", "val_")):
+        candidates = [f"val_{monitor}", f"train_{monitor}", monitor]
+    for candidate in candidates:
+        if candidate in row:
+            return candidate
+    if "val_loss" in row:
+        return "val_loss"
+    return "train_loss"
+
+
+def _smoothed_monitor_value(
+    estimator,
+    history_rows: list[dict[str, float | int]],
+    row: dict[str, float | int],
+    monitor_key: str,
+) -> tuple[float, float]:
+    raw_value = float(row[monitor_key])
+    smoothing = str(getattr(estimator, "early_stopping_smoothing", "none") or "none").lower()
+    window = max(1, int(getattr(estimator, "early_stopping_smoothing_window", 1) or 1))
+    if smoothing in {"none", "raw"} or window <= 1:
+        return raw_value, raw_value
+
+    values = [
+        float(history_row[monitor_key])
+        for history_row in history_rows
+        if monitor_key in history_row and np.isfinite(float(history_row[monitor_key]))
+    ]
+    values.append(raw_value)
+    recent = np.asarray(values[-window:], dtype=float)
+    if smoothing == "median":
+        return raw_value, float(np.median(recent))
+    if smoothing == "mean":
+        return raw_value, float(np.mean(recent))
+    raise ValueError(
+        "early_stopping_smoothing must be one of 'none', 'median', or 'mean', "
+        f"got {smoothing!r}"
+    )
+
+
 def _format_epoch_log_row(
     row: dict[str, float | int | str],
     *,
@@ -308,12 +350,18 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
         else:
             metric = float(row["train_loss"])
 
+        monitor_key = _monitor_key_for_row(estimator, row)
+        monitor_raw, monitor_metric = _smoothed_monitor_value(estimator, history_rows, row, monitor_key)
+        row["monitor_metric_raw"] = monitor_raw
+        row["monitor_metric"] = monitor_metric
+        row["monitor_key"] = monitor_key
+
         should_monitor = epoch >= early_stopping_start_epoch
         improved = False
         if should_monitor:
-            improved = metric < (best_metric - float(estimator.early_stopping_min_delta))
+            improved = monitor_metric < (best_metric - float(estimator.early_stopping_min_delta))
             if improved:
-                best_metric = metric
+                best_metric = monitor_metric
                 best_epoch = epoch
                 epochs_without_improvement = 0
                 best_state = deepcopy(estimator.model_.state_dict())
@@ -321,7 +369,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
                 epochs_without_improvement += 1
 
         if scheduler is not None and should_monitor:
-            scheduler.step(metric)
+            scheduler.step(monitor_metric)
 
         history_rows.append(row)
         if estimator.verbose:
