@@ -11,9 +11,12 @@ import torch
 from src.ml import (
     LossWeightConfig,
     OptimizationConfig,
+    CommutativeCNNClassifier,
+    CommutativeCNNConfig,
     TimeChannel3DCNNClassifier,
     TimeChannel3DCNNConfig,
     evaluate_multitask_estimator,
+    fit_chunked_water_vs_other_hot_start,
     persist_experiment_artifacts,
     prepare_multitask_experiment_data,
     prepare_water_vs_other_pretraining_data,
@@ -164,6 +167,70 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(set(binary_data.val_metadata["image_condition_dir"]).intersection(excluded_dirs))
         self.assertIn("augmentation_index", binary_data.train_metadata.columns)
         self.assertNotIn("augmentation_index", binary_data.val_metadata.columns)
+
+    def test_fit_chunked_water_vs_other_hot_start_uses_chunks_without_concat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunk_dir = Path(tmpdir)
+            chunk_names = []
+            for chunk_index in range(2):
+                rows = []
+                tensors = []
+                for local_index in range(4):
+                    global_index = chunk_index * 4 + local_index
+                    condition_kind = "control" if global_index % 2 == 0 else "treatment"
+                    rows.append(
+                        {
+                            "condition_kind": condition_kind,
+                            "image_condition_dir": f"/tmp/chunked_{global_index}",
+                        }
+                    )
+                    tensors.append(torch.randn(4, 2, 8, 8))
+                chunk_name = f"chunk_{chunk_index:02d}.pt"
+                torch.save(
+                    {
+                        "tensors": torch.stack(tensors),
+                        "metadata_records": rows,
+                    },
+                    chunk_dir / chunk_name,
+                )
+                chunk_names.append(chunk_name)
+            (chunk_dir / "manifest.json").write_text(json.dumps({"chunks": chunk_names}), encoding="utf-8")
+
+            estimator = CommutativeCNNClassifier(
+                model_config=CommutativeCNNConfig(
+                    spatial_conv_channels=(2,),
+                    temporal_st_channels=(2,),
+                    temporal_ts_channels=(2,),
+                    spatial_agg_channels=(2,),
+                    embedding_dim=4,
+                    patch_size_xy=4,
+                    dropout=0.0,
+                    verbose=False,
+                ),
+                optimization_config=OptimizationConfig(
+                    batch_size=2,
+                    epochs=1,
+                    validation_split=0.0,
+                    verbose=False,
+                    early_stopping_patience=None,
+                    scheduler_patience=None,
+                ),
+            )
+
+            result = fit_chunked_water_vs_other_hot_start(
+                estimator,
+                chunk_dir,
+                holdout_metadata=pd.DataFrame({"image_condition_dir": ["/tmp/chunked_0"]}),
+                validation_fraction=0.25,
+                epochs=1,
+                random_state=0,
+            )
+
+            self.assertEqual(result.excluded_holdout_count, 1)
+            self.assertEqual(result.label_map, {0: "Water", 1: "Other"})
+            self.assertEqual(result.train_count + result.val_count, 7)
+            self.assertTrue(hasattr(estimator, "model_"))
+            self.assertEqual(len(estimator.history_), 1)
 
 
 if __name__ == "__main__":

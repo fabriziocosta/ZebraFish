@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 from IPython.display import display
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
 from sklearn.model_selection import train_test_split
 
 from src.training.data import augment_training_tensors_with_rotations, split_labeled_tensor_dataset_by_instance
+from src.training.loop import _format_eta
 from src.training.reporting import (
     build_multitask_classification_reports,
     display_multitask_reports_and_confusions,
@@ -45,6 +49,15 @@ class BinaryWaterVsOtherPretrainingData:
 
 
 @dataclass
+class ChunkedBinaryWaterVsOtherPretrainingResult:
+    metadata: pd.DataFrame
+    label_map: dict[int, str]
+    excluded_holdout_count: int
+    train_count: int
+    val_count: int
+
+
+@dataclass
 class ExperimentArtifacts:
     output_dir: str
     config_path: str
@@ -59,6 +72,26 @@ class MultitaskEvaluationResult:
     predictions: dict[str, Any]
     probabilities: dict[str, Any]
     reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]]
+
+
+def _repeat_labels_for_rotation_augmentation(
+    labels: torch.Tensor | np.ndarray,
+    *,
+    num_random_rotations: int,
+) -> np.ndarray:
+    values = np.asarray(labels.detach().cpu() if isinstance(labels, torch.Tensor) else labels, dtype=int).reshape(-1)
+    return np.repeat(values, int(num_random_rotations) + 1)
+
+
+def _unlabeled_dataset_chunk_paths(path: str | Path) -> list[Path]:
+    dataset_path = Path(path)
+    if dataset_path.is_dir():
+        manifest_path = dataset_path / "manifest.json"
+        if manifest_path.exists():
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            return [dataset_path / chunk_name for chunk_name in payload["chunks"]]
+        return sorted(dataset_path.glob("*.pt"))
+    return [dataset_path]
 
 
 def _to_json_compatible(value: Any) -> Any:
@@ -97,22 +130,14 @@ def prepare_multitask_experiment_data(
     compound_train = None
     concentration_train = None
     if splits.compound_train_base is not None:
-        _, compound_train, _ = augment_training_tensors_with_rotations(
-            splits.X_train_base,
+        compound_train = _repeat_labels_for_rotation_augmentation(
             splits.compound_train_base,
-            metadata=None,
             num_random_rotations=train_num_random_rotations,
-            rotation_range_degrees=rotation_range_degrees,
-            random_state=random_state,
         )
     if splits.concentration_train_base is not None:
-        _, concentration_train, _ = augment_training_tensors_with_rotations(
-            splits.X_train_base,
+        concentration_train = _repeat_labels_for_rotation_augmentation(
             splits.concentration_train_base,
-            metadata=None,
             num_random_rotations=train_num_random_rotations,
-            rotation_range_degrees=rotation_range_degrees,
-            random_state=random_state,
         )
 
     label_maps = {
@@ -221,6 +246,276 @@ def prepare_water_vs_other_pretraining_data(
         val_metadata=selected_metadata.iloc[val_indices].reset_index(drop=True),
         label_map={0: "Water", 1: "Other"},
         excluded_holdout_count=int(is_holdout.sum()),
+    )
+
+
+def _scan_unlabeled_chunks_for_binary_pretraining(
+    unlabeled_dataset_path: str | Path,
+    *,
+    holdout_metadata: pd.DataFrame,
+) -> tuple[pd.DataFrame, int]:
+    if "image_condition_dir" not in holdout_metadata.columns:
+        raise KeyError("holdout_metadata must contain 'image_condition_dir'")
+    holdout_dirs = set(holdout_metadata["image_condition_dir"].astype(str))
+    rows: list[dict[str, object]] = []
+    excluded_holdout_count = 0
+
+    for chunk_path in _unlabeled_dataset_chunk_paths(unlabeled_dataset_path):
+        payload = torch.load(chunk_path, map_location="cpu")
+        metadata = pd.DataFrame(payload["metadata_records"])
+        if "image_condition_dir" not in metadata.columns:
+            raise KeyError("unlabeled dataset metadata must contain 'image_condition_dir'")
+        if "condition_kind" not in metadata.columns:
+            raise KeyError("unlabeled dataset metadata must contain 'condition_kind'")
+
+        is_holdout = metadata["image_condition_dir"].astype(str).isin(holdout_dirs).to_numpy()
+        excluded_holdout_count += int(is_holdout.sum())
+        kept_metadata = metadata.loc[~is_holdout].reset_index()
+        for _, row in kept_metadata.iterrows():
+            condition_kind = str(row["condition_kind"])
+            rows.append(
+                {
+                    "chunk_path": str(chunk_path),
+                    "local_index": int(row["index"]),
+                    "image_condition_dir": str(row["image_condition_dir"]),
+                    "condition_kind": condition_kind,
+                    "label": 0 if condition_kind == "control" else 1,
+                }
+            )
+        del payload
+
+    metadata_df = pd.DataFrame(rows)
+    if metadata_df.empty:
+        raise ValueError("No unlabeled examples remain after excluding supervised holdout image_condition_dir values")
+    if metadata_df["label"].nunique() < 2:
+        raise ValueError("Water-vs-other pretraining requires both control and treatment examples")
+    return metadata_df, excluded_holdout_count
+
+
+def _assign_chunked_binary_train_val(
+    metadata_df: pd.DataFrame,
+    *,
+    validation_fraction: float,
+    random_state: int,
+) -> pd.DataFrame:
+    indices = np.arange(len(metadata_df))
+    labels = metadata_df["label"].to_numpy(dtype=int)
+    try:
+        train_indices, val_indices = train_test_split(
+            indices,
+            test_size=validation_fraction,
+            random_state=random_state,
+            stratify=labels,
+        )
+    except ValueError:
+        train_indices, val_indices = train_test_split(
+            indices,
+            test_size=validation_fraction,
+            random_state=random_state,
+            stratify=None,
+        )
+    result = metadata_df.copy()
+    result["split"] = "train"
+    result.iloc[val_indices, result.columns.get_loc("split")] = "val"
+    result.iloc[train_indices, result.columns.get_loc("split")] = "train"
+    return result
+
+
+def _compute_chunked_train_standardization(metadata_df: pd.DataFrame) -> tuple[float, float]:
+    total_sum = 0.0
+    total_square_sum = 0.0
+    total_count = 0
+    train_df = metadata_df[metadata_df["split"] == "train"]
+    for chunk_path, chunk_rows in train_df.groupby("chunk_path", sort=False):
+        payload = torch.load(chunk_path, map_location="cpu")
+        tensors = payload["tensors"]
+        indices = torch.tensor(chunk_rows["local_index"].to_numpy(dtype=np.int64), dtype=torch.long)
+        selected = tensors.index_select(0, indices).to(torch.float32)
+        total_sum += float(selected.sum().item())
+        total_square_sum += float(selected.square().sum().item())
+        total_count += int(selected.numel())
+        del selected, payload
+    if total_count == 0:
+        raise ValueError("No training examples selected for chunked binary pretraining")
+    mean = total_sum / total_count
+    variance = max(total_square_sum / total_count - mean**2, 0.0)
+    std = float(np.sqrt(variance))
+    return float(mean), std if std > 0 else 1.0
+
+
+def fit_chunked_water_vs_other_hot_start(
+    estimator,
+    unlabeled_dataset_path: str | Path,
+    *,
+    holdout_metadata: pd.DataFrame,
+    validation_fraction: float,
+    epochs: int,
+    random_state: int = 0,
+) -> ChunkedBinaryWaterVsOtherPretrainingResult:
+    """Fit a binary water-vs-other hot-start from unlabeled chunks without concatenating them."""
+    metadata_df, excluded_holdout_count = _scan_unlabeled_chunks_for_binary_pretraining(
+        unlabeled_dataset_path,
+        holdout_metadata=holdout_metadata,
+    )
+    metadata_df = _assign_chunked_binary_train_val(
+        metadata_df,
+        validation_fraction=validation_fraction,
+        random_state=random_state,
+    )
+    estimator.classes_ = np.array([0, 1])
+    estimator.class_to_index_ = {0: 0, 1: 1}
+    estimator.compound_classes_ = None
+    estimator.compound_class_to_index_ = None
+    estimator.concentration_classes_ = None
+    estimator.concentration_class_to_index_ = None
+    if estimator.standardize:
+        estimator.input_mean_, estimator.input_std_ = _compute_chunked_train_standardization(metadata_df)
+    else:
+        estimator.input_mean_, estimator.input_std_ = 0.0, 1.0
+
+    first_payload = torch.load(metadata_df.iloc[0]["chunk_path"], map_location="cpu")
+    first_tensor = first_payload["tensors"][int(metadata_df.iloc[0]["local_index"])]
+    estimator.input_shape_ = tuple(int(size) for size in first_tensor.shape)
+    del first_payload
+
+    hot_start_state = None
+    if getattr(estimator, "hot_start", False) and hasattr(estimator, "model_"):
+        hot_start_state = {key: value.detach().cpu() for key, value in estimator.model_.state_dict().items()}
+
+    estimator.model_ = estimator._build_model(num_classes=2)
+    estimator.device_ = estimator._device()
+    estimator.model_.to(estimator.device_)
+    if hasattr(estimator, "_load_pretrained_weights_into_model"):
+        estimator._load_pretrained_weights_into_model(estimator.model_)
+    if hot_start_state is not None:
+        from src.training.loop import _load_compatible_state_dict
+
+        loaded_keys, skipped_keys = _load_compatible_state_dict(estimator.model_, hot_start_state)
+        estimator.hot_start_loaded_keys_ = loaded_keys
+        estimator.hot_start_skipped_keys_ = skipped_keys
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(
+        [parameter for parameter in estimator.model_.parameters() if parameter.requires_grad],
+        lr=estimator.learning_rate,
+        weight_decay=estimator.weight_decay,
+    )
+    scheduler = (
+        torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=estimator.scheduler_factor,
+            patience=estimator.scheduler_patience,
+            min_lr=estimator.scheduler_min_lr,
+        )
+        if estimator.scheduler_patience is not None and estimator.scheduler_patience >= 0
+        else None
+    )
+
+    rng = np.random.default_rng(random_state)
+    history_rows: list[dict[str, float | int]] = []
+    best_state = deepcopy(estimator.model_.state_dict())
+    best_metric = float("inf")
+    best_epoch = 0
+    epochs_without_improvement = 0
+    early_stopping_start_epoch = max(1, int(getattr(estimator, "early_stopping_start_epoch", None) or 1))
+    training_start = time.perf_counter()
+
+    for epoch in range(1, int(epochs) + 1):
+        estimator.model_.train()
+        train_loss_sum = 0.0
+        train_count = 0
+        train_chunks = list(metadata_df[metadata_df["split"] == "train"].groupby("chunk_path", sort=False))
+        rng.shuffle(train_chunks)
+        for chunk_path, chunk_rows in train_chunks:
+            payload = torch.load(chunk_path, map_location="cpu")
+            tensors = payload["tensors"]
+            local_indices = chunk_rows["local_index"].to_numpy(dtype=np.int64)
+            labels = chunk_rows["label"].to_numpy(dtype=np.int64)
+            order = rng.permutation(len(local_indices))
+            for start in range(0, len(order), int(estimator.batch_size)):
+                batch_order = order[start : start + int(estimator.batch_size)]
+                index_tensor = torch.tensor(local_indices[batch_order], dtype=torch.long)
+                X_batch = tensors.index_select(0, index_tensor).to(torch.float32)
+                X_batch = ((X_batch - estimator.input_mean_) / estimator.input_std_).to(estimator.device_)
+                y_batch = torch.from_numpy(labels[batch_order]).to(estimator.device_)
+                optimizer.zero_grad(set_to_none=True)
+                outputs = estimator.model_(X_batch)
+                loss, _ = estimator._compute_losses(outputs, y_batch, criterion)
+                loss.backward()
+                optimizer.step()
+                batch_size = int(X_batch.shape[0])
+                train_loss_sum += float(loss.item()) * batch_size
+                train_count += batch_size
+            del payload
+
+        estimator.model_.eval()
+        val_loss_sum = 0.0
+        val_count = 0
+        with torch.no_grad():
+            val_df = metadata_df[metadata_df["split"] == "val"]
+            for chunk_path, chunk_rows in val_df.groupby("chunk_path", sort=False):
+                payload = torch.load(chunk_path, map_location="cpu")
+                tensors = payload["tensors"]
+                local_indices = chunk_rows["local_index"].to_numpy(dtype=np.int64)
+                labels = chunk_rows["label"].to_numpy(dtype=np.int64)
+                for start in range(0, len(local_indices), int(estimator.batch_size)):
+                    batch_indices = local_indices[start : start + int(estimator.batch_size)]
+                    index_tensor = torch.tensor(batch_indices, dtype=torch.long)
+                    X_batch = tensors.index_select(0, index_tensor).to(torch.float32)
+                    X_batch = ((X_batch - estimator.input_mean_) / estimator.input_std_).to(estimator.device_)
+                    y_batch = torch.from_numpy(labels[start : start + int(estimator.batch_size)]).to(estimator.device_)
+                    outputs = estimator.model_(X_batch)
+                    loss, _ = estimator._compute_losses(outputs, y_batch, criterion)
+                    batch_size = int(X_batch.shape[0])
+                    val_loss_sum += float(loss.item()) * batch_size
+                    val_count += batch_size
+                del payload
+
+        row = {
+            "epoch": epoch,
+            "train_loss": train_loss_sum / max(train_count, 1),
+            "train_action_loss": train_loss_sum / max(train_count, 1),
+            "val_loss": val_loss_sum / max(val_count, 1),
+            "val_action_loss": val_loss_sum / max(val_count, 1),
+        }
+        metric = float(row["val_loss"])
+        if epoch >= early_stopping_start_epoch:
+            if metric < best_metric - float(estimator.early_stopping_min_delta):
+                best_metric = metric
+                best_epoch = epoch
+                epochs_without_improvement = 0
+                best_state = deepcopy(estimator.model_.state_dict())
+            else:
+                epochs_without_improvement += 1
+        if scheduler is not None and epoch >= early_stopping_start_epoch:
+            scheduler.step(metric)
+        history_rows.append(row)
+        if estimator.verbose:
+            elapsed = time.perf_counter() - training_start
+            eta = _format_eta((elapsed / epoch) * (int(epochs) - epoch))
+            print(
+                f"{epoch:03d}/{int(epochs):03d} lr={optimizer.param_groups[0]['lr']:.2e} eta={eta} "
+                f"train_loss={row['train_loss']:.4f} val_loss={row['val_loss']:.4f}"
+            )
+        if (
+            epoch >= early_stopping_start_epoch
+            and estimator.early_stopping_patience is not None
+            and epochs_without_improvement >= estimator.early_stopping_patience
+        ):
+            break
+
+    estimator.model_.load_state_dict(best_state)
+    estimator.model_.eval()
+    estimator.history_ = pd.DataFrame(history_rows)
+    estimator.best_epoch_ = int(best_epoch) if best_epoch else int(len(history_rows))
+    estimator.best_metric_ = float(best_metric)
+    return ChunkedBinaryWaterVsOtherPretrainingResult(
+        metadata=metadata_df,
+        label_map={0: "Water", 1: "Other"},
+        excluded_holdout_count=int(excluded_holdout_count),
+        train_count=int((metadata_df["split"] == "train").sum()),
+        val_count=int((metadata_df["split"] == "val").sum()),
     )
 
 

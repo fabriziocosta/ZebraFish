@@ -1,6 +1,6 @@
 unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
-pretrained_encoder_path: artifacts/pretrained_commutative_cnn/encoder_state_v5.pt
-validation_fraction: 0.1
+pretrained_encoder_path: artifacts/pretrained_commutative_cnn/encoder_state_v6.pt
+validation_fraction: 0.15
 train_num_random_rotations: 0
 rotation_range_degrees: 0.0
 model_config:
@@ -82,24 +82,24 @@ model_config:
   - 2
   probe_time_bins: 8
   probe_frequency_bins: 4
-  dropout: 0.1
+  dropout: 0.15
   verbose: true
 optimization_config:
   batch_size: 8
-  epochs: 60
-  learning_rate: 0.0004
-  weight_decay: 0.0001
-  early_stopping_patience: 12
-  early_stopping_min_delta: 0.0001
-  early_stopping_start_epoch: 24
+  epochs: 70
+  learning_rate: 0.0002
+  weight_decay: 0.0003
+  early_stopping_patience: 16
+  early_stopping_min_delta: 5.0e-05
+  early_stopping_start_epoch: 30
   early_stopping_monitor: loss
   early_stopping_smoothing: median
   early_stopping_smoothing_window: 5
-  scheduler_patience: 4
-  scheduler_factor: 0.8
+  scheduler_patience: 5
+  scheduler_factor: 0.75
   scheduler_min_lr: 1.0e-06
   training_plot_dir: artifacts/pretrained_commutative_cnn/loss_plots
-  training_plot_every_n_epochs: 1
+  training_plot_every_n_epochs: 2
   training_plot_smoothing_window: 5
   validation_split: 0.0
   random_state: 0
@@ -110,14 +110,14 @@ loss_weight_config:
   action_weight: 1.0
   compound_weight: 0.2
   concentration_weight: 0.2
-  lambda_cross: 0.35
-  lambda_align: 0.0
-  cross_warmup_epochs: 12
-  cross_ramp_epochs: 24
+  lambda_cross: 0.15
+  lambda_align: 0.02
+  cross_warmup_epochs: 16
+  cross_ramp_epochs: 28
   teacher_student_warmup_epochs: 0
-  probe_mask_probability: 0.5
+  probe_mask_probability: 0.75
   probe_alpha_local: 1.0
   probe_alpha_region_time: 1.0
   probe_alpha_derivative: 1.0
   probe_alpha_frequency: 1.0
-  probe_alpha_correlation: 1.0
+  probe_alpha_correlation: 0.25
