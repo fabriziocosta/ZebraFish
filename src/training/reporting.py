@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import tempfile
 from typing import Iterable, Sequence
 
 from IPython.display import display
@@ -173,15 +176,51 @@ def plot_training_history(
         panel_ax.set_ylabel("Loss")
         panel_ax.set_title(_humanize_loss_name(loss_name))
         panel_ax.grid(True, alpha=0.25)
-        panel_ax.legend()
+        panel_ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.24),
+            ncol=2,
+            fontsize="small",
+            frameon=True,
+        )
 
     if ax is None and len(axes) > len(loss_names):
         for empty_ax in axes[len(loss_names) :]:
             empty_ax.set_visible(False)
 
     fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.tight_layout(rect=(0, 0.04, 1, 0.98))
     return fig, (axes[: len(loss_names)] if ax is None else ax)
+
+
+def save_training_history_pdf(
+    history,
+    output_path: str | Path,
+    *,
+    title: str = "Training history",
+    loess_frac: float | None = None,
+    show_raw: bool = True,
+) -> Path:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, _ = plot_training_history(history, title=title, loess_frac=loess_frac, show_raw=show_raw)
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=output_path.suffix,
+            prefix=f".{output_path.stem}.",
+            dir=output_path.parent,
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+        try:
+            fig.savefig(temp_path, format="pdf", bbox_inches="tight")
+            os.replace(temp_path, output_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+    finally:
+        plt.close(fig)
+    return output_path
 
 
 def build_classification_reports(

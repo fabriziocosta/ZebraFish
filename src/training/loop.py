@@ -207,6 +207,31 @@ def _load_compatible_state_dict(
     return sorted(compatible_state), skipped_keys
 
 
+def _maybe_save_training_history_pdfs(
+    estimator,
+    history_rows: list[dict[str, float | int]],
+    epoch: int,
+) -> None:
+    plot_dir = getattr(estimator, "training_plot_dir", None)
+    if not plot_dir:
+        return
+    every_n_epochs = max(1, int(getattr(estimator, "training_plot_every_n_epochs", 1) or 1))
+    if int(epoch) % every_n_epochs != 0:
+        return
+
+    from pathlib import Path
+
+    from src.training.reporting import save_training_history_pdf
+
+    output_dir = Path(str(plot_dir)).expanduser()
+    title = str(getattr(estimator, "training_plot_title", "Training history"))
+    epoch_path = output_dir / f"epoch_{int(epoch):03d}.loss-curves.pdf"
+    latest_path = output_dir / "latest.loss-curves.pdf"
+    history_df = pd.DataFrame(history_rows)
+    save_training_history_pdf(history_df, epoch_path, title=title)
+    save_training_history_pdf(history_df, latest_path, title=title)
+
+
 def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     hot_start_state = None
     if getattr(estimator, "hot_start", False) and hasattr(estimator, "model_"):
@@ -372,6 +397,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
             scheduler.step(monitor_metric)
 
         history_rows.append(row)
+        _maybe_save_training_history_pdfs(estimator, history_rows, epoch)
         if estimator.verbose:
             elapsed = time.perf_counter() - training_start
             avg_epoch_seconds = elapsed / epoch

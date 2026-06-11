@@ -118,7 +118,13 @@ def _plot_loss_group(ax, history_df: pd.DataFrame, columns: list[str], *, title:
     if plotted_values and np.nanmax(np.concatenate(plotted_values)) > 0:
         ax.set_yscale("log", nonpositive="clip")
     ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.35)
-    ax.legend(fontsize="x-small", ncol=2)
+    ax.legend(
+        fontsize="x-small",
+        ncol=2,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.24),
+        frameon=True,
+    )
 
 
 def _save_pretraining_loss_pdf(history_rows: list[dict[str, float | int]], output_path: Path, *, smoothing_window: int) -> Path:
@@ -189,17 +195,27 @@ def _save_pretraining_loss_pdf(history_rows: list[dict[str, float | int]], outpu
                 label="train_lambda_cross",
             )
             lambda_ax.set_ylabel("lambda_cross")
-            lambda_ax.legend(fontsize="x-small", loc="upper right")
+            lambda_ax.legend(
+                fontsize="x-small",
+                loc="upper center",
+                bbox_to_anchor=(0.75, -0.24),
+                frameon=True,
+            )
         aux_ax.set_title("Alignment And Cross Weight")
         aux_ax.set_xlabel("Epoch")
         aux_ax.set_ylabel("Loss")
         if aux_values and np.nanmax(np.concatenate(aux_values)) > 0:
             aux_ax.set_yscale("log", nonpositive="clip")
         aux_ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.35)
-        aux_ax.legend(fontsize="x-small", loc="upper left")
+        aux_ax.legend(
+            fontsize="x-small",
+            loc="upper center",
+            bbox_to_anchor=(0.25, -0.24),
+            frameon=True,
+        )
 
         fig.suptitle("Commutative Pretraining Loss Curves")
-        fig.tight_layout(rect=(0, 0, 1, 0.97))
+        fig.tight_layout(rect=(0, 0.04, 1, 0.97))
         with tempfile.NamedTemporaryFile(
             mode="wb",
             suffix=output_path.suffix,

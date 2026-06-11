@@ -351,6 +351,7 @@ def fit_chunked_water_vs_other_hot_start(
     validation_fraction: float,
     epochs: int,
     random_state: int = 0,
+    class_weighting: str | None = "balanced",
 ) -> ChunkedBinaryWaterVsOtherPretrainingResult:
     """Fit a binary water-vs-other hot-start from unlabeled chunks without concatenating them."""
     metadata_df, excluded_holdout_count = _scan_unlabeled_chunks_for_binary_pretraining(
@@ -394,7 +395,19 @@ def fit_chunked_water_vs_other_hot_start(
         estimator.hot_start_loaded_keys_ = loaded_keys
         estimator.hot_start_skipped_keys_ = skipped_keys
 
-    criterion = nn.CrossEntropyLoss()
+    train_labels = metadata_df.loc[metadata_df["split"] == "train", "label"].to_numpy(dtype=np.int64)
+    criterion_weight = None
+    if class_weighting == "balanced":
+        class_counts = np.bincount(train_labels, minlength=2).astype(float)
+        class_counts[class_counts == 0] = 1.0
+        criterion_weight = torch.tensor(
+            class_counts.sum() / (len(class_counts) * class_counts),
+            dtype=torch.float32,
+            device=estimator.device_,
+        )
+    elif class_weighting not in {None, "none"}:
+        raise ValueError("class_weighting must be one of 'balanced', 'none', or None")
+    criterion = nn.CrossEntropyLoss(weight=criterion_weight)
     optimizer = torch.optim.Adam(
         [parameter for parameter in estimator.model_.parameters() if parameter.requires_grad],
         lr=estimator.learning_rate,
@@ -425,6 +438,7 @@ def fit_chunked_water_vs_other_hot_start(
         estimator.model_.train()
         train_loss_sum = 0.0
         train_count = 0
+        train_correct = 0
         train_chunks = list(metadata_df[metadata_df["split"] == "train"].groupby("chunk_path", sort=False))
         rng.shuffle(train_chunks)
         for chunk_path, chunk_rows in train_chunks:
@@ -446,12 +460,14 @@ def fit_chunked_water_vs_other_hot_start(
                 optimizer.step()
                 batch_size = int(X_batch.shape[0])
                 train_loss_sum += float(loss.item()) * batch_size
+                train_correct += int((outputs["logits"].argmax(dim=1) == y_batch).sum().item())
                 train_count += batch_size
             del payload
 
         estimator.model_.eval()
         val_loss_sum = 0.0
         val_count = 0
+        val_correct = 0
         with torch.no_grad():
             val_df = metadata_df[metadata_df["split"] == "val"]
             for chunk_path, chunk_rows in val_df.groupby("chunk_path", sort=False):
@@ -469,6 +485,7 @@ def fit_chunked_water_vs_other_hot_start(
                     loss, _ = estimator._compute_losses(outputs, y_batch, criterion)
                     batch_size = int(X_batch.shape[0])
                     val_loss_sum += float(loss.item()) * batch_size
+                    val_correct += int((outputs["logits"].argmax(dim=1) == y_batch).sum().item())
                     val_count += batch_size
                 del payload
 
@@ -476,8 +493,10 @@ def fit_chunked_water_vs_other_hot_start(
             "epoch": epoch,
             "train_loss": train_loss_sum / max(train_count, 1),
             "train_action_loss": train_loss_sum / max(train_count, 1),
+            "train_accuracy": train_correct / max(train_count, 1),
             "val_loss": val_loss_sum / max(val_count, 1),
             "val_action_loss": val_loss_sum / max(val_count, 1),
+            "val_accuracy": val_correct / max(val_count, 1),
         }
         metric = float(row["val_loss"])
         if epoch >= early_stopping_start_epoch:
@@ -491,12 +510,31 @@ def fit_chunked_water_vs_other_hot_start(
         if scheduler is not None and epoch >= early_stopping_start_epoch:
             scheduler.step(metric)
         history_rows.append(row)
+        plot_dir = getattr(estimator, "training_plot_dir", None)
+        every_n_epochs = max(1, int(getattr(estimator, "training_plot_every_n_epochs", 1) or 1))
+        if plot_dir and epoch % every_n_epochs == 0:
+            from src.training.reporting import save_training_history_pdf
+
+            output_dir = Path(str(plot_dir)).expanduser()
+            title = str(getattr(estimator, "training_plot_title", "Training history"))
+            history_df = pd.DataFrame(history_rows)
+            save_training_history_pdf(
+                history_df,
+                output_dir / f"epoch_{epoch:03d}.loss-curves.pdf",
+                title=title,
+            )
+            save_training_history_pdf(
+                history_df,
+                output_dir / "latest.loss-curves.pdf",
+                title=title,
+            )
         if estimator.verbose:
             elapsed = time.perf_counter() - training_start
             eta = _format_eta((elapsed / epoch) * (int(epochs) - epoch))
             print(
                 f"{epoch:03d}/{int(epochs):03d} lr={optimizer.param_groups[0]['lr']:.2e} eta={eta} "
-                f"train_loss={row['train_loss']:.4f} val_loss={row['val_loss']:.4f}"
+                f"train_loss={row['train_loss']:.4f} val_loss={row['val_loss']:.4f} "
+                f"train_acc={row['train_accuracy']:.3f} val_acc={row['val_accuracy']:.3f}"
             )
         if (
             epoch >= early_stopping_start_epoch
