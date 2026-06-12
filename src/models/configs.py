@@ -26,6 +26,7 @@ class OptimizationConfig:
     standardize: bool = True
     device: str | None = None
     verbose: bool = True
+    class_weighting: str | None = None
 
 
 @dataclass(frozen=True)

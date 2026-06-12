@@ -39,6 +39,44 @@ def _format_loss_components_for_log(row: dict[str, float | int], *, prefix: str)
     return " ".join(parts)
 
 
+def _balanced_cross_entropy(labels: torch.Tensor, *, num_classes: int, device: torch.device) -> nn.CrossEntropyLoss:
+    labels_cpu = labels.detach().to("cpu", dtype=torch.long)
+    counts = torch.bincount(labels_cpu, minlength=num_classes).to(torch.float32)
+    weights = torch.zeros(num_classes, dtype=torch.float32)
+    present = counts > 0
+    weights[present] = float(labels_cpu.numel()) / (float(num_classes) * counts[present])
+    return nn.CrossEntropyLoss(weight=weights.to(device))
+
+
+def _build_supervised_criteria(estimator, prepared: _PreparedData) -> nn.Module | dict[str, nn.Module]:
+    class_weighting = getattr(estimator, "class_weighting", None)
+    if class_weighting in {None, "none"}:
+        return nn.CrossEntropyLoss()
+    if class_weighting != "balanced":
+        raise ValueError("class_weighting must be one of 'balanced', 'none', or None")
+
+    criteria: dict[str, nn.Module] = {
+        "action": _balanced_cross_entropy(
+            prepared.y_train,
+            num_classes=len(estimator.classes_),
+            device=estimator.device_,
+        )
+    }
+    if prepared.compound_train is not None and estimator.compound_classes_ is not None:
+        criteria["compound"] = _balanced_cross_entropy(
+            prepared.compound_train,
+            num_classes=len(estimator.compound_classes_),
+            device=estimator.device_,
+        )
+    if prepared.concentration_train is not None and estimator.concentration_classes_ is not None:
+        criteria["concentration"] = _balanced_cross_entropy(
+            prepared.concentration_train,
+            num_classes=len(estimator.concentration_classes_),
+            device=estimator.device_,
+        )
+    return criteria
+
+
 def _loss_acronym(name: str) -> str:
     return {
         "loss": "L",
@@ -272,7 +310,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
             val_tensors.append(prepared.concentration_val)
         val_loader = DataLoader(TensorDataset(*val_tensors), batch_size=estimator.batch_size, shuffle=False)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = _build_supervised_criteria(estimator, prepared)
     optimizer = torch.optim.Adam(
         [parameter for parameter in estimator.model_.parameters() if parameter.requires_grad],
         lr=estimator.learning_rate,

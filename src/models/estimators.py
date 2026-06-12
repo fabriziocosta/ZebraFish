@@ -71,6 +71,15 @@ def _model_config_verbose(config) -> bool:
     return bool(getattr(config, "verbose", False))
 
 
+def _criterion_for(
+    criteria: nn.Module | Mapping[str, nn.Module],
+    target: str,
+) -> nn.Module:
+    if isinstance(criteria, Mapping):
+        return criteria.get(target) or criteria["action"]
+    return criteria
+
+
 class _CommutativePretrainingMixin:
     def pretrain(
         self,
@@ -272,16 +281,18 @@ class TimeChannel3DCNNClassifier(
         self,
         outputs: dict[str, torch.Tensor],
         targets: torch.Tensor,
-        criterion: nn.Module,
+        criterion: nn.Module | Mapping[str, nn.Module],
         compound_targets: torch.Tensor | None = None,
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
-        action_loss = criterion(outputs["logits"], targets)
+        action_loss = _criterion_for(criterion, "action")(outputs["logits"], targets)
         total_loss = float(self.action_weight) * action_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
-            criterion=criterion,
+            criterion=_criterion_for(criterion, "action"),
+            compound_criterion=_criterion_for(criterion, "compound"),
+            concentration_criterion=_criterion_for(criterion, "concentration"),
             compound_targets=compound_targets,
             concentration_targets=concentration_targets,
             compound_weight=self.compound_weight,
@@ -518,17 +529,19 @@ class CommutativeCNNClassifier(
         self,
         outputs: dict[str, torch.Tensor],
         targets: torch.Tensor,
-        criterion: nn.Module,
+        criterion: nn.Module | Mapping[str, nn.Module],
         compound_targets: torch.Tensor | None = None,
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
-        action_loss = criterion(outputs["logits"], targets)
+        action_loss = _criterion_for(criterion, "action")(outputs["logits"], targets)
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
         total_loss = float(self.action_weight) * action_loss + float(self.lambda_align) * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
-            criterion=criterion,
+            criterion=_criterion_for(criterion, "action"),
+            compound_criterion=_criterion_for(criterion, "compound"),
+            concentration_criterion=_criterion_for(criterion, "concentration"),
             compound_targets=compound_targets,
             concentration_targets=concentration_targets,
             compound_weight=self.compound_weight,
@@ -715,17 +728,19 @@ class CommutativeTransformerClassifier(
         self,
         outputs: dict[str, torch.Tensor],
         targets: torch.Tensor,
-        criterion: nn.Module,
+        criterion: nn.Module | Mapping[str, nn.Module],
         compound_targets: torch.Tensor | None = None,
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
-        action_loss = criterion(outputs["logits"], targets)
+        action_loss = _criterion_for(criterion, "action")(outputs["logits"], targets)
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
         total_loss = float(self.action_weight) * action_loss + float(self.lambda_align) * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
-            criterion=criterion,
+            criterion=_criterion_for(criterion, "action"),
+            compound_criterion=_criterion_for(criterion, "compound"),
+            concentration_criterion=_criterion_for(criterion, "concentration"),
             compound_targets=compound_targets,
             concentration_targets=concentration_targets,
             compound_weight=self.compound_weight,
