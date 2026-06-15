@@ -431,7 +431,9 @@ def fit_chunked_water_vs_other_hot_start(
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
-    early_stopping_start_epoch = max(1, int(getattr(estimator, "early_stopping_start_epoch", None) or 1))
+    # The binary hot-start is a separate, short phase. Reusing the later
+    # multiclass warm-up can leave best_state at its initial weights.
+    early_stopping_start_epoch = 1
     training_start = time.perf_counter()
 
     for epoch in range(1, int(epochs) + 1):

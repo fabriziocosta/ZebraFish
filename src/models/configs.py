@@ -32,6 +32,7 @@ class OptimizationConfig:
 @dataclass(frozen=True)
 class LossWeightConfig:
     action_weight: float = 1.0
+    water_vs_other_weight: float = 0.0
     compound_weight: float = 0.2
     concentration_weight: float = 0.2
     lambda_cross: float = 1.0

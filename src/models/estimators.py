@@ -21,7 +21,7 @@ from src.models.configs import (
 )
 from src.models.probes import ProbeSpec
 from src.models.common import _PreparedData, _SharedMultitaskEstimatorMixin, _expand_per_block
-from src.training.losses import apply_auxiliary_head_losses
+from src.training.losses import apply_auxiliary_head_losses, apply_water_vs_other_loss
 from src.training.loop import _collect_output_batches
 from src.training.pretraining import _pretrain_commutative_estimator
 
@@ -186,6 +186,7 @@ class TimeChannel3DCNNClassifier(
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         action_weight: float = 1.0,
+        water_vs_other_weight: float = 0.0,
         compound_weight: float = 0.2,
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = None,
@@ -225,6 +226,7 @@ class TimeChannel3DCNNClassifier(
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.action_weight = action_weight
+        self.water_vs_other_weight = water_vs_other_weight
         self.compound_weight = compound_weight
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
@@ -287,6 +289,13 @@ class TimeChannel3DCNNClassifier(
     ) -> tuple[torch.Tensor, dict[str, float]]:
         action_loss = _criterion_for(criterion, "action")(outputs["logits"], targets)
         total_loss = float(self.action_weight) * action_loss
+        total_loss, water_vs_other_loss_value = apply_water_vs_other_loss(
+            total_loss=total_loss,
+            action_logits=outputs["logits"],
+            action_targets=targets,
+            weight=self.water_vs_other_weight,
+            water_class_index=self.class_to_index_.get(0, 0),
+        )
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
@@ -300,6 +309,7 @@ class TimeChannel3DCNNClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
+            "water_vs_other_loss": water_vs_other_loss_value,
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
         }
@@ -361,6 +371,7 @@ class CommutativeCNNClassifier(
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         action_weight: float = 1.0,
+        water_vs_other_weight: float = 0.0,
         compound_weight: float = 0.2,
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = None,
@@ -433,6 +444,7 @@ class CommutativeCNNClassifier(
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.action_weight = action_weight
+        self.water_vs_other_weight = water_vs_other_weight
         self.compound_weight = compound_weight
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
@@ -536,6 +548,13 @@ class CommutativeCNNClassifier(
         action_loss = _criterion_for(criterion, "action")(outputs["logits"], targets)
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
         total_loss = float(self.action_weight) * action_loss + float(self.lambda_align) * feature_alignment_loss
+        total_loss, water_vs_other_loss_value = apply_water_vs_other_loss(
+            total_loss=total_loss,
+            action_logits=outputs["logits"],
+            action_targets=targets,
+            weight=self.water_vs_other_weight,
+            water_class_index=self.class_to_index_.get(0, 0),
+        )
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
@@ -549,6 +568,7 @@ class CommutativeCNNClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
+            "water_vs_other_loss": water_vs_other_loss_value,
             "feature_alignment_loss": float(feature_alignment_loss.item()),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
@@ -606,6 +626,7 @@ class CommutativeTransformerClassifier(
         learning_rate: float = 2e-4,
         weight_decay: float = 3e-3,
         action_weight: float = 1.0,
+        water_vs_other_weight: float = 0.0,
         compound_weight: float = 0.2,
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = 4,
@@ -665,6 +686,7 @@ class CommutativeTransformerClassifier(
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.action_weight = action_weight
+        self.water_vs_other_weight = water_vs_other_weight
         self.compound_weight = compound_weight
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
@@ -735,6 +757,13 @@ class CommutativeTransformerClassifier(
         action_loss = _criterion_for(criterion, "action")(outputs["logits"], targets)
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
         total_loss = float(self.action_weight) * action_loss + float(self.lambda_align) * feature_alignment_loss
+        total_loss, water_vs_other_loss_value = apply_water_vs_other_loss(
+            total_loss=total_loss,
+            action_logits=outputs["logits"],
+            action_targets=targets,
+            weight=self.water_vs_other_weight,
+            water_class_index=self.class_to_index_.get(0, 0),
+        )
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
@@ -748,6 +777,7 @@ class CommutativeTransformerClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
+            "water_vs_other_loss": water_vs_other_loss_value,
             "feature_alignment_loss": float(feature_alignment_loss.item()),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,

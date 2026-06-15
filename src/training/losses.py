@@ -1,7 +1,41 @@
 from __future__ import annotations
 
 import torch
+import torch.nn.functional as F
 from torch import nn
+
+
+def apply_water_vs_other_loss(
+    *,
+    total_loss: torch.Tensor,
+    action_logits: torch.Tensor,
+    action_targets: torch.Tensor,
+    weight: float,
+    water_class_index: int = 0,
+) -> tuple[torch.Tensor, float]:
+    """Retain the water boundary by collapsing multiclass logits to water vs other."""
+    if float(weight) <= 0.0 or action_logits.shape[1] <= 2:
+        return total_loss, 0.0
+    if not 0 <= int(water_class_index) < action_logits.shape[1]:
+        raise ValueError(
+            f"water_class_index must be in [0, {action_logits.shape[1]}), "
+            f"got {water_class_index}"
+        )
+
+    other_indices = [
+        index for index in range(action_logits.shape[1])
+        if index != int(water_class_index)
+    ]
+    binary_logits = torch.stack(
+        [
+            action_logits[:, int(water_class_index)],
+            torch.logsumexp(action_logits[:, other_indices], dim=1),
+        ],
+        dim=1,
+    )
+    binary_targets = action_targets.ne(int(water_class_index)).to(torch.long)
+    binary_loss = F.cross_entropy(binary_logits, binary_targets)
+    return total_loss + float(weight) * binary_loss, float(binary_loss.item())
 
 
 def apply_auxiliary_head_losses(

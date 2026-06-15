@@ -212,6 +212,7 @@ class WorkflowTests(unittest.TestCase):
                     epochs=1,
                     validation_split=0.0,
                     verbose=False,
+                    early_stopping_start_epoch=8,
                     early_stopping_patience=None,
                     scheduler_patience=None,
                 ),
@@ -231,6 +232,8 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result.train_count + result.val_count, 7)
             self.assertTrue(hasattr(estimator, "model_"))
             self.assertEqual(len(estimator.history_), 1)
+            self.assertEqual(estimator.best_epoch_, 1)
+            self.assertLess(estimator.best_metric_, float("inf"))
 
 
 if __name__ == "__main__":
