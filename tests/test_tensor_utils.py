@@ -743,7 +743,7 @@ class CacheRetentionTests(unittest.TestCase):
             embedding_df,
             marker_column=None,
         )
-        legend = ax.get_legend()
+        legend = fig.legends[0]
         colors = {
             text.get_text().split(": ", 1)[1]: to_hex(handle.get_markerfacecolor()).upper()
             for text, handle in zip(legend.get_texts(), legend.legend_handles)
@@ -752,6 +752,53 @@ class CacheRetentionTests(unittest.TestCase):
         self.assertEqual(colors["NMDAR_Activation"], "#59A14F")
         self.assertEqual(colors["AChE_Inhibitor_Reversible"], "#B07AA1")
         self.assertNotEqual(colors["NMDAR_Activation"], colors["AChE_Inhibitor_Reversible"])
+        fig.clf()
+
+    def test_plot_tensor_embedding_2d_uses_split_edge_colors(self) -> None:
+        embedding_df = pd.DataFrame(
+            {
+                "embed_x": [0.0, 1.0],
+                "embed_y": [0.0, 1.0],
+                "label": [0, 1],
+                "label_name": ["Water", "GABAAR_Antagonist"],
+                "method": ["umap", "umap"],
+                "dataset_split": ["train", "holdout"],
+            }
+        )
+
+        fig, ax = tensor_utils.plot_tensor_embedding_2d(
+            embedding_df,
+            marker_column=None,
+            edge_color_column="dataset_split",
+            edge_color_map={"train": "white", "holdout": "black"},
+        )
+
+        edge_colors = [to_hex(collection.get_edgecolors()[0]).upper() for collection in ax.collections]
+        self.assertIn("#FFFFFF", edge_colors)
+        self.assertIn("#000000", edge_colors)
+        fig.clf()
+
+    def test_plot_tensor_embedding_2d_can_hide_control_points_after_projection(self) -> None:
+        embedding_df = pd.DataFrame(
+            {
+                "embed_x": [0.0, 1.0, 2.0],
+                "embed_y": [0.0, 1.0, 2.0],
+                "label": [0, 1, 2],
+                "label_name": ["Water", "GABAAR_Antagonist", "NMDAR_Activation"],
+                "method": ["umap", "umap", "umap"],
+            }
+        )
+
+        fig, ax = tensor_utils.plot_tensor_embedding_2d(
+            embedding_df,
+            marker_column=None,
+            display_control=False,
+        )
+
+        displayed_points = sum(len(collection.get_offsets()) for collection in ax.collections)
+        legend_labels = [text.get_text() for text in fig.legends[0].get_texts()]
+        self.assertEqual(displayed_points, 2)
+        self.assertNotIn("0: Water", legend_labels)
         fig.clf()
 
 

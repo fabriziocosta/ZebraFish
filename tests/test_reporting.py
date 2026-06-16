@@ -9,7 +9,7 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
-from src.training.reporting import plot_embedding_projection, plot_training_history
+from src.training.reporting import plot_confusion_matrices, plot_embedding_projection, plot_training_history
 
 
 class PlotTrainingHistoryTests(unittest.TestCase):
@@ -55,6 +55,21 @@ class PlotTrainingHistoryTests(unittest.TestCase):
         self.assertEqual(legend._loc, 6)
         anchor_box = legend.get_bbox_to_anchor()._bbox
         self.assertGreater(anchor_box.x0, 1.0)
+        fig.clf()
+
+    def test_plot_confusion_matrices_suppresses_zero_cell_text(self) -> None:
+        fig, axes, _, _ = plot_confusion_matrices(
+            [0, 0, 1],
+            [0, 1, 1],
+            class_labels=[0, 1],
+            label_map={0: "A", 1: "B"},
+        )
+
+        count_texts = [text.get_text() for text in axes[0].texts]
+        fraction_texts = [text.get_text() for text in axes[1].texts]
+        self.assertEqual(count_texts, ["1", "1", "1"])
+        self.assertEqual(fraction_texts, ["0.50", "0.50", "1.00"])
+        self.assertEqual(axes[1].texts[-1].get_color(), "white")
         fig.clf()
 
 

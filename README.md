@@ -152,6 +152,12 @@ Current estimator behavior:
 - `transform(...)` returns the shared embedding
 - commutative models also expose `transform_branches(...)`
 
+For multiclass action fine-tuning, all supervised backbones include a dedicated
+binary water-vs-drug head when `LossWeightConfig.water_vs_other_weight > 0`.
+The multiclass action head is then trained conditionally on non-water examples,
+and `predict_proba(...)` composes the final action distribution as
+`P(water)` and `P(drug) * P(action | drug)`.
+
 Commutative encoder pretraining uses a fixed masked-probe ontology rather than full-volume reconstruction. The probe types are:
 
 - `local`
@@ -169,6 +175,7 @@ The main training invariants are:
 - split grouping uses `original_instance_id` to avoid leakage across derived views
 - random rotation augmentation is applied only to the training subset
 - water/control examples remain mechanism label `0` and are collapsed to dedicated control classes for the auxiliary heads
+- holdout action reports are shown both with controls and with controls excluded; the control-excluded report renormalizes probabilities over the surviving action classes
 
 Repo-local caches are now retention-managed rather than unbounded:
 

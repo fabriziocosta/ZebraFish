@@ -72,6 +72,10 @@ class MultitaskEvaluationResult:
     predictions: dict[str, Any]
     probabilities: dict[str, Any]
     reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]]
+    reports_excluding_control: dict[str, tuple[pd.DataFrame, pd.DataFrame]] | None = None
+    predictions_excluding_control: dict[str, Any] | None = None
+    probabilities_excluding_control: dict[str, Any] | None = None
+    y_true_excluding_control: dict[str, Any] | None = None
 
 
 def _repeat_labels_for_rotation_augmentation(
@@ -580,6 +584,84 @@ def evaluate_multitask_estimator(
     )
 
 
+def _renormalize_probabilities_without_control(
+    probabilities: np.ndarray,
+    *,
+    class_labels: list[int],
+    keep_class_labels: list[int],
+) -> np.ndarray:
+    class_to_index = {int(label): index for index, label in enumerate(class_labels)}
+    keep_indices = [class_to_index[int(label)] for label in keep_class_labels]
+    kept_probabilities = np.asarray(probabilities, dtype=float)[:, keep_indices]
+    row_sums = kept_probabilities.sum(axis=1, keepdims=True)
+    return np.divide(
+        kept_probabilities,
+        row_sums,
+        out=np.full_like(kept_probabilities, 1.0 / max(len(keep_indices), 1)),
+        where=row_sums > 0,
+    )
+
+
+def build_reports_excluding_control(
+    *,
+    y_true: dict[str, Any],
+    probabilities: dict[str, Any],
+    class_labels: dict[str, list[int]],
+    label_maps: dict[str, dict[int, str]],
+    control_label: int = 0,
+) -> tuple[
+    dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]:
+    filtered_true: dict[str, Any] = {}
+    filtered_pred: dict[str, Any] = {}
+    filtered_probabilities: dict[str, Any] = {}
+    filtered_class_labels: dict[str, list[int]] = {}
+    filtered_label_maps: dict[str, dict[int, str]] = {}
+
+    for target, target_y_true in y_true.items():
+        target_class_labels = [int(label) for label in class_labels.get(target, [])]
+        if control_label not in target_class_labels or target not in probabilities:
+            continue
+
+        keep_class_labels = [label for label in target_class_labels if label != int(control_label)]
+        if not keep_class_labels:
+            continue
+
+        y_true_arr = np.asarray(target_y_true, dtype=int)
+        row_mask = y_true_arr != int(control_label)
+        if not row_mask.any():
+            continue
+
+        renormalized_proba = _renormalize_probabilities_without_control(
+            np.asarray(probabilities[target])[row_mask],
+            class_labels=target_class_labels,
+            keep_class_labels=keep_class_labels,
+        )
+        predicted_indices = renormalized_proba.argmax(axis=1)
+        predicted_labels = np.asarray([keep_class_labels[index] for index in predicted_indices], dtype=int)
+
+        filtered_true[target] = y_true_arr[row_mask]
+        filtered_pred[target] = predicted_labels
+        filtered_probabilities[target] = renormalized_proba
+        filtered_class_labels[target] = keep_class_labels
+        filtered_label_maps[target] = {
+            label: label_maps.get(target, {}).get(label, str(label))
+            for label in keep_class_labels
+        }
+
+    reports = build_multitask_classification_reports(
+        filtered_true,
+        filtered_pred,
+        y_proba=filtered_probabilities,
+        label_maps=filtered_label_maps,
+        class_labels=filtered_class_labels,
+    )
+    return reports, filtered_true, filtered_pred, filtered_probabilities
+
+
 def fit_estimator_on_experiment(estimator, experiment: MultitaskExperimentData):
     splits = experiment.splits
     estimator.fit(
@@ -634,11 +716,43 @@ def display_holdout_evaluation(
         y_pred=predictions,
         class_labels=experiment.class_labels,
         label_maps=experiment.label_maps,
+        title_suffix=" (including control)",
+    )
+    (
+        reports_excluding_control,
+        y_true_excluding_control,
+        predictions_excluding_control,
+        probabilities_excluding_control,
+    ) = build_reports_excluding_control(
+        y_true=experiment.y_true_holdout,
+        probabilities=probabilities,
+        class_labels=experiment.class_labels,
+        label_maps=experiment.label_maps,
+    )
+    display_multitask_reports_and_confusions(
+        reports_excluding_control,
+        y_true=y_true_excluding_control,
+        y_pred=predictions_excluding_control,
+        class_labels={
+            target: [label for label in labels if int(label) != 0]
+            for target, labels in experiment.class_labels.items()
+            if target in reports_excluding_control
+        },
+        label_maps={
+            target: {label: name for label, name in label_map.items() if int(label) != 0}
+            for target, label_map in experiment.label_maps.items()
+            if target in reports_excluding_control
+        },
+        title_suffix=" (excluding control; probabilities renormalized)",
     )
     return MultitaskEvaluationResult(
         predictions=predictions,
         probabilities=probabilities,
         reports=reports,
+        reports_excluding_control=reports_excluding_control,
+        predictions_excluding_control=predictions_excluding_control,
+        probabilities_excluding_control=probabilities_excluding_control,
+        y_true_excluding_control=y_true_excluding_control,
     )
 
 

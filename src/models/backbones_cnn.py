@@ -63,6 +63,7 @@ class _TimeChannel3DCNN(nn.Module):
             nn.Dropout(p=dropout),
         )
         self.classifier = nn.Linear(embedding_dim, num_classes)
+        self.water_classifier = nn.Linear(embedding_dim, 2)
         self.compound_classifier = nn.Linear(embedding_dim, num_compound_classes) if num_compound_classes > 0 else None
         self.concentration_classifier = (
             nn.Linear(embedding_dim, num_concentration_classes) if num_concentration_classes > 0 else None
@@ -75,7 +76,11 @@ class _TimeChannel3DCNN(nn.Module):
 
     def forward(self, X: torch.Tensor) -> dict[str, torch.Tensor]:
         embedding = self.forward_features(X)
-        outputs = {"embedding": embedding, "logits": self.classifier(embedding)}
+        outputs = {
+            "embedding": embedding,
+            "logits": self.classifier(embedding),
+            "water_logits": self.water_classifier(embedding),
+        }
         if self.compound_classifier is not None:
             outputs["compound_logits"] = self.compound_classifier(embedding)
         if self.concentration_classifier is not None:
@@ -269,6 +274,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
             dropout=dropout,
         )
         self.classifier = nn.Linear(embedding_dim, num_classes)
+        self.water_classifier = nn.Linear(embedding_dim, 2)
         self.compound_classifier = nn.Linear(embedding_dim, num_compound_classes) if num_compound_classes > 0 else None
         self.concentration_classifier = (
             nn.Linear(embedding_dim, num_concentration_classes) if num_concentration_classes > 0 else None
@@ -340,6 +346,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
     def forward(self, X: torch.Tensor) -> dict[str, torch.Tensor]:
         outputs = self.forward_features(X)
         outputs["logits"] = self.classifier(outputs["embedding"])
+        outputs["water_logits"] = self.water_classifier(outputs["embedding"])
         if self.compound_classifier is not None:
             outputs["compound_logits"] = self.compound_classifier(outputs["embedding"])
         if self.concentration_classifier is not None:

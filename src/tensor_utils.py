@@ -1902,6 +1902,10 @@ def plot_tensor_embedding_2d(
     title: str | None = None,
     ax=None,
     marker_column: str | None = "compound",
+    display_control: bool = True,
+    edge_color_column: str | None = None,
+    edge_color_map: dict[object, str] | None = None,
+    default_edge_color: str = "white",
     show_svm_background: bool = False,
     svm_background_alpha: float = 0.14,
     svm_background_resolution: int = 300,
@@ -1937,6 +1941,10 @@ def plot_tensor_embedding_2d(
         fig = ax.figure
 
     unique_labels = embedding_df[["label", "label_name"]].drop_duplicates().sort_values("label")
+    display_df = embedding_df if display_control else embedding_df[embedding_df["label"] != 0]
+    display_labels = unique_labels if display_control else unique_labels[unique_labels["label"] != 0]
+    if display_df.empty:
+        raise ValueError("No embedding rows remain to display")
     color_map = {
         int(row.label): class_color_overrides.get(
             str(row.label_name), class_palette[color_index % len(class_palette)]
@@ -1980,9 +1988,9 @@ def plot_tensor_embedding_2d(
         )
 
     marker_map = None
-    if marker_column is not None and marker_column in embedding_df.columns:
+    if marker_column is not None and marker_column in display_df.columns:
         unique_markers = (
-            embedding_df[[marker_column]]
+            display_df[[marker_column]]
             .drop_duplicates()
             .sort_values(marker_column)
             .reset_index(drop=True)[marker_column]
@@ -1993,9 +2001,37 @@ def plot_tensor_embedding_2d(
             for marker_index, marker_value in enumerate(unique_markers)
         }
 
+    edge_map = None
+    if edge_color_column is not None and edge_color_column in display_df.columns:
+        if edge_color_map is None:
+            unique_edge_values = (
+                display_df[[edge_color_column]]
+                .drop_duplicates()
+                .sort_values(edge_color_column)
+                .reset_index(drop=True)[edge_color_column]
+                .tolist()
+            )
+            edge_palette = ["white", "black", "#7F7F7F", "#D62728", "#9467BD"]
+            edge_map = {
+                edge_value: edge_palette[edge_index % len(edge_palette)]
+                for edge_index, edge_value in enumerate(unique_edge_values)
+            }
+        else:
+            edge_map = dict(edge_color_map)
+
+    def edge_color_for(row) -> str:
+        if edge_map is None:
+            return default_edge_color
+        return edge_map.get(getattr(row, edge_color_column), default_edge_color)
+
     if marker_map is None:
-        for row in unique_labels.itertuples(index=False):
-            class_df = embedding_df[embedding_df["label"] == row.label]
+        for row in display_labels.itertuples(index=False):
+            class_df = display_df[display_df["label"] == row.label]
+            edgecolors = (
+                [edge_color_for(point_row) for point_row in class_df.itertuples(index=False)]
+                if edge_map is not None
+                else default_edge_color
+            )
             ax.scatter(
                 class_df["embed_x"],
                 class_df["embed_y"],
@@ -2003,12 +2039,12 @@ def plot_tensor_embedding_2d(
                 alpha=0.9,
                 color=color_map[int(row.label)],
                 marker="o",
-                edgecolors="white",
+                edgecolors=edgecolors,
                 linewidths=0.7,
                 zorder=2,
             )
     else:
-        for row in embedding_df.itertuples(index=False):
+        for row in display_df.itertuples(index=False):
             ax.scatter(
                 row.embed_x,
                 row.embed_y,
@@ -2016,7 +2052,7 @@ def plot_tensor_embedding_2d(
                 alpha=0.92,
                 color=color_map[int(row.label)],
                 marker=marker_map[getattr(row, marker_column)],
-                edgecolors="white",
+                edgecolors=edge_color_for(row),
                 linewidths=0.7,
                 zorder=2,
             )
@@ -2043,21 +2079,49 @@ def plot_tensor_embedding_2d(
             markersize=11,
             label=f"{row.label}: {row.label_name}",
         )
-        for row in unique_labels.itertuples(index=False)
+        for row in display_labels.itertuples(index=False)
     ]
     legend_x = 1.01
     legend_width = 0.33
 
-    class_legend = ax.legend(
+    class_legend = fig.legend(
         handles=class_handles,
         title="Class",
         loc="upper left",
-        bbox_to_anchor=(legend_x, 1.0, legend_width, 0.0),
+        bbox_to_anchor=(0.70, 0.96, 0.28, 0.0),
+        bbox_transform=fig.transFigure,
         borderaxespad=0.0,
         frameon=True,
         mode="expand",
     )
-    ax.add_artist(class_legend)
+
+    if edge_map is not None:
+        edge_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="none",
+                markerfacecolor="#BDBDBD",
+                markeredgecolor=edge_color,
+                markeredgewidth=1.4,
+                linestyle="None",
+                markersize=10,
+                label=str(edge_value),
+            )
+            for edge_value, edge_color in edge_map.items()
+        ]
+        edge_legend = fig.legend(
+            handles=edge_handles,
+            title=edge_color_column.replace("_", " ").title(),
+            loc="upper left",
+            bbox_to_anchor=(0.70, 0.56, 0.28, 0.0),
+            bbox_transform=fig.transFigure,
+            borderaxespad=0.0,
+            frameon=True,
+            ncol=1,
+            mode="expand",
+        )
 
     if marker_map is not None:
         marker_handles = [
@@ -2073,11 +2137,12 @@ def plot_tensor_embedding_2d(
             )
             for marker_value, marker_shape in marker_map.items()
         ]
-        ax.legend(
+        marker_legend = fig.legend(
             handles=marker_handles,
             title=marker_column.replace("_", " ").title(),
             loc="upper left",
-            bbox_to_anchor=(legend_x, 0.46, legend_width, 0.0),
+            bbox_to_anchor=(0.70, 0.36, 0.28, 0.0),
+            bbox_transform=fig.transFigure,
             borderaxespad=0.0,
             frameon=True,
             ncol=1,

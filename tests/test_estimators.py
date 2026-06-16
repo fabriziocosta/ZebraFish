@@ -20,6 +20,7 @@ from src.ml import (
 
 COMMUTATIVE_HEAD_PREFIXES = (
     "classifier.",
+    "water_classifier.",
     "compound_classifier.",
     "concentration_classifier.",
     "st_self_probe_decoder.",
@@ -75,6 +76,45 @@ class EstimatorSmokeTests(unittest.TestCase):
         self.assertIsInstance(params["optimization_config"], OptimizationConfig)
         self.assertIsInstance(params["model_config"], TimeChannel3DCNNConfig)
         self._run_estimator(estimator)
+
+    def test_hierarchical_water_head_composes_action_probabilities(self) -> None:
+        estimator = TimeChannel3DCNNClassifier(
+            model_config=TimeChannel3DCNNConfig(conv_channels=(4,), embedding_dim=6),
+            optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+            loss_weight_config=LossWeightConfig(water_vs_other_weight=1.0),
+        )
+        estimator.fit(self.X, np.array([0, 1, 2, 0, 1, 2, 0, 1]))
+
+        probs = estimator.predict_proba(self.X)["action"]
+
+        self.assertEqual(probs.shape, (len(self.X), 3))
+        self.assertTrue(np.allclose(probs.sum(axis=1), 1.0))
+        self.assertTrue(np.all((0.0 <= probs) & (probs <= 1.0)))
+
+    def test_transformer_hierarchical_water_head_composes_action_probabilities(self) -> None:
+        estimator = CommutativeTransformerClassifier(
+            model_config=CommutativeTransformerConfig(
+                spatial_patch_size_st=(1, 8, 8),
+                spatial_patch_size_ts=(1, 8, 8),
+                temporal_patch_size_ts=2,
+                embed_dim=16,
+                num_heads=4,
+                st_spatial_depth=1,
+                st_temporal_depth=1,
+                ts_temporal_depth=1,
+                ts_spatial_depth=1,
+                embedding_dim=8,
+            ),
+            optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+            loss_weight_config=LossWeightConfig(water_vs_other_weight=1.0),
+        )
+        estimator.fit(self.X, np.array([0, 1, 2, 0, 1, 2, 0, 1]))
+
+        probs = estimator.predict_proba(self.X)["action"]
+
+        self.assertEqual(probs.shape, (len(self.X), 3))
+        self.assertTrue(np.allclose(probs.sum(axis=1), 1.0))
+        self.assertTrue(np.all((0.0 <= probs) & (probs <= 1.0)))
 
     def test_commutative_cnn_estimator_with_configs(self) -> None:
         estimator = CommutativeCNNClassifier(

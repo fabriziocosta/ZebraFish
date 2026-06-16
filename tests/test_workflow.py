@@ -21,6 +21,7 @@ from src.ml import (
     prepare_multitask_experiment_data,
     prepare_water_vs_other_pretraining_data,
 )
+from src.training.workflow import build_reports_excluding_control
 
 
 class WorkflowTests(unittest.TestCase):
@@ -120,6 +121,27 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNotNone(experiment.train_metadata)
         assert experiment.train_metadata is not None
         self.assertIn("original_instance_id", experiment.train_metadata.columns)
+
+    def test_build_reports_excluding_control_renormalizes_probabilities(self) -> None:
+        reports, y_true, y_pred, probabilities = build_reports_excluding_control(
+            y_true={"action": [0, 1, 2, 1]},
+            probabilities={
+                "action": [
+                    [0.90, 0.05, 0.05],
+                    [0.60, 0.30, 0.10],
+                    [0.10, 0.20, 0.70],
+                    [0.05, 0.80, 0.15],
+                ]
+            },
+            class_labels={"action": [0, 1, 2]},
+            label_maps={"action": {0: "Water", 1: "A", 2: "B"}},
+        )
+
+        self.assertEqual(y_true["action"].tolist(), [1, 2, 1])
+        self.assertEqual(y_pred["action"].tolist(), [1, 2, 1])
+        self.assertTrue(torch.allclose(torch.as_tensor(probabilities["action"].sum(axis=1)), torch.ones(3, dtype=torch.float64)))
+        self.assertNotIn("Water", reports["action"][0].index)
+        self.assertEqual(float(reports["action"][1].loc["accuracy", "value"]), 1.0)
 
     def test_prepare_water_vs_other_pretraining_data_excludes_holdout_and_augments_train_only(self) -> None:
         rows = []

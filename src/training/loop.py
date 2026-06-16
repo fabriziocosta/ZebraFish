@@ -496,7 +496,24 @@ def _collect_output_batches(estimator, X: torch.Tensor | np.ndarray) -> dict[str
 
 def _predict_proba_from_estimator(estimator, X: torch.Tensor | np.ndarray) -> dict[str, np.ndarray]:
     outputs = _collect_output_batches(estimator, X)
-    result = {"action": torch.softmax(torch.from_numpy(outputs["logits"]), dim=1).numpy()}
+    action_logits = torch.from_numpy(outputs["logits"])
+    use_hierarchical_action = (
+        "water_logits" in outputs
+        and float(getattr(estimator, "water_vs_other_weight", 0.0)) > 0.0
+        and action_logits.shape[1] > 2
+        and 0 in getattr(estimator, "class_to_index_", {})
+    )
+    if use_hierarchical_action:
+        water_index = int(estimator.class_to_index_[0])
+        drug_indices = [index for index in range(action_logits.shape[1]) if index != water_index]
+        water_proba = torch.softmax(torch.from_numpy(outputs["water_logits"]), dim=1)
+        drug_action_proba = torch.softmax(action_logits[:, drug_indices], dim=1)
+        action_proba = torch.zeros_like(action_logits)
+        action_proba[:, water_index] = water_proba[:, 0]
+        action_proba[:, drug_indices] = water_proba[:, 1:2] * drug_action_proba
+        result = {"action": action_proba.numpy()}
+    else:
+        result = {"action": torch.softmax(action_logits, dim=1).numpy()}
     if "compound_logits" in outputs:
         result["compound"] = torch.softmax(torch.from_numpy(outputs["compound_logits"]), dim=1).numpy()
     if "concentration_logits" in outputs:

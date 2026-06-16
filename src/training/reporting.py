@@ -356,6 +356,8 @@ def plot_confusion_matrices(
     ]
     for ax, matrix, title, fmt in panels:
         image = ax.imshow(matrix, cmap=cmap, aspect="auto")
+        max_value = float(np.max(matrix)) if matrix.size else 0.0
+        dark_threshold = 0.5 * max_value
         ax.set_xticks(range(len(class_labels)))
         ax.set_xticklabels(tick_labels, rotation=35, ha="right")
         ax.set_yticks(range(len(class_labels)))
@@ -365,8 +367,11 @@ def plot_confusion_matrices(
         ax.set_title(title)
         for row_index in range(matrix.shape[0]):
             for column_index in range(matrix.shape[1]):
+                if float(matrix[row_index, column_index]) == 0.0:
+                    continue
                 value = format(matrix[row_index, column_index], fmt)
-                ax.text(column_index, row_index, value, ha="center", va="center", color="black")
+                text_color = "white" if float(matrix[row_index, column_index]) > dark_threshold else "black"
+                ax.text(column_index, row_index, value, ha="center", va="center", color=text_color)
         fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
 
     fig.tight_layout()
@@ -418,10 +423,11 @@ def display_multitask_reports_and_confusions(
     y_pred: dict[str, Iterable[int]],
     class_labels: dict[str, Sequence[int]] | None = None,
     label_maps: dict[str, dict[int, str]] | None = None,
+    title_suffix: str = "",
 ) -> None:
     for target, (per_class_df, summary_df) in reports.items():
         print()
-        print(f"## Holdout report: {target}")
+        print(f"## Holdout report: {target}{title_suffix}")
         display(per_class_df)
         display(summary_df)
         plot_confusion_matrices(

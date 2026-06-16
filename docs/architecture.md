@@ -144,6 +144,8 @@ The current implementation can train the shared embedding against three supervis
 
 Controls remain action label `0` and are collapsed to dedicated control classes for the auxiliary compound and concentration heads.
 
+When `water_vs_other_weight > 0`, the baseline and commutative supervised classifiers also add a persistent binary water-vs-drug head and compose final action probabilities hierarchically.
+
 At inference time, `predict(...)` and `predict_proba(...)` return dictionaries keyed by those targets rather than a single array.
 
 ## 2. Pure-CNN commutative dual-pathway model
@@ -185,6 +187,7 @@ The network then produces:
 - structured self probe predictions from each branch embedding
 - structured cross probe predictions from the opposite branch embedding
 - action logits from the fused embedding $z$
+- binary water-vs-drug logits from the fused embedding $z$
 - optional compound logits from the fused embedding $z$
 - optional concentration logits from the fused embedding $z$
 
@@ -321,15 +324,34 @@ In the default configuration, `lambda_align = 0`. `lambda_cross` is held at zero
 
 For supervised classifier training and fine-tuning, the model uses the fused embedding for classification. The default supervised objective is:
 
-1. supervised classification loss on the fused logits
+1. supervised action classification loss on the fused logits
 2. optional auxiliary classification losses for compound and concentration
 3. optional weak latent alignment controlled by `lambda_align`
+
+When `LossWeightConfig.water_vs_other_weight > 0`, action classification uses a hierarchical control-aware objective:
+
+1. a dedicated binary head predicts water/control versus drug
+2. the multiclass action head is trained only on non-water examples, over the surviving drug action classes
+3. the final action probabilities are composed as
+
+$$
+P(y=\text{water}) = P(b=\text{water})
+$$
+
+and, for every non-water action class $c$,
+
+$$
+P(y=c) = P(b=\text{drug}) P(y=c \mid b=\text{drug}).
+$$
+
+This preserves a direct water-vs-drug decision during multiclass fine-tuning instead of relying on the multiclass softmax alone to maintain the control boundary.
 
 The implemented total loss is
 
 $$
 \mathcal L =
-\mathcal L_{\text{cls}}
+\mathcal L_{\text{action}}
++ \lambda_{\text{water}} \mathcal L_{\text{water-vs-drug}}
 + \lambda_{\text{align}} \mathcal L_{\text{align}}
 + \mathcal L_{\text{aux}}.
 $$
@@ -596,10 +618,13 @@ Like the pure-CNN commutative model, the transformer variant uses the same fixed
 For supervised training, it uses the fused embedding for:
 
 - action classification
+- binary water-vs-drug classification when `water_vs_other_weight > 0`
 - optional compound classification
 - optional concentration classification
 
 with optional weak latent alignment controlled by `lambda_align`.
+
+The transformer classifier uses the same hierarchical action objective as the CNN backbones: water/control is handled by a persistent binary head, and non-water action probabilities are distributed conditionally over the drug classes.
 
 ## 4. Choosing between the three
 
