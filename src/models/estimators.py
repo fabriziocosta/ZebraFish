@@ -81,6 +81,13 @@ def _criterion_for(
     return criteria
 
 
+def _latent_alignment_weight(obj) -> float:
+    weight = float(getattr(obj, "latent_alignment_weight", 0.0))
+    if weight != 0.0:
+        return weight
+    return float(getattr(obj, "lambda_align", 0.0))
+
+
 class _CommutativePretrainingMixin:
     def pretrain(
         self,
@@ -355,8 +362,14 @@ class CommutativeCNNClassifier(
         probe_region_grid: tuple[int, int, int] = (1, 2, 2),
         probe_time_bins: int = 8,
         probe_frequency_bins: int = 4,
+        num_prototypes: int = 64,
         lambda_cross: float = 1.0,
         lambda_align: float = 0.0,
+        prototype_temperature: float = 0.1,
+        prototype_alignment_weight: float = 1.0,
+        prototype_warmup_epochs: int = 0,
+        prototype_ramp_epochs: int = 0,
+        latent_alignment_weight: float = 0.0,
         cross_warmup_epochs: int = 5,
         cross_ramp_epochs: int = 5,
         teacher_student_warmup_epochs: int = 0,
@@ -428,8 +441,14 @@ class CommutativeCNNClassifier(
         self.probe_region_grid = probe_region_grid
         self.probe_time_bins = probe_time_bins
         self.probe_frequency_bins = probe_frequency_bins
+        self.num_prototypes = num_prototypes
         self.lambda_cross = lambda_cross
         self.lambda_align = lambda_align
+        self.prototype_temperature = prototype_temperature
+        self.prototype_alignment_weight = prototype_alignment_weight
+        self.prototype_warmup_epochs = prototype_warmup_epochs
+        self.prototype_ramp_epochs = prototype_ramp_epochs
+        self.latent_alignment_weight = latent_alignment_weight
         self.cross_warmup_epochs = cross_warmup_epochs
         self.cross_ramp_epochs = cross_ramp_epochs
         self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
@@ -521,6 +540,7 @@ class CommutativeCNNClassifier(
             patch_size_z=self.patch_size_z,
             patch_size_xy=self.patch_size_xy,
             embedding_dim=self.embedding_dim,
+            num_prototypes=self.num_prototypes,
             dropout=self.dropout,
             probe_spec=ProbeSpec(
                 local_count=int(self.probe_local_count),
@@ -555,7 +575,8 @@ class CommutativeCNNClassifier(
             water_class_index=self.class_to_index_.get(0, 0),
         )
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-        total_loss = float(self.action_weight) * action_total_loss + float(self.lambda_align) * feature_alignment_loss
+        latent_alignment_weight = _latent_alignment_weight(self)
+        total_loss = float(self.action_weight) * action_total_loss + latent_alignment_weight * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
@@ -571,6 +592,8 @@ class CommutativeCNNClassifier(
             "action_loss": float(action_loss.item()),
             "water_vs_other_loss": float(water_vs_other_loss.item()),
             "feature_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_weight": float(latent_alignment_weight),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
         }
@@ -611,8 +634,14 @@ class CommutativeTransformerClassifier(
         probe_region_grid: tuple[int, int, int] = (1, 2, 2),
         probe_time_bins: int = 8,
         probe_frequency_bins: int = 4,
+        num_prototypes: int = 64,
         lambda_cross: float = 1.0,
         lambda_align: float = 0.0,
+        prototype_temperature: float = 0.1,
+        prototype_alignment_weight: float = 1.0,
+        prototype_warmup_epochs: int = 0,
+        prototype_ramp_epochs: int = 0,
+        latent_alignment_weight: float = 0.0,
         cross_warmup_epochs: int = 5,
         cross_ramp_epochs: int = 5,
         teacher_student_warmup_epochs: int = 0,
@@ -671,8 +700,14 @@ class CommutativeTransformerClassifier(
         self.probe_region_grid = probe_region_grid
         self.probe_time_bins = probe_time_bins
         self.probe_frequency_bins = probe_frequency_bins
+        self.num_prototypes = num_prototypes
         self.lambda_cross = lambda_cross
         self.lambda_align = lambda_align
+        self.prototype_temperature = prototype_temperature
+        self.prototype_alignment_weight = prototype_alignment_weight
+        self.prototype_warmup_epochs = prototype_warmup_epochs
+        self.prototype_ramp_epochs = prototype_ramp_epochs
+        self.latent_alignment_weight = latent_alignment_weight
         self.cross_warmup_epochs = cross_warmup_epochs
         self.cross_ramp_epochs = cross_ramp_epochs
         self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
@@ -731,6 +766,7 @@ class CommutativeTransformerClassifier(
             ts_temporal_depth=self.ts_temporal_depth,
             ts_spatial_depth=self.ts_spatial_depth,
             embedding_dim=self.embedding_dim,
+            num_prototypes=self.num_prototypes,
             probe_spec=ProbeSpec(
                 local_count=int(self.probe_local_count),
                 region_grid=tuple(int(size) for size in self.probe_region_grid),
@@ -764,7 +800,8 @@ class CommutativeTransformerClassifier(
             water_class_index=self.class_to_index_.get(0, 0),
         )
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-        total_loss = float(self.action_weight) * action_total_loss + float(self.lambda_align) * feature_alignment_loss
+        latent_alignment_weight = _latent_alignment_weight(self)
+        total_loss = float(self.action_weight) * action_total_loss + latent_alignment_weight * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
@@ -780,6 +817,8 @@ class CommutativeTransformerClassifier(
             "action_loss": float(action_loss.item()),
             "water_vs_other_loss": float(water_vs_other_loss.item()),
             "feature_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_weight": float(latent_alignment_weight),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
         }

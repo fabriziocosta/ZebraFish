@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import unittest
 import tempfile
 from pathlib import Path
@@ -135,6 +137,34 @@ class EstimatorSmokeTests(unittest.TestCase):
         self.assertIsInstance(params["optimization_config"], OptimizationConfig)
         self.assertIsInstance(params["model_config"], CommutativeCNNConfig)
         self._run_estimator(estimator)
+
+    def test_commutative_cnn_fit_logs_selected_best_epoch_when_not_early_stopped(self) -> None:
+        estimator = CommutativeCNNClassifier(
+            model_config=CommutativeCNNConfig(
+                spatial_conv_channels=(4,),
+                temporal_st_channels=(4,),
+                temporal_ts_channels=(4,),
+                spatial_agg_channels=(4,),
+                patch_size_z=1,
+                patch_size_xy=8,
+                embedding_dim=4,
+                verbose=False,
+            ),
+            optimization_config=OptimizationConfig(
+                batch_size=4,
+                epochs=1,
+                validation_split=0.0,
+                verbose=True,
+                early_stopping_patience=None,
+                scheduler_patience=None,
+            ),
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            estimator.fit(self.X, self.y)
+
+        self.assertIn("select_best epoch=001 best_epoch=001", stdout.getvalue())
 
     def test_commutative_cnn_pretrain_save_load_and_frozen_head_fit(self) -> None:
         model_config = CommutativeCNNConfig(

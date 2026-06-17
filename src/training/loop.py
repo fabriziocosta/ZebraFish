@@ -339,6 +339,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
+    stopped_early = False
     early_stopping_start_epoch = max(1, int(getattr(estimator, "early_stopping_start_epoch", None) or 1))
     training_start = time.perf_counter()
     if estimator.verbose:
@@ -462,12 +463,19 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
             and estimator.early_stopping_patience is not None
             and epochs_without_improvement >= estimator.early_stopping_patience
         ):
+            stopped_early = True
             if estimator.verbose:
                 print(
                     f"early_stop epoch={epoch:03d} best_epoch={best_epoch:03d} "
                     f"best_metric={best_metric:.4f}"
                 )
             break
+
+    if estimator.verbose and not stopped_early:
+        print(
+            f"select_best epoch={len(history_rows):03d} best_epoch={best_epoch or len(history_rows):03d} "
+            f"best_metric={best_metric:.4f}"
+        )
 
     estimator.model_.load_state_dict(best_state)
     estimator.model_.eval()

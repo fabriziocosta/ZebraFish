@@ -121,6 +121,7 @@ class _CommutativeTransformerNetwork(nn.Module):
         ts_temporal_depth: int,
         ts_spatial_depth: int,
         embedding_dim: int,
+        num_prototypes: int,
         probe_spec: ProbeSpec | None = None,
         num_compound_classes: int = 0,
         num_concentration_classes: int = 0,
@@ -183,6 +184,7 @@ class _CommutativeTransformerNetwork(nn.Module):
             nn.GELU(),
             nn.Dropout(p=dropout),
         )
+        self.prototype_layer = nn.Linear(embedding_dim, int(num_prototypes), bias=False)
 
         self.probe_spec = probe_spec or ProbeSpec()
         self.ts_self_probe_decoder = ProbeDecoder(
@@ -294,6 +296,8 @@ class _CommutativeTransformerNetwork(nn.Module):
         return {
             "st_embedding": st_embedding,
             "ts_embedding": ts_embedding,
+            "st_prototypes": self.prototype_layer(st_embedding),
+            "ts_prototypes": self.prototype_layer(ts_embedding),
             "embedding": fused_embedding,
             "pred_A_self": self.ts_self_probe_decoder(ts_embedding),
             "pred_B_self": self.st_self_probe_decoder(st_embedding),

@@ -301,7 +301,7 @@ Every probe type is present in the output dictionary for every batch. A binary m
 
 ### 2.7 Pretraining losses
 
-During unlabeled commutative pretraining, each branch predicts the same probe-target dictionary through self and cross heads:
+During unlabeled commutative pretraining, self heads predict the input-derived probe-target dictionary. Cross heads predict detached self-head outputs from the opposite branch, so cross-probes remain teacher-student signals after warmup instead of switching back to raw probe targets:
 
 - `pred_A_self`: Path A embedding decoded by the Path A self head
 - `pred_B_self`: Path B embedding decoded by the Path B self head
@@ -315,10 +315,11 @@ $$
 =
 \mathcal L_{\text{self}}
 + \lambda_{\text{cross}} \mathcal L_{\text{cross}}
-+ \lambda_{\text{align}} \mathcal L_{\text{align}}.
++ \lambda_{\text{proto}} \mathcal L_{\text{proto}}
++ \lambda_{\text{latent}} \mathcal L_{\text{latent}}.
 $$
 
-In the default configuration, `lambda_align = 0`. `lambda_cross` is held at zero for `cross_warmup_epochs`, then ramps upward over `cross_ramp_epochs`.
+Prototype alignment maps `z^{ST}` and `z^{TS}` through the shared `prototype_layer` and applies a symmetric swapped soft cross-entropy between the prototype assignment distributions. `lambda_cross` and `lambda_proto` are scheduled with warmup plus optional linear ramp. `latent_alignment_weight` defaults to zero; legacy `lambda_align` is still accepted for old configs but should not be used for new experiments.
 
 ### 2.8 Supervised losses
 
@@ -326,7 +327,7 @@ For supervised classifier training and fine-tuning, the model uses the fused emb
 
 1. supervised action classification loss on the fused logits
 2. optional auxiliary classification losses for compound and concentration
-3. optional weak latent alignment controlled by `lambda_align`
+3. optional weak latent alignment controlled by `latent_alignment_weight`
 
 When `LossWeightConfig.water_vs_other_weight > 0`, action classification uses a hierarchical control-aware objective:
 
@@ -352,7 +353,7 @@ $$
 \mathcal L =
 \mathcal L_{\text{action}}
 + \lambda_{\text{water}} \mathcal L_{\text{water-vs-drug}}
-+ \lambda_{\text{align}} \mathcal L_{\text{align}}
++ \lambda_{\text{latent}} \mathcal L_{\text{latent}}
 + \mathcal L_{\text{aux}}.
 $$
 
@@ -392,10 +393,15 @@ Shared heads:
 - `probe_alpha_frequency`
 - `probe_alpha_correlation`
 - `lambda_cross`
-- `lambda_align`
+- `prototype_temperature`
+- `prototype_alignment_weight`
+- `prototype_warmup_epochs`
+- `prototype_ramp_epochs`
+- `latent_alignment_weight`
+- `lambda_align` (deprecated alias for old configs)
 - `cross_warmup_epochs`
 - `cross_ramp_epochs`
-- `teacher_student_warmup_epochs`
+- `teacher_student_warmup_epochs` (deprecated no-op)
 - `dropout`
 
 ### 2.10 Strengths and limitations
@@ -622,7 +628,7 @@ For supervised training, it uses the fused embedding for:
 - optional compound classification
 - optional concentration classification
 
-with optional weak latent alignment controlled by `lambda_align`.
+with optional weak latent alignment controlled by `latent_alignment_weight`.
 
 The transformer classifier uses the same hierarchical action objective as the CNN backbones: water/control is handled by a persistent binary head, and non-water action probabilities are distributed conditionally over the drug classes.
 

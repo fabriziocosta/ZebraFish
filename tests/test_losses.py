@@ -5,10 +5,29 @@ import unittest
 import torch
 import torch.nn.functional as F
 
-from src.training.losses import apply_water_vs_other_loss, compute_hierarchical_action_losses
+from src.training.losses import (
+    apply_water_vs_other_loss,
+    compute_hierarchical_action_losses,
+    prototype_consistency_loss,
+)
 
 
 class WaterVsOtherLossTests(unittest.TestCase):
+    def test_prototype_consistency_loss_backpropagates_to_both_branches(self) -> None:
+        st_logits = torch.tensor([[2.0, 0.0, -1.0]], requires_grad=True)
+        ts_logits = torch.tensor([[0.5, 1.0, -0.5]], requires_grad=True)
+
+        loss = prototype_consistency_loss(st_logits, ts_logits, temperature=0.2)
+
+        self.assertGreater(float(loss.item()), 0.0)
+        loss.backward()
+        self.assertIsNotNone(st_logits.grad)
+        self.assertIsNotNone(ts_logits.grad)
+
+    def test_prototype_consistency_loss_rejects_non_positive_temperature(self) -> None:
+        with self.assertRaises(ValueError):
+            prototype_consistency_loss(torch.zeros(1, 2), torch.zeros(1, 2), temperature=0.0)
+
     def test_collapses_multiclass_logits_into_water_vs_other(self) -> None:
         action_logits = torch.tensor(
             [

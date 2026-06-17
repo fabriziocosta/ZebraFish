@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import tempfile
 import unittest
 import json
@@ -233,21 +235,23 @@ class WorkflowTests(unittest.TestCase):
                     batch_size=2,
                     epochs=1,
                     validation_split=0.0,
-                    verbose=False,
+                    verbose=True,
                     early_stopping_start_epoch=8,
                     early_stopping_patience=None,
                     scheduler_patience=None,
                 ),
             )
 
-            result = fit_chunked_water_vs_other_hot_start(
-                estimator,
-                chunk_dir,
-                holdout_metadata=pd.DataFrame({"image_condition_dir": ["/tmp/chunked_0"]}),
-                validation_fraction=0.25,
-                epochs=1,
-                random_state=0,
-            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                result = fit_chunked_water_vs_other_hot_start(
+                    estimator,
+                    chunk_dir,
+                    holdout_metadata=pd.DataFrame({"image_condition_dir": ["/tmp/chunked_0"]}),
+                    validation_fraction=0.25,
+                    epochs=1,
+                    random_state=0,
+                )
 
             self.assertEqual(result.excluded_holdout_count, 1)
             self.assertEqual(result.label_map, {0: "Water", 1: "Other"})
@@ -256,6 +260,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(len(estimator.history_), 1)
             self.assertEqual(estimator.best_epoch_, 1)
             self.assertLess(estimator.best_metric_, float("inf"))
+            self.assertIn("select_best epoch=001 best_epoch=001", stdout.getvalue())
 
 
 if __name__ == "__main__":

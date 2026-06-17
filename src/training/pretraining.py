@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from src.models.common import _ensure_tensor_5d
 from src.models.probes import PROBE_TYPES, build_probe_masks, build_probe_targets, masked_probe_loss
+from src.training.losses import prototype_consistency_loss
 from src.training.loop import _format_eta
 
 
@@ -27,16 +28,55 @@ def _probe_alpha_weights(estimator) -> dict[str, float]:
     }
 
 
-def _cross_weight_for_epoch(estimator, epoch: int) -> float:
-    target = float(getattr(estimator, "lambda_cross", 1.0))
-    warmup_epochs = int(getattr(estimator, "cross_warmup_epochs", 0))
-    ramp_epochs = int(getattr(estimator, "cross_ramp_epochs", 0))
-    if int(epoch) <= warmup_epochs:
+def linear_ramp(epoch: int, target_weight: float, warmup_epochs: int, ramp_epochs: int) -> float:
+    target = float(target_weight)
+    warmup = int(warmup_epochs)
+    ramp = int(ramp_epochs)
+    if int(epoch) <= warmup:
         return 0.0
-    if ramp_epochs <= 0:
+    if ramp <= 0:
         return target
-    ramp_step = int(epoch) - warmup_epochs
-    return target * min(max(ramp_step / ramp_epochs, 0.0), 1.0)
+    ramp_step = int(epoch) - warmup
+    return target * min(max(ramp_step / ramp, 0.0), 1.0)
+
+
+def _cross_weight_for_epoch(estimator, epoch: int) -> float:
+    return linear_ramp(
+        epoch=epoch,
+        target_weight=float(getattr(estimator, "lambda_cross", 1.0)),
+        warmup_epochs=int(getattr(estimator, "cross_warmup_epochs", 0)),
+        ramp_epochs=int(getattr(estimator, "cross_ramp_epochs", 0)),
+    )
+
+
+def _prototype_weight_for_epoch(estimator, epoch: int) -> float:
+    return linear_ramp(
+        epoch=epoch,
+        target_weight=float(getattr(estimator, "prototype_alignment_weight", 1.0)),
+        warmup_epochs=int(getattr(estimator, "prototype_warmup_epochs", 0)),
+        ramp_epochs=int(getattr(estimator, "prototype_ramp_epochs", 0)),
+    )
+
+
+def _latent_alignment_weight(estimator) -> float:
+    weight = float(getattr(estimator, "latent_alignment_weight", 0.0))
+    if weight != 0.0:
+        return weight
+    return float(getattr(estimator, "lambda_align", 0.0))
+
+
+def _cross_probe_teacher_targets(
+    outputs: dict[str, torch.Tensor | dict[str, torch.Tensor]],
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    cross_targets_A_to_B = {
+        key: value.detach()
+        for key, value in outputs["pred_B_self"].items()
+    }
+    cross_targets_B_to_A = {
+        key: value.detach()
+        for key, value in outputs["pred_A_self"].items()
+    }
+    return cross_targets_A_to_B, cross_targets_B_to_A
 
 
 def _early_stopping_start_epoch_for_pretraining(estimator) -> int:
@@ -173,7 +213,14 @@ def _save_pretraining_loss_pdf(history_rows: list[dict[str, float | int]], outpu
         aux_ax = axes[1, 1]
         epochs = history_df["epoch"].to_numpy(dtype=float)
         aux_values = []
-        for column in ["train_feature_alignment_loss", "val_feature_alignment_loss"]:
+        for column in [
+            "train_prototype_alignment_loss",
+            "val_prototype_alignment_loss",
+            "train_latent_alignment_loss",
+            "val_latent_alignment_loss",
+            "train_feature_alignment_loss",
+            "val_feature_alignment_loss",
+        ]:
             if column in history_df.columns:
                 values = history_df[column].astype(float)
                 aux_values.append(values.to_numpy())
@@ -201,6 +248,21 @@ def _save_pretraining_loss_pdf(history_rows: list[dict[str, float | int]], outpu
                 bbox_to_anchor=(0.75, -0.24),
                 frameon=True,
             )
+            if "train_lambda_proto" in history_df.columns:
+                lambda_ax.plot(
+                    epochs,
+                    history_df["train_lambda_proto"].astype(float).to_numpy(),
+                    color="tab:green",
+                    linewidth=2.0,
+                    linestyle=":",
+                    label="train_lambda_proto",
+                )
+                lambda_ax.legend(
+                    fontsize="x-small",
+                    loc="upper center",
+                    bbox_to_anchor=(0.75, -0.24),
+                    frameon=True,
+                )
         aux_ax.set_title("Alignment And Cross Weight")
         aux_ax.set_xlabel("Epoch")
         aux_ax.set_ylabel("Loss")
@@ -279,13 +341,7 @@ def _compute_commutative_pretraining_loss(
     )
     self_loss = loss_A_self + loss_B_self
 
-    teacher_student_warmup_epochs = int(getattr(estimator, "teacher_student_warmup_epochs", 0))
-    if teacher_student_warmup_epochs > 0 and int(epoch) <= teacher_student_warmup_epochs:
-        cross_targets_A_to_B = {key: value.detach() for key, value in outputs["pred_B_self"].items()}
-        cross_targets_B_to_A = {key: value.detach() for key, value in outputs["pred_A_self"].items()}
-    else:
-        cross_targets_A_to_B = probe_targets
-        cross_targets_B_to_A = probe_targets
+    cross_targets_A_to_B, cross_targets_B_to_A = _cross_probe_teacher_targets(outputs)
 
     loss_A_to_B, per_A_to_B = masked_probe_loss(
         outputs["pred_A_to_B"],
@@ -302,14 +358,30 @@ def _compute_commutative_pretraining_loss(
     cross_loss = loss_A_to_B + loss_B_to_A
     lambda_cross = _cross_weight_for_epoch(estimator, epoch)
 
-    alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-    total_loss = self_loss + lambda_cross * cross_loss + float(getattr(estimator, "lambda_align", 0.0)) * alignment_loss
+    lambda_proto = _prototype_weight_for_epoch(estimator, epoch)
+    prototype_alignment_loss = prototype_consistency_loss(
+        outputs["st_prototypes"],
+        outputs["ts_prototypes"],
+        temperature=float(getattr(estimator, "prototype_temperature", 0.1)),
+    )
+    latent_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
+    latent_alignment_weight = _latent_alignment_weight(estimator)
+    total_loss = (
+        self_loss
+        + lambda_cross * cross_loss
+        + lambda_proto * prototype_alignment_loss
+        + latent_alignment_weight * latent_alignment_loss
+    )
 
     components = {
         "self_probe_loss": float(self_loss.item()),
         "cross_probe_loss": float(cross_loss.item()),
         "lambda_cross": float(lambda_cross),
-        "feature_alignment_loss": float(alignment_loss.item()),
+        "lambda_proto": float(lambda_proto),
+        "prototype_alignment_loss": float(prototype_alignment_loss.item()),
+        "latent_alignment_loss": float(latent_alignment_loss.item()),
+        "latent_alignment_weight": float(latent_alignment_weight),
+        "feature_alignment_loss": float(latent_alignment_loss.item()),
     }
     for probe_type in PROBE_TYPES:
         components[f"self_probe_{probe_type}_loss"] = float((per_A_self[probe_type] + per_B_self[probe_type]).item())
@@ -393,14 +465,19 @@ def _pretrain_commutative_estimator(
             "    trL=train_loss\n"
             "    trS=train_self_probe_loss\n"
             "    trX=train_cross_probe_loss\n"
-            "    trFA=train_feature_alignment_loss"
+            "    trP=train_prototype_alignment_loss\n"
+            "    trLA=train_latent_alignment_loss"
         )
         if val_loader is None:
-            print(f"{'ep':>7} {'lr':>8} {'eta':>9} | {'trL':>8} {'trS':>8} {'trX':>8} {'trFA':>8}")
+            print(
+                f"{'ep':>7} {'lr':>8} {'eta':>9} | "
+                f"{'trL':>8} {'trS':>8} {'trX':>8} {'trP':>8} {'trLA':>8}"
+            )
         else:
             print(
-                f"{'ep':>7} {'lr':>8} {'eta':>9} | {'trL':>8} {'trS':>8} {'trX':>8} {'trFA':>8} | "
-                f"{'vaL':>8} {'vaS':>8} {'vaX':>8} {'vaFA':>8}"
+                f"{'ep':>7} {'lr':>8} {'eta':>9} | "
+                f"{'trL':>8} {'trS':>8} {'trX':>8} {'trP':>8} {'trLA':>8} | "
+                f"{'vaL':>8} {'vaS':>8} {'vaX':>8} {'vaP':>8} {'vaLA':>8}"
             )
 
     for epoch in range(1, n_epochs + 1):
@@ -486,14 +563,16 @@ def _pretrain_commutative_estimator(
                 f"{float(row['train_loss']):8.4f} "
                 f"{float(row.get('train_self_probe_loss', 0.0)):8.4f} "
                 f"{float(row.get('train_cross_probe_loss', 0.0)):8.4f} "
-                f"{float(row.get('train_feature_alignment_loss', 0.0)):8.4f}"
+                f"{float(row.get('train_prototype_alignment_loss', 0.0)):8.4f} "
+                f"{float(row.get('train_latent_alignment_loss', 0.0)):8.4f}"
             )
             if "val_loss" in row:
                 val_parts = (
                     f"{float(row['val_loss']):8.4f} "
                     f"{float(row.get('val_self_probe_loss', 0.0)):8.4f} "
                     f"{float(row.get('val_cross_probe_loss', 0.0)):8.4f} "
-                    f"{float(row.get('val_feature_alignment_loss', 0.0)):8.4f}"
+                    f"{float(row.get('val_prototype_alignment_loss', 0.0)):8.4f} "
+                    f"{float(row.get('val_latent_alignment_loss', 0.0)):8.4f}"
                 )
                 print(f"{epoch:03d}/{n_epochs:03d} {current_lr:8.2e} {eta:>9} | {train_parts} | {val_parts}")
             else:

@@ -435,6 +435,7 @@ def fit_chunked_water_vs_other_hot_start(
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
+    stopped_early = False
     # The binary hot-start is a separate, short phase. Reusing the later
     # multiclass warm-up can leave best_state at its initial weights.
     early_stopping_start_epoch = 1
@@ -547,7 +548,19 @@ def fit_chunked_water_vs_other_hot_start(
             and estimator.early_stopping_patience is not None
             and epochs_without_improvement >= estimator.early_stopping_patience
         ):
+            stopped_early = True
+            if estimator.verbose:
+                print(
+                    f"early_stop epoch={epoch:03d} best_epoch={best_epoch:03d} "
+                    f"best_metric={best_metric:.4f}"
+                )
             break
+
+    if estimator.verbose and not stopped_early:
+        print(
+            f"select_best epoch={len(history_rows):03d} best_epoch={best_epoch or len(history_rows):03d} "
+            f"best_metric={best_metric:.4f}"
+        )
 
     estimator.model_.load_state_dict(best_state)
     estimator.model_.eval()

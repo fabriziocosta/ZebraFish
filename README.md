@@ -158,7 +158,7 @@ The multiclass action head is then trained conditionally on non-water examples,
 and `predict_proba(...)` composes the final action distribution as
 `P(water)` and `P(drug) * P(action | drug)`.
 
-Commutative encoder pretraining uses a fixed masked-probe ontology rather than full-volume reconstruction. The probe types are:
+Commutative encoder pretraining uses a fixed masked-probe ontology rather than full-volume reconstruction. Self-probes are trained against input-derived probe targets, cross-probes learn from detached opposite-branch self-probe predictions, and branch agreement is encouraged through scheduled prototype alignment rather than direct latent MSE by default. The probe types are:
 
 - `local`
 - `region_time`

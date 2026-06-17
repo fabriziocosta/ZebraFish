@@ -37,6 +37,11 @@ class LossWeightConfig:
     concentration_weight: float = 0.2
     lambda_cross: float = 1.0
     lambda_align: float = 0.0
+    prototype_temperature: float = 0.1
+    prototype_alignment_weight: float = 1.0
+    prototype_warmup_epochs: int = 0
+    prototype_ramp_epochs: int = 0
+    latent_alignment_weight: float = 0.0
     cross_warmup_epochs: int = 5
     cross_ramp_epochs: int = 5
     teacher_student_warmup_epochs: int = 0
@@ -90,6 +95,7 @@ class CommutativeCNNConfig:
     patch_size_z: int = 1
     patch_size_xy: int = 16
     embedding_dim: int = 128
+    num_prototypes: int = 64
     probe_local_count: int = 32
     probe_region_grid: tuple[int, int, int] = (1, 2, 2)
     probe_time_bins: int = 8
@@ -113,6 +119,7 @@ class CommutativeTransformerConfig:
     ts_temporal_depth: int = 2
     ts_spatial_depth: int = 2
     embedding_dim: int = 96
+    num_prototypes: int = 64
     probe_local_count: int = 32
     probe_region_grid: tuple[int, int, int] = (1, 2, 2)
     probe_time_bins: int = 8

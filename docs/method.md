@@ -136,10 +136,13 @@ $$
 =
 \mathcal L_{\text{self}}
 + \lambda_{\text{cross}} \mathcal L_{\text{cross}}
-+ \lambda_{\text{align}} \lVert z^{ST} - z^{TS} \rVert_2^2.
++ \lambda_{\text{proto}} \mathcal L_{\text{proto}}
++ \lambda_{\text{latent}} \lVert z^{ST} - z^{TS} \rVert_2^2.
 $$
 
-By default, `lambda_align` is zero. `lambda_cross` is held at zero for `cross_warmup_epochs`, then ramped over `cross_ramp_epochs`. This keeps the objective centered on structured probe prediction rather than full input reconstruction or direct latent matching.
+Self-probes are anchored to probe targets computed from the input tensor. Cross-probes use detached opposite-branch self-probe predictions as teacher targets for the whole run; their influence is controlled by `lambda_cross`, `cross_warmup_epochs`, and `cross_ramp_epochs`.
+
+Prototype alignment projects both branch embeddings through a shared prototype layer and matches the resulting soft assignment distributions with a symmetric swapped cross-entropy. Its weight is controlled by `prototype_alignment_weight`, `prototype_warmup_epochs`, and `prototype_ramp_epochs`. Exact latent matching is an ablation knob only: `latent_alignment_weight` defaults to zero, and legacy `lambda_align` is retained only for old configs.
 
 ### 2.3 Interpretation
 

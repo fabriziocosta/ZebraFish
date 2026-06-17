@@ -5,6 +5,24 @@ import torch.nn.functional as F
 from torch import nn
 
 
+def prototype_consistency_loss(
+    st_logits: torch.Tensor,
+    ts_logits: torch.Tensor,
+    *,
+    temperature: float,
+) -> torch.Tensor:
+    temperature_value = float(temperature)
+    if temperature_value <= 0.0:
+        raise ValueError("temperature must be positive")
+    st_scaled = st_logits / temperature_value
+    ts_scaled = ts_logits / temperature_value
+    st_targets = F.softmax(st_scaled.detach(), dim=-1)
+    ts_targets = F.softmax(ts_scaled.detach(), dim=-1)
+    st_to_ts = -(ts_targets * F.log_softmax(st_scaled, dim=-1)).sum(dim=-1).mean()
+    ts_to_st = -(st_targets * F.log_softmax(ts_scaled, dim=-1)).sum(dim=-1).mean()
+    return 0.5 * (st_to_ts + ts_to_st)
+
+
 def apply_water_vs_other_loss(
     *,
     total_loss: torch.Tensor,
