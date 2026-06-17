@@ -14,20 +14,20 @@ PROBE_TYPES: tuple[str, ...] = ("local", "region_time", "derivative", "frequency
 
 @dataclass(frozen=True)
 class ProbeSpec:
-    local_count: int = 32
     region_grid: tuple[int, int, int] = (1, 2, 2)
     time_bins: int = 8
     frequency_bins: int = 4
+    local_stats: tuple[str, ...] = ("mean", "std")
 
     def __post_init__(self) -> None:
-        if self.local_count <= 0:
-            raise ValueError("local_count must be positive")
         if len(self.region_grid) != 3 or any(size <= 0 for size in self.region_grid):
             raise ValueError("region_grid must contain three positive integers")
         if self.time_bins <= 0:
             raise ValueError("time_bins must be positive")
         if self.frequency_bins <= 0:
             raise ValueError("frequency_bins must be positive")
+        if tuple(self.local_stats) != ("mean", "std"):
+            raise ValueError("local_stats must be ('mean', 'std')")
 
     @property
     def num_regions(self) -> int:
@@ -40,7 +40,7 @@ class ProbeSpec:
     @property
     def shapes(self) -> dict[str, tuple[int, ...]]:
         return {
-            "local": (self.local_count,),
+            "local": (self.num_regions, self.time_bins, len(self.local_stats)),
             "region_time": (self.num_regions, self.time_bins),
             "derivative": (self.num_regions, self.time_bins),
             "frequency": (self.num_regions, self.frequency_bins),
@@ -87,49 +87,49 @@ def _numel(shape: tuple[int, ...]) -> int:
     return result
 
 
-def _sample_axis_indices(size: int, count: int, *, device: torch.device) -> torch.Tensor:
-    if count <= 0:
-        raise ValueError("count must be positive")
-    if size <= 1:
-        return torch.zeros(count, dtype=torch.long, device=device)
-    return torch.linspace(0, size - 1, steps=count, device=device).round().long()
+def _validate_coarse_bins(X: torch.Tensor, probe_spec: ProbeSpec) -> None:
+    _, n_timepoints, z_size, y_size, x_size = X.shape
+    grid_z, grid_y, grid_x = probe_spec.region_grid
+    if probe_spec.time_bins > n_timepoints:
+        raise ValueError("time_bins cannot exceed the number of timepoints")
+    if grid_z > z_size or grid_y > y_size or grid_x > x_size:
+        raise ValueError("region_grid cannot exceed the spatial tensor shape")
 
 
-def _region_traces(X: torch.Tensor, probe_spec: ProbeSpec) -> torch.Tensor:
-    n_samples, n_timepoints, z_size, y_size, x_size = X.shape
-    pooled = F.adaptive_avg_pool3d(
-        X.reshape(n_samples * n_timepoints, 1, z_size, y_size, x_size),
-        output_size=probe_spec.region_grid,
-    )
-    return pooled.reshape(n_samples, n_timepoints, probe_spec.num_regions)
+def _coarse_spatiotemporal_stats(X: torch.Tensor, probe_spec: ProbeSpec) -> torch.Tensor:
+    _validate_coarse_bins(X, probe_spec)
+    grid_z, grid_y, grid_x = probe_spec.region_grid
+    region_stats: list[torch.Tensor] = []
+    for z_chunk in torch.tensor_split(X, grid_z, dim=2):
+        for y_chunk in torch.tensor_split(z_chunk, grid_y, dim=3):
+            for x_chunk in torch.tensor_split(y_chunk, grid_x, dim=4):
+                stats_by_time: list[torch.Tensor] = []
+                for time_chunk in torch.tensor_split(x_chunk, probe_spec.time_bins, dim=1):
+                    flattened = time_chunk.flatten(start_dim=1)
+                    mean = flattened.mean(dim=1)
+                    std = flattened.std(dim=1, unbiased=False)
+                    stats_by_time.append(torch.stack((mean, std), dim=-1))
+                region_stats.append(torch.stack(stats_by_time, dim=1))
+    return torch.stack(region_stats, dim=1)
 
 
 def build_probe_targets(X: torch.Tensor, probe_spec: ProbeSpec) -> dict[str, torch.Tensor]:
     if X.ndim != 5:
         raise ValueError(f"Expected X with shape (N, T, Z, Y, X), got {tuple(X.shape)}")
-    n_samples, n_timepoints, z_size, y_size, x_size = X.shape
-    time_idx = _sample_axis_indices(n_timepoints, probe_spec.local_count, device=X.device)
-    z_idx = _sample_axis_indices(z_size, probe_spec.local_count, device=X.device)
-    y_idx = _sample_axis_indices(y_size, probe_spec.local_count, device=X.device)
-    x_idx = _sample_axis_indices(x_size, probe_spec.local_count, device=X.device)
-    local = X[:, time_idx, z_idx, y_idx.roll(1), x_idx.roll(2)]
-
-    traces = _region_traces(X, probe_spec)
-    region_time = F.adaptive_avg_pool1d(
-        traces.transpose(1, 2),
-        output_size=probe_spec.time_bins,
-    )
+    n_samples = X.shape[0]
+    local = _coarse_spatiotemporal_stats(X, probe_spec)
+    region_time = local[..., 0]
     derivative = F.pad(region_time.diff(dim=-1), (1, 0))
 
-    frequency = torch.fft.rfft(traces - traces.mean(dim=1, keepdim=True), dim=1).abs().transpose(1, 2)
+    frequency = torch.fft.rfft(region_time - region_time.mean(dim=-1, keepdim=True), dim=-1).abs()
     if frequency.shape[-1] >= probe_spec.frequency_bins:
         frequency = frequency[..., : probe_spec.frequency_bins]
     else:
         frequency = F.pad(frequency, (0, probe_spec.frequency_bins - frequency.shape[-1]))
 
-    centered = traces - traces.mean(dim=1, keepdim=True)
-    normalized = centered / (centered.square().mean(dim=1, keepdim=True).sqrt() + 1e-6)
-    corr = torch.einsum("btr,bts->brs", normalized, normalized) / max(n_timepoints, 1)
+    centered = region_time - region_time.mean(dim=-1, keepdim=True)
+    normalized = centered / (centered.square().mean(dim=-1, keepdim=True).sqrt() + 1e-6)
+    corr = torch.einsum("brt,bst->brs", normalized, normalized) / max(probe_spec.time_bins, 1)
     pair_indices = list(combinations(range(probe_spec.num_regions), 2))
     if pair_indices:
         first = torch.tensor([pair[0] for pair in pair_indices], device=X.device)

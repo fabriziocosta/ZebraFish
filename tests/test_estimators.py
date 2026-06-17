@@ -175,6 +175,7 @@ class EstimatorSmokeTests(unittest.TestCase):
             patch_size_z=1,
             patch_size_xy=8,
             embedding_dim=4,
+            probe_time_bins=4,
         )
         estimator = CommutativeCNNClassifier(
             model_config=model_config,

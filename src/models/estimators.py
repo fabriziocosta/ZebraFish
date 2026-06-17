@@ -358,7 +358,6 @@ class CommutativeCNNClassifier(
         patch_size_z: int = 1,
         patch_size_xy: int = 16,
         embedding_dim: int = 128,
-        probe_local_count: int = 32,
         probe_region_grid: tuple[int, int, int] = (1, 2, 2),
         probe_time_bins: int = 8,
         probe_frequency_bins: int = 4,
@@ -437,7 +436,6 @@ class CommutativeCNNClassifier(
         self.patch_size_z = patch_size_z
         self.patch_size_xy = patch_size_xy
         self.embedding_dim = embedding_dim
-        self.probe_local_count = probe_local_count
         self.probe_region_grid = probe_region_grid
         self.probe_time_bins = probe_time_bins
         self.probe_frequency_bins = probe_frequency_bins
@@ -543,7 +541,6 @@ class CommutativeCNNClassifier(
             num_prototypes=self.num_prototypes,
             dropout=self.dropout,
             probe_spec=ProbeSpec(
-                local_count=int(self.probe_local_count),
                 region_grid=tuple(int(size) for size in self.probe_region_grid),
                 time_bins=int(self.probe_time_bins),
                 frequency_bins=int(self.probe_frequency_bins),
@@ -630,7 +627,6 @@ class CommutativeTransformerClassifier(
         ts_temporal_depth: int = 2,
         ts_spatial_depth: int = 2,
         embedding_dim: int = 96,
-        probe_local_count: int = 32,
         probe_region_grid: tuple[int, int, int] = (1, 2, 2),
         probe_time_bins: int = 8,
         probe_frequency_bins: int = 4,
@@ -696,7 +692,6 @@ class CommutativeTransformerClassifier(
         self.ts_temporal_depth = ts_temporal_depth
         self.ts_spatial_depth = ts_spatial_depth
         self.embedding_dim = embedding_dim
-        self.probe_local_count = probe_local_count
         self.probe_region_grid = probe_region_grid
         self.probe_time_bins = probe_time_bins
         self.probe_frequency_bins = probe_frequency_bins
@@ -768,7 +763,6 @@ class CommutativeTransformerClassifier(
             embedding_dim=self.embedding_dim,
             num_prototypes=self.num_prototypes,
             probe_spec=ProbeSpec(
-                local_count=int(self.probe_local_count),
                 region_grid=tuple(int(size) for size in self.probe_region_grid),
                 time_bins=int(self.probe_time_bins),
                 frequency_bins=int(self.probe_frequency_bins),

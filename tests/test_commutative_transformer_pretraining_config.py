@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -38,6 +39,20 @@ class CommutativeTransformerPretrainingConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config, config)
         self.assertIsInstance(loaded_config.model_config.spatial_patch_size_st, tuple)
         self.assertIsInstance(loaded_config.model_config.spatial_patch_size_ts, tuple)
+
+    def test_load_rejects_removed_probe_local_count(self) -> None:
+        payload = {
+            "unlabeled_dataset_path": ".dataset_cache/unlabeled",
+            "pretrained_encoder_path": "artifacts/pretrained_commutative_transformer/encoder_state.pt",
+            "model_config": {"probe_local_count": 32},
+            "optimization_config": {},
+            "loss_weight_config": {},
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "probe_local_count"):
+                load_commutative_transformer_pretraining_config(config_path)
 
 
 if __name__ == "__main__":

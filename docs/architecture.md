@@ -289,13 +289,13 @@ Projection -> z^(TS): (N, d)
 
 ### 2.6 Probe ontology
 
-Commutative encoder pretraining uses a fixed masked-probe ontology instead of reconstructing the full input volume. The probe types are:
+Commutative encoder pretraining uses a fixed masked-probe ontology instead of reconstructing the full input volume. All probe targets are derived from a shared coarse spatiotemporal tensor over `probe_region_grid` and `probe_time_bins`. The probe types are:
 
-- `local`: fixed local voxel/time samples from the input tensor
-- `region_time`: coarse region-level temporal summaries
-- `derivative`: temporal derivatives of the region-level summaries
-- `frequency`: low-frequency magnitude summaries of region traces
-- `correlation`: pairwise correlations between coarse region traces
+- `local`: coarse region-time mean and standard deviation summaries
+- `region_time`: coarse region-time mean activity
+- `derivative`: temporal derivatives of the coarse region-time means
+- `frequency`: low-frequency magnitude summaries of coarse region-time means
+- `correlation`: pairwise correlations between coarse region-time means
 
 Every probe type is present in the output dictionary for every batch. A binary mask selects which entries are supervised at a given training step; training masks guarantee at least one observed entry per probe type, while validation uses full masks for deterministic model selection.
 
@@ -382,7 +382,6 @@ Temporal-first branch:
 Shared heads:
 
 - `embedding_dim`
-- `probe_local_count`
 - `probe_region_grid`
 - `probe_time_bins`
 - `probe_frequency_bins`

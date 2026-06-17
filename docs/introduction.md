@@ -48,7 +48,7 @@ This enforces that spatial-then-temporal and temporal-then-spatial processing pr
 We instantiate this principle using a **dual-pathway self-supervised architecture** combined with **masked probe prediction**:
 
 * Each pathway produces an embedding of the same input.
-* A fixed probe ontology defines structured questions about the input.
+* A fixed probe ontology defines structured questions about a shared coarse spatiotemporal view of the input.
 * Self heads decode probes from their own pathway embeddings.
 * Cross heads decode the same probes using the other pathway's prediction machinery.
 

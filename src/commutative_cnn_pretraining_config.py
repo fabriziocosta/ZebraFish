@@ -39,8 +39,17 @@ def _keep_dataclass_keys(config_class, values: dict[str, Any]) -> dict[str, Any]
     return {key: value for key, value in values.items() if key in valid_keys}
 
 
+def _reject_unknown_dataclass_keys(config_class, values: dict[str, Any]) -> None:
+    valid_keys = {field.name for field in fields(config_class)}
+    unknown_keys = sorted(set(values) - valid_keys)
+    if unknown_keys:
+        raise ValueError(f"Unknown {config_class.__name__} field(s): {', '.join(unknown_keys)}")
+
+
 def _tupleify_config_values(config_class, values: dict[str, Any]) -> dict[str, Any]:
-    coerced = _keep_dataclass_keys(config_class, dict(values))
+    raw_values = dict(values)
+    _reject_unknown_dataclass_keys(config_class, raw_values)
+    coerced = dict(raw_values)
     tuple_fields = set(_COMMUTATIVE_CNN_TUPLE_FIELDS)
     if config_class is CommutativeCNNConfig:
         tuple_fields.update(

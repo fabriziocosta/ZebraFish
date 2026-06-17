@@ -129,7 +129,7 @@ class CommutativePretrainingObjectiveTests(unittest.TestCase):
 
     def test_cross_probe_targets_do_not_switch_back_to_raw_probe_targets_after_warmup(self) -> None:
         X = torch.randn(2, 4, 1, 8, 8)
-        spec = ProbeSpec(local_count=3, region_grid=(1, 1, 1), time_bins=2, frequency_bins=2)
+        spec = ProbeSpec(region_grid=(1, 1, 1), time_bins=2, frequency_bins=2)
         probe_targets = build_probe_targets(X, spec)
         pred_A_self = {key: target + 1.0 for key, target in probe_targets.items()}
         pred_B_self = {key: target + 2.0 for key, target in probe_targets.items()}
@@ -171,7 +171,7 @@ class CommutativePretrainingObjectiveTests(unittest.TestCase):
         self.assertEqual(LossWeightConfig().latent_alignment_weight, 0.0)
 
         X = torch.randn(2, 4, 1, 8, 8)
-        spec = ProbeSpec(local_count=3, region_grid=(1, 1, 1), time_bins=2, frequency_bins=2)
+        spec = ProbeSpec(region_grid=(1, 1, 1), time_bins=2, frequency_bins=2)
         probe_targets = build_probe_targets(X, spec)
         outputs = {
             "pred_A_self": {key: value.clone() for key, value in probe_targets.items()},

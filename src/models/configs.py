@@ -96,7 +96,6 @@ class CommutativeCNNConfig:
     patch_size_xy: int = 16
     embedding_dim: int = 128
     num_prototypes: int = 64
-    probe_local_count: int = 32
     probe_region_grid: tuple[int, int, int] = (1, 2, 2)
     probe_time_bins: int = 8
     probe_frequency_bins: int = 4
@@ -120,7 +119,6 @@ class CommutativeTransformerConfig:
     ts_spatial_depth: int = 2
     embedding_dim: int = 96
     num_prototypes: int = 64
-    probe_local_count: int = 32
     probe_region_grid: tuple[int, int, int] = (1, 2, 2)
     probe_time_bins: int = 8
     probe_frequency_bins: int = 4

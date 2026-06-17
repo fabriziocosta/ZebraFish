@@ -83,13 +83,13 @@ $$
 
 be the embeddings produced by the two pathways for sample $i$. The current self-supervised pretraining objective does not require these embeddings to match directly. Instead, both embeddings must answer the same fixed set of structured questions about the input tensor.
 
-Define a fixed probe ontology. For every input sample, the implementation computes the following probe-target tensors:
+Define a fixed probe ontology. For every input sample, the implementation first computes a shared coarse spatiotemporal tensor over `probe_region_grid` and `probe_time_bins`, then derives the following probe-target tensors:
 
-- `local`: fixed local voxel/time samples from the input tensor
-- `region_time`: coarse region-level temporal summaries
-- `derivative`: temporal derivatives of the region-level summaries
-- `frequency`: low-frequency magnitude summaries of region traces
-- `correlation`: pairwise correlations between coarse region traces
+- `local`: coarse region-time mean and standard deviation summaries
+- `region_time`: coarse region-time mean activity
+- `derivative`: temporal derivatives of the coarse region-time means
+- `frequency`: low-frequency magnitude summaries of coarse region-time means
+- `correlation`: pairwise correlations between coarse region-time means
 
 Every probe type is present in every batch. During training, randomness enters only through binary masks over entries within those tensors:
 

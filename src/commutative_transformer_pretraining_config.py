@@ -32,8 +32,17 @@ def _keep_dataclass_keys(config_class, values: dict[str, Any]) -> dict[str, Any]
     return {key: value for key, value in values.items() if key in valid_keys}
 
 
+def _reject_unknown_dataclass_keys(config_class, values: dict[str, Any]) -> None:
+    valid_keys = {field.name for field in fields(config_class)}
+    unknown_keys = sorted(set(values) - valid_keys)
+    if unknown_keys:
+        raise ValueError(f"Unknown {config_class.__name__} field(s): {', '.join(unknown_keys)}")
+
+
 def _tupleify_config_values(values: dict[str, Any]) -> dict[str, Any]:
-    coerced = _keep_dataclass_keys(CommutativeTransformerConfig, dict(values))
+    raw_values = dict(values)
+    _reject_unknown_dataclass_keys(CommutativeTransformerConfig, raw_values)
+    coerced = dict(raw_values)
     for field_name in ("spatial_patch_size_st", "spatial_patch_size_ts", "probe_region_grid"):
         value = coerced.get(field_name)
         if isinstance(value, list):
