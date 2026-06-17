@@ -8,3 +8,9 @@ __pycache__/
 *.pt
 artifacts/*
 !artifacts/current_dataset.json
+!artifacts/pretrained_commutative_cnn/
+artifacts/pretrained_commutative_cnn/*
+!artifacts/pretrained_commutative_cnn/config.yaml
+!artifacts/pretrained_commutative_transformer/
+artifacts/pretrained_commutative_transformer/*
+!artifacts/pretrained_commutative_transformer/config.yaml

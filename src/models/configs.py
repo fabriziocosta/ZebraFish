@@ -11,24 +11,46 @@ class OptimizationConfig:
     weight_decay: float = 1e-4
     early_stopping_patience: int | None = None
     early_stopping_min_delta: float = 0.0
+    early_stopping_start_epoch: int | None = None
+    early_stopping_monitor: str = "loss"
+    early_stopping_smoothing: str = "none"
+    early_stopping_smoothing_window: int = 1
     scheduler_patience: int | None = None
     scheduler_factor: float = 0.5
     scheduler_min_lr: float = 1e-6
+    training_plot_dir: str | None = None
+    training_plot_every_n_epochs: int = 1
+    training_plot_smoothing_window: int = 5
     validation_split: float = 0.2
     random_state: int = 0
     standardize: bool = True
     device: str | None = None
     verbose: bool = True
+    class_weighting: str | None = None
 
 
 @dataclass(frozen=True)
 class LossWeightConfig:
     action_weight: float = 1.0
+    water_vs_other_weight: float = 0.0
     compound_weight: float = 0.2
     concentration_weight: float = 0.2
-    consistency_weight: float = 0.5
-    feature_weight: float = 0.1
+    lambda_cross: float = 1.0
+    lambda_align: float = 0.0
     prototype_temperature: float = 0.1
+    prototype_alignment_weight: float = 1.0
+    prototype_warmup_epochs: int = 0
+    prototype_ramp_epochs: int = 0
+    latent_alignment_weight: float = 0.0
+    cross_warmup_epochs: int = 5
+    cross_ramp_epochs: int = 5
+    teacher_student_warmup_epochs: int = 0
+    probe_mask_probability: float = 0.25
+    probe_alpha_local: float = 1.0
+    probe_alpha_region_time: float = 1.0
+    probe_alpha_derivative: float = 1.0
+    probe_alpha_frequency: float = 1.0
+    probe_alpha_correlation: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -74,7 +96,12 @@ class CommutativeCNNConfig:
     patch_size_xy: int = 16
     embedding_dim: int = 128
     num_prototypes: int = 64
+    probe_local_count: int = 32
+    probe_region_grid: tuple[int, int, int] = (1, 2, 2)
+    probe_time_bins: int = 8
+    probe_frequency_bins: int = 4
     dropout: float = 0.2
+    verbose: bool = True
 
 
 @dataclass(frozen=True)
@@ -92,7 +119,12 @@ class CommutativeTransformerConfig:
     ts_temporal_depth: int = 2
     ts_spatial_depth: int = 2
     embedding_dim: int = 96
-    num_prototypes: int = 32
+    num_prototypes: int = 64
+    probe_local_count: int = 32
+    probe_region_grid: tuple[int, int, int] = (1, 2, 2)
+    probe_time_bins: int = 8
+    probe_frequency_bins: int = 4
+    verbose: bool = True
 
 
 def config_as_dict(config) -> dict[str, object]:

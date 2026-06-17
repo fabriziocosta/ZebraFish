@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import tempfile
 from typing import Iterable, Sequence
 
 from IPython.display import display
@@ -88,7 +91,7 @@ def plot_training_history(
             [
                 "loss",
                 "action_loss",
-                "commutative_consistency_loss",
+                "water_vs_other_loss",
                 "feature_alignment_loss",
                 "compound_loss",
                 "concentration_loss",
@@ -97,7 +100,7 @@ def plot_training_history(
             in {
                 "loss",
                 "action_loss",
-                "commutative_consistency_loss",
+                "water_vs_other_loss",
                 "feature_alignment_loss",
                 "compound_loss",
                 "concentration_loss",
@@ -175,15 +178,51 @@ def plot_training_history(
         panel_ax.set_ylabel("Loss")
         panel_ax.set_title(_humanize_loss_name(loss_name))
         panel_ax.grid(True, alpha=0.25)
-        panel_ax.legend()
+        panel_ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.24),
+            ncol=2,
+            fontsize="small",
+            frameon=True,
+        )
 
     if ax is None and len(axes) > len(loss_names):
         for empty_ax in axes[len(loss_names) :]:
             empty_ax.set_visible(False)
 
     fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.tight_layout(rect=(0, 0.04, 1, 0.98))
     return fig, (axes[: len(loss_names)] if ax is None else ax)
+
+
+def save_training_history_pdf(
+    history,
+    output_path: str | Path,
+    *,
+    title: str = "Training history",
+    loess_frac: float | None = None,
+    show_raw: bool = True,
+) -> Path:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, _ = plot_training_history(history, title=title, loess_frac=loess_frac, show_raw=show_raw)
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=output_path.suffix,
+            prefix=f".{output_path.stem}.",
+            dir=output_path.parent,
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+        try:
+            fig.savefig(temp_path, format="pdf", bbox_inches="tight")
+            os.replace(temp_path, output_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+    finally:
+        plt.close(fig)
+    return output_path
 
 
 def build_classification_reports(
@@ -317,6 +356,8 @@ def plot_confusion_matrices(
     ]
     for ax, matrix, title, fmt in panels:
         image = ax.imshow(matrix, cmap=cmap, aspect="auto")
+        max_value = float(np.max(matrix)) if matrix.size else 0.0
+        dark_threshold = 0.5 * max_value
         ax.set_xticks(range(len(class_labels)))
         ax.set_xticklabels(tick_labels, rotation=35, ha="right")
         ax.set_yticks(range(len(class_labels)))
@@ -326,8 +367,11 @@ def plot_confusion_matrices(
         ax.set_title(title)
         for row_index in range(matrix.shape[0]):
             for column_index in range(matrix.shape[1]):
+                if float(matrix[row_index, column_index]) == 0.0:
+                    continue
                 value = format(matrix[row_index, column_index], fmt)
-                ax.text(column_index, row_index, value, ha="center", va="center", color="black")
+                text_color = "white" if float(matrix[row_index, column_index]) > dark_threshold else "black"
+                ax.text(column_index, row_index, value, ha="center", va="center", color=text_color)
         fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
 
     fig.tight_layout()
@@ -379,10 +423,11 @@ def display_multitask_reports_and_confusions(
     y_pred: dict[str, Iterable[int]],
     class_labels: dict[str, Sequence[int]] | None = None,
     label_maps: dict[str, dict[int, str]] | None = None,
+    title_suffix: str = "",
 ) -> None:
     for target, (per_class_df, summary_df) in reports.items():
         print()
-        print(f"## Holdout report: {target}")
+        print(f"## Holdout report: {target}{title_suffix}")
         display(per_class_df)
         display(summary_df)
         plot_confusion_matrices(

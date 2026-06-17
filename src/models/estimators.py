@@ -19,13 +19,23 @@ from src.models.configs import (
     TimeChannel3DCNNConfig,
     config_as_dict,
 )
+from src.models.probes import ProbeSpec
 from src.models.common import _PreparedData, _SharedMultitaskEstimatorMixin, _expand_per_block
-from src.training.losses import apply_auxiliary_head_losses, commutative_consistency_loss
+from src.training.losses import apply_auxiliary_head_losses, compute_hierarchical_action_losses
 from src.training.loop import _collect_output_batches
 from src.training.pretraining import _pretrain_commutative_estimator
 
 
-_HEAD_PREFIXES = ("classifier.", "compound_classifier.", "concentration_classifier.")
+_HEAD_PREFIXES = (
+    "classifier.",
+    "water_classifier.",
+    "compound_classifier.",
+    "concentration_classifier.",
+    "st_self_probe_decoder.",
+    "ts_self_probe_decoder.",
+    "st_cross_probe_decoder.",
+    "ts_cross_probe_decoder.",
+)
 
 
 def _apply_config(obj, *configs) -> None:
@@ -44,6 +54,38 @@ def _load_state_payload(path_or_state: str | Path | Mapping[str, torch.Tensor]) 
     if "model_state_dict" in payload:
         payload = payload["model_state_dict"]
     return {str(key): value.detach().cpu() for key, value in payload.items()}
+
+
+def _print_model_size(model: nn.Module, label: str) -> None:
+    total_params = sum(parameter.numel() for parameter in model.parameters())
+    trainable_params = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    param_bytes = sum(parameter.numel() * parameter.element_size() for parameter in model.parameters())
+    buffer_bytes = sum(buffer.numel() * buffer.element_size() for buffer in model.buffers())
+    total_mb = (param_bytes + buffer_bytes) / (1024**2)
+    print(
+        f"{label}: parameters={total_params:,} "
+        f"trainable={trainable_params:,} size={total_mb:.2f} MB"
+    )
+
+
+def _model_config_verbose(config) -> bool:
+    return bool(getattr(config, "verbose", False))
+
+
+def _criterion_for(
+    criteria: nn.Module | Mapping[str, nn.Module],
+    target: str,
+) -> nn.Module:
+    if isinstance(criteria, Mapping):
+        return criteria.get(target) or criteria["action"]
+    return criteria
+
+
+def _latent_alignment_weight(obj) -> float:
+    weight = float(getattr(obj, "latent_alignment_weight", 0.0))
+    if weight != 0.0:
+        return weight
+    return float(getattr(obj, "lambda_align", 0.0))
 
 
 class _CommutativePretrainingMixin:
@@ -152,13 +194,21 @@ class TimeChannel3DCNNClassifier(
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         action_weight: float = 1.0,
+        water_vs_other_weight: float = 0.0,
         compound_weight: float = 0.2,
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = None,
         early_stopping_min_delta: float = 0.0,
+        early_stopping_start_epoch: int | None = None,
+        early_stopping_monitor: str = "loss",
+        early_stopping_smoothing: str = "none",
+        early_stopping_smoothing_window: int = 1,
         scheduler_patience: int | None = None,
         scheduler_factor: float = 0.5,
         scheduler_min_lr: float = 1e-6,
+        training_plot_dir: str | None = None,
+        training_plot_every_n_epochs: int = 1,
+        training_plot_smoothing_window: int = 5,
         validation_split: float = 0.2,
         random_state: int = 0,
         standardize: bool = True,
@@ -184,13 +234,21 @@ class TimeChannel3DCNNClassifier(
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.action_weight = action_weight
+        self.water_vs_other_weight = water_vs_other_weight
         self.compound_weight = compound_weight
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
+        self.early_stopping_start_epoch = early_stopping_start_epoch
+        self.early_stopping_monitor = early_stopping_monitor
+        self.early_stopping_smoothing = early_stopping_smoothing
+        self.early_stopping_smoothing_window = early_stopping_smoothing_window
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
         self.scheduler_min_lr = scheduler_min_lr
+        self.training_plot_dir = training_plot_dir
+        self.training_plot_every_n_epochs = training_plot_every_n_epochs
+        self.training_plot_smoothing_window = training_plot_smoothing_window
         self.validation_split = validation_split
         self.random_state = random_state
         self.standardize = standardize
@@ -233,16 +291,25 @@ class TimeChannel3DCNNClassifier(
         self,
         outputs: dict[str, torch.Tensor],
         targets: torch.Tensor,
-        criterion: nn.Module,
+        criterion: nn.Module | Mapping[str, nn.Module],
         compound_targets: torch.Tensor | None = None,
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
-        action_loss = criterion(outputs["logits"], targets)
-        total_loss = float(self.action_weight) * action_loss
+        action_loss, water_vs_other_loss, action_total_loss = compute_hierarchical_action_losses(
+            action_logits=outputs["logits"],
+            water_logits=outputs["water_logits"],
+            action_targets=targets,
+            action_criterion=_criterion_for(criterion, "action"),
+            water_weight=self.water_vs_other_weight,
+            water_class_index=self.class_to_index_.get(0, 0),
+        )
+        total_loss = float(self.action_weight) * action_total_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
-            criterion=criterion,
+            criterion=_criterion_for(criterion, "action"),
+            compound_criterion=_criterion_for(criterion, "compound"),
+            concentration_criterion=_criterion_for(criterion, "concentration"),
             compound_targets=compound_targets,
             concentration_targets=concentration_targets,
             compound_weight=self.compound_weight,
@@ -250,6 +317,7 @@ class TimeChannel3DCNNClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
+            "water_vs_other_loss": float(water_vs_other_loss.item()),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
         }
@@ -290,23 +358,48 @@ class CommutativeCNNClassifier(
         patch_size_z: int = 1,
         patch_size_xy: int = 16,
         embedding_dim: int = 128,
+        probe_local_count: int = 32,
+        probe_region_grid: tuple[int, int, int] = (1, 2, 2),
+        probe_time_bins: int = 8,
+        probe_frequency_bins: int = 4,
         num_prototypes: int = 64,
-        consistency_weight: float = 0.5,
-        feature_weight: float = 0.1,
+        lambda_cross: float = 1.0,
+        lambda_align: float = 0.0,
         prototype_temperature: float = 0.1,
+        prototype_alignment_weight: float = 1.0,
+        prototype_warmup_epochs: int = 0,
+        prototype_ramp_epochs: int = 0,
+        latent_alignment_weight: float = 0.0,
+        cross_warmup_epochs: int = 5,
+        cross_ramp_epochs: int = 5,
+        teacher_student_warmup_epochs: int = 0,
+        probe_mask_probability: float = 0.25,
+        probe_alpha_local: float = 1.0,
+        probe_alpha_region_time: float = 1.0,
+        probe_alpha_derivative: float = 1.0,
+        probe_alpha_frequency: float = 1.0,
+        probe_alpha_correlation: float = 1.0,
         dropout: float = 0.2,
         batch_size: int = 16,
         epochs: int = 20,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         action_weight: float = 1.0,
+        water_vs_other_weight: float = 0.0,
         compound_weight: float = 0.2,
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = None,
         early_stopping_min_delta: float = 0.0,
+        early_stopping_start_epoch: int | None = None,
+        early_stopping_monitor: str = "loss",
+        early_stopping_smoothing: str = "none",
+        early_stopping_smoothing_window: int = 1,
         scheduler_patience: int | None = None,
         scheduler_factor: float = 0.5,
         scheduler_min_lr: float = 1e-6,
+        training_plot_dir: str | None = None,
+        training_plot_every_n_epochs: int = 1,
+        training_plot_smoothing_window: int = 5,
         validation_split: float = 0.2,
         random_state: int = 0,
         standardize: bool = True,
@@ -317,6 +410,7 @@ class CommutativeCNNClassifier(
         loss_weight_config: LossWeightConfig | None = None,
         pretrained_state_path: str | Path | None = None,
         freeze_backbone: bool = False,
+        hot_start: bool = False,
     ) -> None:
         self.spatial_conv_channels = spatial_conv_channels
         self.spatial_kernel_size_z = spatial_kernel_size_z
@@ -343,23 +437,48 @@ class CommutativeCNNClassifier(
         self.patch_size_z = patch_size_z
         self.patch_size_xy = patch_size_xy
         self.embedding_dim = embedding_dim
+        self.probe_local_count = probe_local_count
+        self.probe_region_grid = probe_region_grid
+        self.probe_time_bins = probe_time_bins
+        self.probe_frequency_bins = probe_frequency_bins
         self.num_prototypes = num_prototypes
-        self.consistency_weight = consistency_weight
-        self.feature_weight = feature_weight
+        self.lambda_cross = lambda_cross
+        self.lambda_align = lambda_align
         self.prototype_temperature = prototype_temperature
+        self.prototype_alignment_weight = prototype_alignment_weight
+        self.prototype_warmup_epochs = prototype_warmup_epochs
+        self.prototype_ramp_epochs = prototype_ramp_epochs
+        self.latent_alignment_weight = latent_alignment_weight
+        self.cross_warmup_epochs = cross_warmup_epochs
+        self.cross_ramp_epochs = cross_ramp_epochs
+        self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
+        self.probe_mask_probability = probe_mask_probability
+        self.probe_alpha_local = probe_alpha_local
+        self.probe_alpha_region_time = probe_alpha_region_time
+        self.probe_alpha_derivative = probe_alpha_derivative
+        self.probe_alpha_frequency = probe_alpha_frequency
+        self.probe_alpha_correlation = probe_alpha_correlation
         self.dropout = dropout
         self.batch_size = batch_size
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.action_weight = action_weight
+        self.water_vs_other_weight = water_vs_other_weight
         self.compound_weight = compound_weight
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
+        self.early_stopping_start_epoch = early_stopping_start_epoch
+        self.early_stopping_monitor = early_stopping_monitor
+        self.early_stopping_smoothing = early_stopping_smoothing
+        self.early_stopping_smoothing_window = early_stopping_smoothing_window
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
         self.scheduler_min_lr = scheduler_min_lr
+        self.training_plot_dir = training_plot_dir
+        self.training_plot_every_n_epochs = training_plot_every_n_epochs
+        self.training_plot_smoothing_window = training_plot_smoothing_window
         self.validation_split = validation_split
         self.random_state = random_state
         self.standardize = standardize
@@ -370,6 +489,7 @@ class CommutativeCNNClassifier(
         self.loss_weight_config = loss_weight_config
         self.pretrained_state_path = pretrained_state_path
         self.freeze_backbone = freeze_backbone
+        self.hot_start = hot_start
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _PureCNNDualPathwayNetwork:
@@ -393,7 +513,7 @@ class CommutativeCNNClassifier(
         spatial_agg_pool_stride_xy = (
             self.spatial_agg_pool_kernel_xy if self.spatial_agg_pool_stride_xy is None else self.spatial_agg_pool_stride_xy
         )
-        return _PureCNNDualPathwayNetwork(
+        model = _PureCNNDualPathwayNetwork(
             num_classes=num_classes,
             spatial_conv_channels=self.spatial_conv_channels,
             spatial_kernel_size_z=_expand_per_block(self.spatial_kernel_size_z, n_spatial_blocks, "spatial_kernel_size_z"),
@@ -422,9 +542,18 @@ class CommutativeCNNClassifier(
             embedding_dim=self.embedding_dim,
             num_prototypes=self.num_prototypes,
             dropout=self.dropout,
+            probe_spec=ProbeSpec(
+                local_count=int(self.probe_local_count),
+                region_grid=tuple(int(size) for size in self.probe_region_grid),
+                time_bins=int(self.probe_time_bins),
+                frequency_bins=int(self.probe_frequency_bins),
+            ),
             num_compound_classes=0 if self.compound_classes_ is None else len(self.compound_classes_),
             num_concentration_classes=0 if self.concentration_classes_ is None else len(self.concentration_classes_),
         )
+        if _model_config_verbose(self.model_config):
+            _print_model_size(model, "Commutative CNN model")
+        return model
 
     def _build_model_from_prepared(self, prepared: _PreparedData) -> nn.Module:
         return self._build_model(num_classes=len(self.classes_))
@@ -433,26 +562,27 @@ class CommutativeCNNClassifier(
         self,
         outputs: dict[str, torch.Tensor],
         targets: torch.Tensor,
-        criterion: nn.Module,
+        criterion: nn.Module | Mapping[str, nn.Module],
         compound_targets: torch.Tensor | None = None,
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
-        action_loss = criterion(outputs["logits"], targets)
-        consistency = commutative_consistency_loss(
-            outputs["st_prototypes"],
-            outputs["ts_prototypes"],
-            temperature=float(self.prototype_temperature),
+        action_loss, water_vs_other_loss, action_total_loss = compute_hierarchical_action_losses(
+            action_logits=outputs["logits"],
+            water_logits=outputs["water_logits"],
+            action_targets=targets,
+            action_criterion=_criterion_for(criterion, "action"),
+            water_weight=self.water_vs_other_weight,
+            water_class_index=self.class_to_index_.get(0, 0),
         )
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-        total_loss = (
-            float(self.action_weight) * action_loss
-            + float(self.consistency_weight) * consistency
-            + float(self.feature_weight) * feature_alignment_loss
-        )
+        latent_alignment_weight = _latent_alignment_weight(self)
+        total_loss = float(self.action_weight) * action_total_loss + latent_alignment_weight * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
-            criterion=criterion,
+            criterion=_criterion_for(criterion, "action"),
+            compound_criterion=_criterion_for(criterion, "compound"),
+            concentration_criterion=_criterion_for(criterion, "concentration"),
             compound_targets=compound_targets,
             concentration_targets=concentration_targets,
             compound_weight=self.compound_weight,
@@ -460,8 +590,10 @@ class CommutativeCNNClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
-            "commutative_consistency_loss": float(consistency.item()),
+            "water_vs_other_loss": float(water_vs_other_loss.item()),
             "feature_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_weight": float(latent_alignment_weight),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
         }
@@ -498,22 +630,47 @@ class CommutativeTransformerClassifier(
         ts_temporal_depth: int = 2,
         ts_spatial_depth: int = 2,
         embedding_dim: int = 96,
-        num_prototypes: int = 32,
-        consistency_weight: float = 0.5,
-        feature_weight: float = 0.1,
+        probe_local_count: int = 32,
+        probe_region_grid: tuple[int, int, int] = (1, 2, 2),
+        probe_time_bins: int = 8,
+        probe_frequency_bins: int = 4,
+        num_prototypes: int = 64,
+        lambda_cross: float = 1.0,
+        lambda_align: float = 0.0,
         prototype_temperature: float = 0.1,
+        prototype_alignment_weight: float = 1.0,
+        prototype_warmup_epochs: int = 0,
+        prototype_ramp_epochs: int = 0,
+        latent_alignment_weight: float = 0.0,
+        cross_warmup_epochs: int = 5,
+        cross_ramp_epochs: int = 5,
+        teacher_student_warmup_epochs: int = 0,
+        probe_mask_probability: float = 0.25,
+        probe_alpha_local: float = 1.0,
+        probe_alpha_region_time: float = 1.0,
+        probe_alpha_derivative: float = 1.0,
+        probe_alpha_frequency: float = 1.0,
+        probe_alpha_correlation: float = 1.0,
         batch_size: int = 8,
         epochs: int = 20,
         learning_rate: float = 2e-4,
         weight_decay: float = 3e-3,
         action_weight: float = 1.0,
+        water_vs_other_weight: float = 0.0,
         compound_weight: float = 0.2,
         concentration_weight: float = 0.2,
         early_stopping_patience: int | None = 4,
         early_stopping_min_delta: float = 0.0,
+        early_stopping_start_epoch: int | None = None,
+        early_stopping_monitor: str = "loss",
+        early_stopping_smoothing: str = "none",
+        early_stopping_smoothing_window: int = 1,
         scheduler_patience: int | None = 1,
         scheduler_factor: float = 0.5,
         scheduler_min_lr: float = 1e-6,
+        training_plot_dir: str | None = None,
+        training_plot_every_n_epochs: int = 1,
+        training_plot_smoothing_window: int = 5,
         validation_split: float = 0.2,
         random_state: int = 0,
         standardize: bool = True,
@@ -524,6 +681,7 @@ class CommutativeTransformerClassifier(
         loss_weight_config: LossWeightConfig | None = None,
         pretrained_state_path: str | Path | None = None,
         freeze_backbone: bool = False,
+        hot_start: bool = False,
     ) -> None:
         self.spatial_patch_size_st = spatial_patch_size_st
         self.spatial_patch_size_ts = spatial_patch_size_ts
@@ -538,22 +696,47 @@ class CommutativeTransformerClassifier(
         self.ts_temporal_depth = ts_temporal_depth
         self.ts_spatial_depth = ts_spatial_depth
         self.embedding_dim = embedding_dim
+        self.probe_local_count = probe_local_count
+        self.probe_region_grid = probe_region_grid
+        self.probe_time_bins = probe_time_bins
+        self.probe_frequency_bins = probe_frequency_bins
         self.num_prototypes = num_prototypes
-        self.consistency_weight = consistency_weight
-        self.feature_weight = feature_weight
+        self.lambda_cross = lambda_cross
+        self.lambda_align = lambda_align
         self.prototype_temperature = prototype_temperature
+        self.prototype_alignment_weight = prototype_alignment_weight
+        self.prototype_warmup_epochs = prototype_warmup_epochs
+        self.prototype_ramp_epochs = prototype_ramp_epochs
+        self.latent_alignment_weight = latent_alignment_weight
+        self.cross_warmup_epochs = cross_warmup_epochs
+        self.cross_ramp_epochs = cross_ramp_epochs
+        self.teacher_student_warmup_epochs = teacher_student_warmup_epochs
+        self.probe_mask_probability = probe_mask_probability
+        self.probe_alpha_local = probe_alpha_local
+        self.probe_alpha_region_time = probe_alpha_region_time
+        self.probe_alpha_derivative = probe_alpha_derivative
+        self.probe_alpha_frequency = probe_alpha_frequency
+        self.probe_alpha_correlation = probe_alpha_correlation
         self.batch_size = batch_size
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.action_weight = action_weight
+        self.water_vs_other_weight = water_vs_other_weight
         self.compound_weight = compound_weight
         self.concentration_weight = concentration_weight
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
+        self.early_stopping_start_epoch = early_stopping_start_epoch
+        self.early_stopping_monitor = early_stopping_monitor
+        self.early_stopping_smoothing = early_stopping_smoothing
+        self.early_stopping_smoothing_window = early_stopping_smoothing_window
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
         self.scheduler_min_lr = scheduler_min_lr
+        self.training_plot_dir = training_plot_dir
+        self.training_plot_every_n_epochs = training_plot_every_n_epochs
+        self.training_plot_smoothing_window = training_plot_smoothing_window
         self.validation_split = validation_split
         self.random_state = random_state
         self.standardize = standardize
@@ -564,10 +747,11 @@ class CommutativeTransformerClassifier(
         self.loss_weight_config = loss_weight_config
         self.pretrained_state_path = pretrained_state_path
         self.freeze_backbone = freeze_backbone
+        self.hot_start = hot_start
         _apply_config(self, model_config, optimization_config, loss_weight_config)
 
     def _build_model(self, num_classes: int) -> _CommutativeTransformerNetwork:
-        return _CommutativeTransformerNetwork(
+        model = _CommutativeTransformerNetwork(
             num_classes=num_classes,
             spatial_patch_size_st=self.spatial_patch_size_st,
             spatial_patch_size_ts=self.spatial_patch_size_ts,
@@ -583,9 +767,18 @@ class CommutativeTransformerClassifier(
             ts_spatial_depth=self.ts_spatial_depth,
             embedding_dim=self.embedding_dim,
             num_prototypes=self.num_prototypes,
+            probe_spec=ProbeSpec(
+                local_count=int(self.probe_local_count),
+                region_grid=tuple(int(size) for size in self.probe_region_grid),
+                time_bins=int(self.probe_time_bins),
+                frequency_bins=int(self.probe_frequency_bins),
+            ),
             num_compound_classes=0 if self.compound_classes_ is None else len(self.compound_classes_),
             num_concentration_classes=0 if self.concentration_classes_ is None else len(self.concentration_classes_),
         )
+        if _model_config_verbose(self.model_config):
+            _print_model_size(model, "Commutative transformer model")
+        return model
 
     def _build_model_from_prepared(self, prepared: _PreparedData) -> nn.Module:
         return self._build_model(num_classes=len(self.classes_))
@@ -594,26 +787,27 @@ class CommutativeTransformerClassifier(
         self,
         outputs: dict[str, torch.Tensor],
         targets: torch.Tensor,
-        criterion: nn.Module,
+        criterion: nn.Module | Mapping[str, nn.Module],
         compound_targets: torch.Tensor | None = None,
         concentration_targets: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
-        action_loss = criterion(outputs["logits"], targets)
-        consistency = commutative_consistency_loss(
-            outputs["st_prototypes"],
-            outputs["ts_prototypes"],
-            temperature=float(self.prototype_temperature),
+        action_loss, water_vs_other_loss, action_total_loss = compute_hierarchical_action_losses(
+            action_logits=outputs["logits"],
+            water_logits=outputs["water_logits"],
+            action_targets=targets,
+            action_criterion=_criterion_for(criterion, "action"),
+            water_weight=self.water_vs_other_weight,
+            water_class_index=self.class_to_index_.get(0, 0),
         )
         feature_alignment_loss = F.mse_loss(outputs["st_embedding"], outputs["ts_embedding"])
-        total_loss = (
-            float(self.action_weight) * action_loss
-            + float(self.consistency_weight) * consistency
-            + float(self.feature_weight) * feature_alignment_loss
-        )
+        latent_alignment_weight = _latent_alignment_weight(self)
+        total_loss = float(self.action_weight) * action_total_loss + latent_alignment_weight * feature_alignment_loss
         total_loss, compound_loss_value, concentration_loss_value = apply_auxiliary_head_losses(
             total_loss=total_loss,
             outputs=outputs,
-            criterion=criterion,
+            criterion=_criterion_for(criterion, "action"),
+            compound_criterion=_criterion_for(criterion, "compound"),
+            concentration_criterion=_criterion_for(criterion, "concentration"),
             compound_targets=compound_targets,
             concentration_targets=concentration_targets,
             compound_weight=self.compound_weight,
@@ -621,8 +815,10 @@ class CommutativeTransformerClassifier(
         )
         return total_loss, {
             "action_loss": float(action_loss.item()),
-            "commutative_consistency_loss": float(consistency.item()),
+            "water_vs_other_loss": float(water_vs_other_loss.item()),
             "feature_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_loss": float(feature_alignment_loss.item()),
+            "latent_alignment_weight": float(latent_alignment_weight),
             "compound_loss": compound_loss_value,
             "concentration_loss": concentration_loss_value,
         }

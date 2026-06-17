@@ -42,6 +42,7 @@ TENSOR_CACHE_DIR = PROJECT_ROOT / ".tensor_cache"
 TIFF_CACHE_DIR = PROJECT_ROOT / ".tiff_cache"
 DATASET_CACHE_DIR = PROJECT_ROOT / ".dataset_cache"
 CACHE_INDEX_FILENAME = ".cache_index.json"
+UNLABELED_FAILURES_FILENAME = "failed_conditions.json"
 DEFAULT_CACHE_BUDGETS = {
     TENSOR_CACHE_DIR.resolve(): 5 * 1024**3,
     TIFF_CACHE_DIR.resolve(): 30 * 1024**3,
@@ -214,6 +215,17 @@ def _format_bytes(num_bytes: int) -> str:
     return f"{int(num_bytes)} B"
 
 
+def _format_exception_chain(exc: BaseException) -> str:
+    parts: list[str] = []
+    current: BaseException | None = exc
+    while current is not None:
+        rendered = f"{type(current).__name__}: {current}"
+        if rendered not in parts:
+            parts.append(rendered)
+        current = current.__cause__ or current.__context__
+    return " <- ".join(parts)
+
+
 def _validate_dataset_save_capacity(
     dataset_path: Path,
     *,
@@ -266,33 +278,76 @@ def _validate_dataset_save_capacity(
 
 
 def _collect_pinned_cache_paths(cache_dir: Path) -> set[Path]:
-    if cache_dir.resolve() != DATASET_CACHE_DIR.resolve():
+    resolved_cache_dir = cache_dir.resolve()
+    if resolved_cache_dir != DATASET_CACHE_DIR.resolve():
         return set()
     pinned_paths: set[Path] = set()
     try:
-        current_dataset_path = load_current_dataset_artifact_path(
-            config_path=DEFAULT_CURRENT_DATASET_CONFIG_PATH
+        current_dataset_path = _resolve_dataset_artifact_path(
+            load_current_dataset_artifact_path(config_path=DEFAULT_CURRENT_DATASET_CONFIG_PATH)
         ).resolve()
     except (FileNotFoundError, KeyError, json.JSONDecodeError, OSError):
         current_dataset_path = None
     if current_dataset_path is not None:
         try:
-            current_dataset_path.relative_to(cache_dir.resolve())
+            current_dataset_path.relative_to(resolved_cache_dir)
         except ValueError:
             pass
         else:
             pinned_paths.add(current_dataset_path)
+    for manifest_path in resolved_cache_dir.rglob("manifest.json"):
+        try:
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            continue
+        chunks = manifest.get("chunks")
+        if not isinstance(chunks, list) or not chunks:
+            continue
+        if all(isinstance(chunk_name, str) for chunk_name in chunks):
+            pinned_paths.add(manifest_path.parent.resolve())
     extra_pins = os.environ.get("ZF_PINNED_DATASET_PATHS", "")
     for raw_path in extra_pins.split(os.pathsep):
         if not raw_path.strip():
             continue
         candidate = Path(raw_path).expanduser().resolve()
         try:
-            candidate.relative_to(cache_dir.resolve())
+            candidate.relative_to(resolved_cache_dir)
         except ValueError:
             continue
         pinned_paths.add(candidate)
     return pinned_paths
+
+
+def _is_pinned_cache_path(path: Path, pinned_paths: set[Path]) -> bool:
+    resolved_path = path.resolve()
+    for pinned_path in pinned_paths:
+        if resolved_path == pinned_path:
+            return True
+        if pinned_path.is_dir():
+            try:
+                resolved_path.relative_to(pinned_path)
+            except ValueError:
+                pass
+            else:
+                return True
+    return False
+
+
+def _resolve_dataset_artifact_path(path: str | Path) -> Path:
+    dataset_path = Path(path)
+    if dataset_path.is_absolute():
+        local_cache_path = DATASET_CACHE_DIR / dataset_path.name
+        if (
+            not dataset_path.exists()
+            and DATASET_CACHE_DIR.name in dataset_path.parts
+            and local_cache_path.exists()
+        ):
+            return local_cache_path
+        return dataset_path
+    if dataset_path.parts and dataset_path.parts[0] == DATASET_CACHE_DIR.name:
+        return DATASET_CACHE_DIR.parent / dataset_path
+    return DATASET_CACHE_DIR / dataset_path
 
 
 def _list_cache_files(cache_dir: Path) -> list[Path]:
@@ -303,6 +358,13 @@ def _list_cache_files(cache_dir: Path) -> list[Path]:
         for path in cache_dir.rglob("*")
         if path.is_file() and not _is_cache_metadata_file(path.resolve(), cache_dir.resolve())
     ]
+
+
+def _stat_cache_file(path: Path) -> os.stat_result | None:
+    try:
+        return path.stat()
+    except FileNotFoundError:
+        return None
 
 
 def _remove_cache_entry(cache_dir: Path, path: Path) -> None:
@@ -350,7 +412,10 @@ def _prune_cache_entries(
     file_rows: list[dict[str, object]] = []
     dirty_index = False
     for path in _list_cache_files(resolved_cache_dir):
-        stat = path.stat()
+        stat = _stat_cache_file(path)
+        if stat is None:
+            dirty_index = True
+            continue
         relative_key = path.relative_to(resolved_cache_dir).as_posix()
         metadata = entries.get(relative_key)
         last_used_ns = stat.st_mtime_ns if metadata is None else metadata["last_used_ns"]
@@ -362,7 +427,7 @@ def _prune_cache_entries(
                 "path": path,
                 "size": int(stat.st_size),
                 "last_used_ns": int(last_used_ns),
-                "pinned": path.resolve() in pinned_paths,
+                "pinned": _is_pinned_cache_path(path, pinned_paths),
             }
         )
 
@@ -382,7 +447,9 @@ def _prune_cache_entries(
 
     file_rows = []
     for path in _list_cache_files(resolved_cache_dir):
-        stat = path.stat()
+        stat = _stat_cache_file(path)
+        if stat is None:
+            continue
         relative_key = path.relative_to(resolved_cache_dir).as_posix()
         metadata = _read_cache_index(resolved_cache_dir).get(
             relative_key,
@@ -393,7 +460,7 @@ def _prune_cache_entries(
                 "path": path,
                 "size": int(stat.st_size),
                 "last_used_ns": int(metadata["last_used_ns"]),
-                "pinned": path.resolve() in pinned_paths,
+                "pinned": _is_pinned_cache_path(path, pinned_paths),
             }
         )
 
@@ -543,10 +610,10 @@ def timepoint_sort_key(path: Path):
 
 def list_timepoint_files(condition_dir: str | Path) -> list[Path]:
     condition_dir = Path(condition_dir)
-    direct_files = sorted(condition_dir.glob("*.tif*"), key=timepoint_sort_key)
+    direct_files = sorted((path for path in condition_dir.glob("*.tif*") if path.is_file()), key=timepoint_sort_key)
     if direct_files:
         return direct_files
-    return sorted(condition_dir.rglob("*.tif*"), key=timepoint_sort_key)
+    return sorted((path for path in condition_dir.rglob("*.tif*") if path.is_file()), key=timepoint_sort_key)
 
 
 def build_tiff_cache_path(path: str | Path) -> Path:
@@ -647,9 +714,7 @@ def save_labeled_tensor_dataset(
     dataset: dict[str, object],
     path: str | Path,
 ) -> Path:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
     metadata = dataset["metadata"]
@@ -676,6 +741,11 @@ def save_labeled_tensor_dataset(
 
     if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
         _prune_cache_entries(
+            TENSOR_CACHE_DIR,
+            incoming_bytes=estimated_size_bytes,
+            force=True,
+        )
+        _prune_cache_entries(
             DATASET_CACHE_DIR,
             incoming_bytes=estimated_size_bytes,
             force=True,
@@ -691,9 +761,13 @@ def save_labeled_tensor_dataset(
 
 
 def load_labeled_tensor_dataset(path: str | Path) -> dict[str, object]:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
+    if not dataset_path.exists():
+        raise FileNotFoundError(
+            f"Labeled tensor dataset artifact does not exist: {dataset_path}. "
+            "Regenerate it with the dataset preparation notebook or update "
+            f"{DEFAULT_CURRENT_DATASET_CONFIG_PATH} to point at an existing artifact."
+        )
     if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
         _prune_cache_entries(DATASET_CACHE_DIR)
     payload = torch.load(dataset_path, map_location="cpu")
@@ -718,9 +792,7 @@ def save_unlabeled_tensor_dataset(
     dataset: dict[str, object],
     path: str | Path,
 ) -> Path:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
     metadata = dataset["metadata"]
@@ -729,23 +801,47 @@ def save_unlabeled_tensor_dataset(
     tensors = dataset["tensors"]
     if not isinstance(tensors, torch.Tensor):
         raise TypeError("dataset['tensors'] must be a torch.Tensor")
+    estimated_size_bytes = _estimate_dataset_payload_size_bytes({"tensors": tensors, "metadata": metadata})
 
     payload = {
         "tensors": tensors.detach().cpu(),
         "metadata_records": metadata.to_dict(orient="records"),
     }
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _prune_cache_entries(
+            TENSOR_CACHE_DIR,
+            incoming_bytes=estimated_size_bytes,
+            force=True,
+        )
     _validate_dataset_save_capacity(
         dataset_path,
-        estimated_size_bytes=_estimate_dataset_payload_size_bytes({"tensors": tensors, "metadata": metadata}),
+        estimated_size_bytes=estimated_size_bytes,
     )
     torch.save(payload, dataset_path)
+    if dataset_path.resolve().is_relative_to(DATASET_CACHE_DIR.resolve()):
+        _touch_cache_entry(DATASET_CACHE_DIR, dataset_path)
     return dataset_path
 
 
 def load_unlabeled_tensor_dataset(path: str | Path) -> dict[str, object]:
-    dataset_path = Path(path)
-    if not dataset_path.is_absolute():
-        dataset_path = DATASET_CACHE_DIR / dataset_path
+    dataset_path = _resolve_dataset_artifact_path(path)
+    if dataset_path.is_dir():
+        manifest_path = dataset_path / "manifest.json"
+        if manifest_path.exists():
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+            chunk_paths = [dataset_path / chunk_name for chunk_name in manifest["chunks"]]
+        else:
+            chunk_paths = sorted(dataset_path.glob("*.pt"))
+        if not chunk_paths:
+            raise ValueError(f"No unlabeled tensor dataset chunks found in {dataset_path}")
+
+        chunk_payloads = [load_unlabeled_tensor_dataset(chunk_path) for chunk_path in chunk_paths]
+        return {
+            "tensors": torch.cat([payload["tensors"] for payload in chunk_payloads], dim=0),
+            "metadata": pd.concat([payload["metadata"] for payload in chunk_payloads], ignore_index=True),
+        }
+
     payload = torch.load(dataset_path, map_location="cpu")
     return {
         "tensors": payload["tensors"],
@@ -804,6 +900,62 @@ def downsample_tzyx(
         index_tensor = torch.tensor(indices, dtype=torch.long, device=result.device)
         result = torch.index_select(result, dim=dim, index=index_tensor)
     return result
+
+
+def _tensor_matches_output_size(
+    tensor: torch.Tensor,
+    output_size: tuple[int | None, int | None, int | None, int | None] | None,
+) -> bool:
+    if output_size is None:
+        return True
+    if tensor.ndim != 4:
+        return False
+    return all(expected is None or int(actual) == int(expected) for actual, expected in zip(tensor.shape, output_size))
+
+
+def _unlabeled_row_record(original_instance_id: int, row: pd.Series) -> dict[str, object]:
+    return {
+        "original_instance_id": int(original_instance_id),
+        "mechanism_of_action": row["mechanism_of_action"],
+        "compound": row["compound"],
+        "condition_kind": row["condition_kind"],
+        "concentration_band": row["concentration_band"],
+        "concentration_label": row["concentration_label"],
+        "image_condition_dir": row["image_condition_dir"],
+    }
+
+
+def _unlabeled_record_matches_row(record: dict[str, object], row: pd.Series) -> bool:
+    return all(
+        record.get(key) == value
+        for key, value in {
+            "mechanism_of_action": row["mechanism_of_action"],
+            "compound": row["compound"],
+            "condition_kind": row["condition_kind"],
+            "concentration_band": row["concentration_band"],
+            "concentration_label": row["concentration_label"],
+            "image_condition_dir": row["image_condition_dir"],
+        }.items()
+    )
+
+
+def _read_unlabeled_failure_records(path: Path) -> list[dict[str, object]]:
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    failures = payload.get("failures")
+    if not isinstance(failures, list):
+        return []
+    return [failure for failure in failures if isinstance(failure, dict)]
+
+
+def _write_unlabeled_failure_records(path: Path, failures: list[dict[str, object]]) -> None:
+    payload = {"failures": sorted(failures, key=lambda failure: int(failure["original_instance_id"]))}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def loess_smooth_1d(values: np.ndarray, frac: float = 0.25) -> np.ndarray:
@@ -892,17 +1044,43 @@ def load_image_condition_tensor(
     if use_cache:
         cached_tensor = load_cached_tensor(cache_key)
         if cached_tensor is not None:
-            return cached_tensor
+            if _tensor_matches_output_size(cached_tensor, output_size):
+                return cached_tensor
+            cache_path = TENSOR_CACHE_DIR / f"{cache_key}.pt"
+            warnings.warn(
+                "Ignoring cached tensor with unexpected shape "
+                f"{tuple(cached_tensor.shape)} for condition directory {condition_dir}; "
+                f"expected output_size={output_size}. Rebuilding {cache_path}."
+            )
+            _remove_cache_entry(TENSOR_CACHE_DIR, cache_path)
 
-    load_paths = ensure_cached_tiffs(timepoint_files) if use_tiff_cache else timepoint_files
+    try:
+        load_paths = ensure_cached_tiffs(timepoint_files) if use_tiff_cache else timepoint_files
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to prepare TIFF cache for condition directory {condition_dir}. "
+            f"Selected {len(timepoint_files)} timepoints; first files: "
+            f"{[str(path) for path in timepoint_files[:5]]}. "
+            f"Root cause: {_format_exception_chain(exc)}"
+        ) from exc
 
     tensors = []
-    for path in load_paths:
+    for timepoint_index, (source_path, path) in enumerate(zip(timepoint_files, load_paths), start=1):
         try:
             tensors.append(load_tiff_as_tzyx(path, output_size=output_size))
         except Exception as exc:
+            source_detail = f"source={source_path}"
+            cached_detail = f", cached={path}" if Path(path) != Path(source_path) else ""
+            size_details: list[str] = []
+            for label, detail_path in (("source_size", source_path), ("cached_size", path)):
+                try:
+                    size_details.append(f"{label}={_format_bytes(Path(detail_path).stat().st_size)}")
+                except OSError:
+                    size_details.append(f"{label}=unavailable")
             raise RuntimeError(
-                f"Failed to load TIFF timepoint {path} for condition directory {condition_dir}"
+                f"Failed to load TIFF timepoint {timepoint_index}/{len(load_paths)} "
+                f"for condition directory {condition_dir}: {source_detail}{cached_detail}; "
+                f"{', '.join(size_details)}. Root cause: {_format_exception_chain(exc)}"
             ) from exc
     reference_shape = tensors[0].shape[1:]
     mismatched = [str(path) for path, tensor in zip(load_paths, tensors) if tensor.shape[1:] != reference_shape]
@@ -913,7 +1091,7 @@ def load_image_condition_tensor(
 
     tensor = torch.cat(tensors, dim=0)
     if output_size is not None:
-        tensor = downsample_tzyx(tensor, output_size=(None, None, output_size[2], output_size[3]))
+        tensor = downsample_tzyx(tensor, output_size=output_size)
     if normalize_global_drift:
         tensor = normalize_global_intensity_drift(tensor, loess_frac=loess_frac)
     if use_cache:
@@ -1185,7 +1363,7 @@ def build_moa_labeled_tensor_dataset(
                         f"image_condition_dir={row['image_condition_dir']!r}"
                     )
                     if skip_failed_conditions:
-                        warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                        warnings.warn(f"{message}. Skipping this example. Root cause: {_format_exception_chain(exc)}")
                         continue
                     raise RuntimeError(message) from exc
                 add_example(
@@ -1225,7 +1403,7 @@ def build_moa_labeled_tensor_dataset(
                         f"image_condition_dir={row['image_condition_dir']!r}"
                     )
                     if skip_failed_conditions:
-                        warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                        warnings.warn(f"{message}. Skipping this example. Root cause: {_format_exception_chain(exc)}")
                         continue
                     raise RuntimeError(message) from exc
                 add_example(
@@ -1270,6 +1448,11 @@ def build_unlabeled_tensor_dataset(
     use_cache: bool = True,
     use_tiff_cache: bool = True,
     skip_failed_conditions: bool = True,
+    retry_failed_conditions: bool = False,
+    chunk_output_dir: str | Path | None = None,
+    chunk_size: int | None = None,
+    chunk_prefix: str = "unlabeled_chunk",
+    overwrite_chunks: bool = False,
     verbose: bool = True,
 ) -> dict[str, object]:
     """Build an unlabeled tensor dataset for representation pretraining."""
@@ -1279,6 +1462,13 @@ def build_unlabeled_tensor_dataset(
         raise ValueError("max_tensors_per_compound must be positive when provided")
     if max_tensors_total is not None and max_tensors_total <= 0:
         raise ValueError("max_tensors_total must be positive when provided")
+    if chunk_output_dir is not None:
+        if chunk_size is None:
+            raise ValueError("chunk_size must be provided when chunk_output_dir is provided")
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive when provided")
+    elif chunk_size is not None:
+        raise ValueError("chunk_output_dir must be provided when chunk_size is provided")
 
     working_df = condition_df.copy()
     if only_active:
@@ -1315,13 +1505,166 @@ def build_unlabeled_tensor_dataset(
     if working_df.empty:
         raise ValueError("No unlabeled dataset examples were selected with the provided filters")
 
-    tensors: list[torch.Tensor] = []
+    chunk_dir: Path | None = None
+    chunk_paths: list[Path] = []
+    chunk_index = 0
     rows: list[dict[str, object]] = []
+    resume_from_condition_index = 0
+    existing_original_instance_ids: set[int] = set()
+    existing_chunk_indices: set[int] = set()
+    failed_condition_records: dict[int, dict[str, object]] = {}
+    failure_log_path: Path | None = None
+    if chunk_output_dir is not None:
+        chunk_dir = _resolve_dataset_artifact_path(chunk_output_dir)
+        chunk_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = chunk_dir / "manifest.json"
+        failure_log_path = chunk_dir / UNLABELED_FAILURES_FILENAME
+        existing_chunks = sorted(chunk_dir.glob(f"{chunk_prefix}_*.pt"))
+        if overwrite_chunks:
+            for chunk_path in existing_chunks:
+                chunk_path.unlink()
+            if manifest_path.exists():
+                manifest_path.unlink()
+            if failure_log_path.exists():
+                failure_log_path.unlink()
+        elif manifest_path.exists():
+            raise FileExistsError(
+                f"Chunk output directory already contains a manifest: {chunk_dir}. "
+                "Set overwrite_chunks=True to rebuild it."
+            )
+        elif existing_chunks:
+            chunk_name_pattern = re.compile(rf"^{re.escape(chunk_prefix)}_(\d+)\.pt$")
+            existing_rows: list[dict[str, object]] = []
+            for chunk_path in existing_chunks:
+                match = chunk_name_pattern.match(chunk_path.name)
+                if match is None:
+                    raise FileExistsError(
+                        f"Chunk output directory contains an unexpected chunk name {chunk_path.name!r}: {chunk_dir}. "
+                        "Set overwrite_chunks=True to rebuild it."
+                    )
+                chunk_number = int(match.group(1))
+                if chunk_number in existing_chunk_indices:
+                    raise FileExistsError(
+                        f"Chunk output directory contains duplicate {chunk_prefix!r} chunk number {chunk_number}: "
+                        f"{chunk_dir}. Set overwrite_chunks=True to rebuild it."
+                    )
+                chunk_dataset = load_unlabeled_tensor_dataset(chunk_path)
+                chunk_metadata = chunk_dataset["metadata"]
+                if not isinstance(chunk_metadata, pd.DataFrame):
+                    raise TypeError(f"Chunk metadata must be a pandas DataFrame: {chunk_path}")
+                if int(len(chunk_metadata)) != int(chunk_size):
+                    raise FileExistsError(
+                        f"Chunk output directory contains a partial chunk without a manifest: {chunk_path}. "
+                        "Set overwrite_chunks=True to rebuild it."
+                    )
+                existing_chunk_indices.add(chunk_number)
+                existing_rows.extend(chunk_metadata.to_dict(orient="records"))
+
+            for existing_row in existing_rows:
+                original_instance_id = int(existing_row["original_instance_id"])
+                if original_instance_id in existing_original_instance_ids:
+                    raise FileExistsError(
+                        f"Existing chunks contain duplicate original_instance_id={original_instance_id}: {chunk_dir}. "
+                        "Set overwrite_chunks=True to rebuild them."
+                    )
+                if original_instance_id < 0 or original_instance_id >= len(working_df):
+                    raise FileExistsError(
+                        f"Existing chunks contain out-of-range original_instance_id={original_instance_id}: {chunk_dir}. "
+                        "Set overwrite_chunks=True to rebuild them."
+                    )
+                expected_row = working_df.iloc[original_instance_id]
+                expected_record = {
+                    "original_instance_id": original_instance_id,
+                    "mechanism_of_action": expected_row["mechanism_of_action"],
+                    "compound": expected_row["compound"],
+                    "condition_kind": expected_row["condition_kind"],
+                    "concentration_band": expected_row["concentration_band"],
+                    "concentration_label": expected_row["concentration_label"],
+                    "image_condition_dir": expected_row["image_condition_dir"],
+                }
+                if existing_row != expected_record:
+                    raise FileExistsError(
+                        f"Existing chunks do not match the current unlabeled dataset filters: {chunk_dir}. "
+                        "Set overwrite_chunks=True to rebuild them."
+                    )
+                existing_original_instance_ids.add(original_instance_id)
+
+            rows = existing_rows
+            chunk_paths = existing_chunks.copy()
+            chunk_index = max(existing_chunk_indices, default=0)
+            missing_chunk_indices = [
+                index for index in range(1, chunk_index + 1) if index not in existing_chunk_indices
+            ]
+            if verbose:
+                gap_suffix = f"; filling missing chunks {missing_chunk_indices}" if missing_chunk_indices else ""
+                print(
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"resuming unlabeled chunk build with {len(existing_rows)} existing examples "
+                    f"across {len(existing_chunks)} chunks{gap_suffix}"
+                )
+
+        if not retry_failed_conditions:
+            for failure_record in _read_unlabeled_failure_records(failure_log_path):
+                try:
+                    original_instance_id = int(failure_record["original_instance_id"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if original_instance_id < 0 or original_instance_id >= len(working_df):
+                    continue
+                expected_row = working_df.iloc[original_instance_id]
+                if not _unlabeled_record_matches_row(failure_record, expected_row):
+                    continue
+                failed_condition_records[original_instance_id] = failure_record
+            if verbose and failed_condition_records:
+                print(
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"skipping {len(failed_condition_records)} previously failed unlabeled examples "
+                    f"from {failure_log_path}"
+                )
+
+    tensors: list[torch.Tensor] = []
+    chunk_tensors: list[torch.Tensor] = []
+    chunk_rows: list[dict[str, object]] = []
     build_start = time.perf_counter()
     total_conditions = int(len(working_df))
     attempted_conditions = 0
-    for original_instance_id, row in working_df.iterrows():
-        attempted_conditions += 1
+
+    def flush_chunk(*, final: bool = False) -> None:
+        nonlocal chunk_index, chunk_tensors, chunk_rows
+        if chunk_dir is None or not chunk_tensors:
+            return
+        next_chunk_index = 1
+        while next_chunk_index in existing_chunk_indices:
+            next_chunk_index += 1
+        chunk_index = next_chunk_index
+        chunk_dataset = {
+            "tensors": torch.stack(chunk_tensors, dim=0),
+            "metadata": pd.DataFrame(chunk_rows),
+        }
+        chunk_path = chunk_dir / f"{chunk_prefix}_{chunk_index:04d}.pt"
+        if chunk_path.exists():
+            raise FileExistsError(f"Refusing to overwrite existing chunk path: {chunk_path}")
+        save_unlabeled_tensor_dataset(chunk_dataset, chunk_path)
+        chunk_paths.append(chunk_path)
+        if verbose:
+            suffix = "final " if final else ""
+            print(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                f"saved {suffix}chunk {chunk_index:04d} "
+                f"n={len(chunk_rows)} path={chunk_path}"
+            )
+        chunk_tensors = []
+        chunk_rows = []
+        existing_chunk_indices.add(chunk_index)
+
+    for attempted_conditions, (original_instance_id, row) in enumerate(
+        working_df.iloc[resume_from_condition_index:].iterrows(),
+        start=resume_from_condition_index + 1,
+    ):
+        if int(original_instance_id) in existing_original_instance_ids:
+            continue
+        if int(original_instance_id) in failed_condition_records:
+            continue
         try:
             source = describe_condition_tensor_source(
                 condition_dir=row["image_condition_dir"],
@@ -1360,11 +1703,20 @@ def build_unlabeled_tensor_dataset(
                 f"for compound={row['compound']!r}, image_condition_dir={row['image_condition_dir']!r}"
             )
             if skip_failed_conditions:
-                warnings.warn(f"{message}. Skipping this example. Root cause: {exc!r}")
+                root_cause = _format_exception_chain(exc)
+                warnings.warn(f"{message}. Skipping this example. Root cause: {root_cause}")
+                if failure_log_path is not None:
+                    failure_record = _unlabeled_row_record(int(original_instance_id), row)
+                    failure_record["failed_at"] = datetime.now().isoformat(timespec="seconds")
+                    failure_record["root_cause"] = root_cause
+                    failed_condition_records[int(original_instance_id)] = failure_record
+                    _write_unlabeled_failure_records(
+                        failure_log_path,
+                        list(failed_condition_records.values()),
+                    )
                 continue
             raise RuntimeError(message) from exc
 
-        tensors.append(tensor)
         rows.append(
             {
                 "original_instance_id": int(original_instance_id),
@@ -1376,6 +1728,40 @@ def build_unlabeled_tensor_dataset(
                 "image_condition_dir": row["image_condition_dir"],
             }
         )
+        if chunk_dir is None:
+            tensors.append(tensor)
+        else:
+            chunk_tensors.append(tensor)
+            chunk_rows.append(rows[-1])
+            if len(chunk_tensors) >= int(chunk_size):
+                flush_chunk()
+
+    if chunk_dir is not None:
+        flush_chunk(final=True)
+        if not chunk_paths:
+            raise ValueError("No unlabeled dataset examples were created with the provided filters")
+        manifest_path = chunk_dir / "manifest.json"
+        chunk_sort_pattern = re.compile(rf"^{re.escape(chunk_prefix)}_(\d+)\.pt$")
+        chunk_paths = sorted(
+            chunk_paths,
+            key=lambda path: int(chunk_sort_pattern.match(path.name).group(1)),
+        )
+        manifest = {
+            "chunks": [chunk_path.name for chunk_path in chunk_paths],
+            "chunk_size": int(chunk_size),
+            "total_examples": int(len(rows)),
+            "failed_examples": int(len(failed_condition_records)),
+            "output_size": list(output_size),
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        with manifest_path.open("w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, indent=2)
+        return {
+            "chunk_dir": chunk_dir,
+            "chunk_paths": chunk_paths,
+            "manifest_path": manifest_path,
+            "metadata": pd.DataFrame(rows),
+        }
 
     if not tensors:
         raise ValueError("No unlabeled dataset examples were created with the provided filters")
@@ -1516,6 +1902,10 @@ def plot_tensor_embedding_2d(
     title: str | None = None,
     ax=None,
     marker_column: str | None = "compound",
+    display_control: bool = True,
+    edge_color_column: str | None = None,
+    edge_color_map: dict[object, str] | None = None,
+    default_edge_color: str = "white",
     show_svm_background: bool = False,
     svm_background_alpha: float = 0.14,
     svm_background_resolution: int = 300,
@@ -1523,20 +1913,25 @@ def plot_tensor_embedding_2d(
     svm_gamma: str | float = "scale",
 ):
     class_palette = [
-        "#A0C2E7",
-        "#F58518",
-        "#E45756",
-        "#36852D",
-        "#66EE8F",
-        "#B279A2",
-        "#E1B0FE",
+        "#4E79A7",  # blue
+        "#F28E2B",  # orange
+        "#E15759",  # red
+        "#59A14F",  # green
+        "#B07AA1",  # purple
+        "#EDC948",  # yellow
+        "#76B7B2",  # teal
+        "#FF9DA7",  # pink
+        "#9C755F",  # brown
+        "#BAB0AC",  # gray
     ]
     class_color_overrides = {
-        "Water": "#A0C2E7",
-        "GABAAR_Antagonist": "#F58518",
+        "Water": "#4E79A7",
+        "GABAAR_Antagonist": "#F28E2B",
         "GABAAR_NegativeAllostericModulator": "#E45756",
-        "NMDAR_Activation": "#36852D",
-        "NMDAR_Antagonist": "#66EE8F",
+        "NMDAR_Activation": "#59A14F",
+        "NMDAR_Antagonist": "#B07AA1",
+        "AChE_Inhibitor_Reversible": "#B07AA1",
+        "mAChR_Agonist_NonSelective": "#76B7B2",
     }
     marker_cycle = ["o", "s", "^", "D", "P", "X", "v", "<", ">", "*", "h", "8"]
 
@@ -1546,6 +1941,10 @@ def plot_tensor_embedding_2d(
         fig = ax.figure
 
     unique_labels = embedding_df[["label", "label_name"]].drop_duplicates().sort_values("label")
+    display_df = embedding_df if display_control else embedding_df[embedding_df["label"] != 0]
+    display_labels = unique_labels if display_control else unique_labels[unique_labels["label"] != 0]
+    if display_df.empty:
+        raise ValueError("No embedding rows remain to display")
     color_map = {
         int(row.label): class_color_overrides.get(
             str(row.label_name), class_palette[color_index % len(class_palette)]
@@ -1589,9 +1988,9 @@ def plot_tensor_embedding_2d(
         )
 
     marker_map = None
-    if marker_column is not None and marker_column in embedding_df.columns:
+    if marker_column is not None and marker_column in display_df.columns:
         unique_markers = (
-            embedding_df[[marker_column]]
+            display_df[[marker_column]]
             .drop_duplicates()
             .sort_values(marker_column)
             .reset_index(drop=True)[marker_column]
@@ -1602,9 +2001,37 @@ def plot_tensor_embedding_2d(
             for marker_index, marker_value in enumerate(unique_markers)
         }
 
+    edge_map = None
+    if edge_color_column is not None and edge_color_column in display_df.columns:
+        if edge_color_map is None:
+            unique_edge_values = (
+                display_df[[edge_color_column]]
+                .drop_duplicates()
+                .sort_values(edge_color_column)
+                .reset_index(drop=True)[edge_color_column]
+                .tolist()
+            )
+            edge_palette = ["white", "black", "#7F7F7F", "#D62728", "#9467BD"]
+            edge_map = {
+                edge_value: edge_palette[edge_index % len(edge_palette)]
+                for edge_index, edge_value in enumerate(unique_edge_values)
+            }
+        else:
+            edge_map = dict(edge_color_map)
+
+    def edge_color_for(row) -> str:
+        if edge_map is None:
+            return default_edge_color
+        return edge_map.get(getattr(row, edge_color_column), default_edge_color)
+
     if marker_map is None:
-        for row in unique_labels.itertuples(index=False):
-            class_df = embedding_df[embedding_df["label"] == row.label]
+        for row in display_labels.itertuples(index=False):
+            class_df = display_df[display_df["label"] == row.label]
+            edgecolors = (
+                [edge_color_for(point_row) for point_row in class_df.itertuples(index=False)]
+                if edge_map is not None
+                else default_edge_color
+            )
             ax.scatter(
                 class_df["embed_x"],
                 class_df["embed_y"],
@@ -1612,12 +2039,12 @@ def plot_tensor_embedding_2d(
                 alpha=0.9,
                 color=color_map[int(row.label)],
                 marker="o",
-                edgecolors="white",
+                edgecolors=edgecolors,
                 linewidths=0.7,
                 zorder=2,
             )
     else:
-        for row in embedding_df.itertuples(index=False):
+        for row in display_df.itertuples(index=False):
             ax.scatter(
                 row.embed_x,
                 row.embed_y,
@@ -1625,7 +2052,7 @@ def plot_tensor_embedding_2d(
                 alpha=0.92,
                 color=color_map[int(row.label)],
                 marker=marker_map[getattr(row, marker_column)],
-                edgecolors="white",
+                edgecolors=edge_color_for(row),
                 linewidths=0.7,
                 zorder=2,
             )
@@ -1652,21 +2079,49 @@ def plot_tensor_embedding_2d(
             markersize=11,
             label=f"{row.label}: {row.label_name}",
         )
-        for row in unique_labels.itertuples(index=False)
+        for row in display_labels.itertuples(index=False)
     ]
     legend_x = 1.01
     legend_width = 0.33
 
-    class_legend = ax.legend(
+    class_legend = fig.legend(
         handles=class_handles,
         title="Class",
         loc="upper left",
-        bbox_to_anchor=(legend_x, 1.0, legend_width, 0.0),
+        bbox_to_anchor=(0.70, 0.96, 0.28, 0.0),
+        bbox_transform=fig.transFigure,
         borderaxespad=0.0,
         frameon=True,
         mode="expand",
     )
-    ax.add_artist(class_legend)
+
+    if edge_map is not None:
+        edge_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="none",
+                markerfacecolor="#BDBDBD",
+                markeredgecolor=edge_color,
+                markeredgewidth=1.4,
+                linestyle="None",
+                markersize=10,
+                label=str(edge_value),
+            )
+            for edge_value, edge_color in edge_map.items()
+        ]
+        edge_legend = fig.legend(
+            handles=edge_handles,
+            title=edge_color_column.replace("_", " ").title(),
+            loc="upper left",
+            bbox_to_anchor=(0.70, 0.56, 0.28, 0.0),
+            bbox_transform=fig.transFigure,
+            borderaxespad=0.0,
+            frameon=True,
+            ncol=1,
+            mode="expand",
+        )
 
     if marker_map is not None:
         marker_handles = [
@@ -1682,11 +2137,12 @@ def plot_tensor_embedding_2d(
             )
             for marker_value, marker_shape in marker_map.items()
         ]
-        ax.legend(
+        marker_legend = fig.legend(
             handles=marker_handles,
             title=marker_column.replace("_", " ").title(),
             loc="upper left",
-            bbox_to_anchor=(legend_x, 0.46, legend_width, 0.0),
+            bbox_to_anchor=(0.70, 0.36, 0.28, 0.0),
+            bbox_transform=fig.transFigure,
             borderaxespad=0.0,
             frameon=True,
             ncol=1,

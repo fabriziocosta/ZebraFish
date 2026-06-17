@@ -45,23 +45,32 @@ This enforces that spatial-then-temporal and temporal-then-spatial processing pr
 
 ### Method
 
-We instantiate this principle using a **dual-pathway self-supervised architecture** combined with **prototype-based consistency learning**:
+We instantiate this principle using a **dual-pathway self-supervised architecture** combined with **masked probe prediction**:
 
 * Each pathway produces an embedding of the same input.
-* Embeddings are mapped to a shared set of prototypes.
-* Training enforces **agreement of prototype assignments** across pathways.
+* A fixed probe ontology defines structured questions about the input.
+* Self heads decode probes from their own pathway embeddings.
+* Cross heads decode the same probes using the other pathway's prediction machinery.
 
-This follows the SwAV paradigm, where representations are aligned via clustering rather than direct feature matching.
+The current probe types are:
+
+* `local`
+* `region_time`
+* `derivative`
+* `frequency`
+* `correlation`
+
+Every probe type is present in every batch. Random binary masks decide which entries are supervised at a given step.
 
 The loss enforces:
 
 $$
-\text{Cluster}(ST(x)) \approx \text{Cluster}(TS(x))
+\text{ProbeAnswers}(ST(x)) \approx \text{ProbeAnswers}(TS(x))
 $$
 
 This can be interpreted as:
 
-> **Commutativity in the quotient space defined by learned semantic clusters.**
+> **Commutativity through a shared structured prediction interface.**
 
 ---
 
@@ -71,9 +80,9 @@ This can be interpreted as:
 
 The learned representation is invariant to the order of abstraction operators, capturing intrinsic structure rather than architectural artifacts.
 
-#### 2. Non-Collapsing Self-Supervision
+#### 2. Structured Self-Supervision
 
-Prototype-based alignment avoids trivial solutions and provides meaningful semantic organization.
+Masked probe prediction makes each embedding preserve information needed to answer local, regional, temporal, spectral, and correlation questions about the same input.
 
 #### 3. Operator-Level Regularization
 
@@ -95,14 +104,14 @@ The framework applies to any pair of structured operators, including:
 The method can be viewed as enforcing:
 
 $$
-\pi(ST(x)) = \pi(TS(x))
+D(ST(x)) \approx D(TS(x))
 $$
 
-where $\pi$ maps representations to prototype assignments.
+where $D$ denotes the shared family of structured probe decoders.
 
 Thus, instead of requiring exact commutativity, we require:
 
-> **semantic commutativity under learned clustering**
+> **semantic commutativity under shared probe prediction**
 
 This is a relaxed but powerful structural constraint.
 
@@ -136,6 +145,6 @@ and instead operates at the level of **operator algebra over data structure**.
 
 We propose a new direction in self-supervised learning:
 
-> **Commutative Representation Learning** — enforcing invariance to the order of structured abstraction via prototype-consistent dual pathways.
+> **Commutative Representation Learning** — enforcing invariance to the order of structured abstraction via masked-probe dual pathways.
 
 This framework provides a principled, general, and extensible approach to learning representations that reflect the intrinsic structure of data rather than the arbitrary order of processing.

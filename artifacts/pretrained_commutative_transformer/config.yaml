@@ -1,0 +1,60 @@
+unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+pretrained_encoder_path: artifacts/pretrained_commutative_transformer/encoder_state.pt
+model_config:
+  spatial_patch_size_st:
+  - 1
+  - 32
+  - 32
+  spatial_patch_size_ts:
+  - 1
+  - 32
+  - 32
+  temporal_patch_size_ts: 2
+  embed_dim: 32
+  num_heads: 2
+  mlp_ratio: 2.0
+  dropout: 0.3
+  attention_dropout: 0.1
+  st_spatial_depth: 1
+  st_temporal_depth: 1
+  ts_temporal_depth: 1
+  ts_spatial_depth: 1
+  embedding_dim: 16
+  verbose: true
+optimization_config:
+  batch_size: 8
+  epochs: 90
+  learning_rate: 7.5e-05
+  weight_decay: 0.003
+  early_stopping_patience: 14
+  early_stopping_min_delta: 0.0
+  early_stopping_start_epoch: 24
+  early_stopping_monitor: loss
+  early_stopping_smoothing: median
+  early_stopping_smoothing_window: 5
+  scheduler_patience: 5
+  scheduler_factor: 0.85
+  scheduler_min_lr: 1.0e-06
+  training_plot_dir: artifacts/pretrained_commutative_transformer/loss_plots
+  training_plot_every_n_epochs: 1
+  training_plot_smoothing_window: 5
+  validation_split: 0.0
+  random_state: 0
+  standardize: true
+  device: null
+  verbose: true
+loss_weight_config:
+  action_weight: 1.0
+  compound_weight: 0.2
+  concentration_weight: 0.2
+  lambda_cross: 0.35
+  lambda_align: 0.0
+  cross_warmup_epochs: 12
+  cross_ramp_epochs: 24
+  teacher_student_warmup_epochs: 0
+  probe_mask_probability: 0.5
+  probe_alpha_local: 1.0
+  probe_alpha_region_time: 1.0
+  probe_alpha_derivative: 1.0
+  probe_alpha_frequency: 1.0
+  probe_alpha_correlation: 1.0

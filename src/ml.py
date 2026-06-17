@@ -5,6 +5,16 @@ from src.models.configs import (
     OptimizationConfig,
     TimeChannel3DCNNConfig,
 )
+from src.commutative_cnn_pretraining_config import (
+    CommutativeCNNPretrainingConfig,
+    load_commutative_cnn_pretraining_config,
+    write_commutative_cnn_pretraining_config,
+)
+from src.commutative_transformer_pretraining_config import (
+    CommutativeTransformerPretrainingConfig,
+    load_commutative_transformer_pretraining_config,
+    write_commutative_transformer_pretraining_config,
+)
 from src.models.estimators import (
     CommutativeCNNClassifier,
     CommutativeTransformerClassifier,
@@ -22,17 +32,21 @@ from src.training.reporting import (
     plot_training_history,
 )
 from src.training.workflow import (
+    BinaryWaterVsOtherPretrainingData,
+    ChunkedBinaryWaterVsOtherPretrainingResult,
     ExperimentArtifacts,
     MultitaskExperimentData,
     MultitaskEvaluationResult,
     display_experiment_summary,
     display_holdout_evaluation,
     evaluate_multitask_estimator,
+    fit_chunked_water_vs_other_hot_start,
     fit_estimator_on_experiment,
     persist_experiment_artifacts,
     plot_holdout_branch_embedding_projections,
     plot_holdout_embedding_projection,
     prepare_multitask_experiment_data,
+    prepare_water_vs_other_pretraining_data,
 )
 from src.tensor_utils import (
     build_unlabeled_tensor_dataset,
@@ -42,9 +56,13 @@ from src.tensor_utils import (
 
 __all__ = [
     "CommutativeCNNConfig",
+    "CommutativeCNNPretrainingConfig",
     "CommutativeCNNClassifier",
     "CommutativeTransformerConfig",
+    "CommutativeTransformerPretrainingConfig",
     "CommutativeTransformerClassifier",
+    "BinaryWaterVsOtherPretrainingData",
+    "ChunkedBinaryWaterVsOtherPretrainingResult",
     "ExperimentArtifacts",
     "LossWeightConfig",
     "MultitaskExperimentData",
@@ -60,6 +78,7 @@ __all__ = [
     "display_experiment_summary",
     "display_holdout_evaluation",
     "evaluate_multitask_estimator",
+    "fit_chunked_water_vs_other_hot_start",
     "fit_estimator_on_experiment",
     "persist_experiment_artifacts",
     "plot_confusion_matrices",
@@ -67,7 +86,12 @@ __all__ = [
     "plot_holdout_embedding_projection",
     "plot_training_history",
     "prepare_multitask_experiment_data",
+    "prepare_water_vs_other_pretraining_data",
     "build_unlabeled_tensor_dataset",
     "load_unlabeled_tensor_dataset",
     "save_unlabeled_tensor_dataset",
+    "load_commutative_cnn_pretraining_config",
+    "write_commutative_cnn_pretraining_config",
+    "load_commutative_transformer_pretraining_config",
+    "write_commutative_transformer_pretraining_config",
 ]

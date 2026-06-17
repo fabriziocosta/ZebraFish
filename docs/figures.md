@@ -21,8 +21,11 @@ flowchart TD
     TS3 --> TS4["3D CNN spatial aggregator"]
     TS4 --> ZTS["z^(TS)"]
 
-    ZST --> P["Shared projection / prototypes"]
-    ZTS --> P
-    P --> L1["SwAV-style swapped assignment loss"]
-    L1 --> L2["+ optional feature tie loss"]
+    ZST --> DA["Self and cross probe decoders"]
+    ZTS --> DA
+    X --> PT["Fixed probe targets"]
+    PT --> M["Random entry masks"]
+    DA --> L1["Masked probe prediction loss"]
+    M --> L1
+    L1 --> L2["+ optional weak latent alignment"]
 ```

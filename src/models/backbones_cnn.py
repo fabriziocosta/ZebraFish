@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from src.models.common import _as_tuple
+from src.models.probes import ProbeDecoder, ProbeSpec
 
 
 class _TimeChannel3DCNN(nn.Module):
@@ -62,6 +63,7 @@ class _TimeChannel3DCNN(nn.Module):
             nn.Dropout(p=dropout),
         )
         self.classifier = nn.Linear(embedding_dim, num_classes)
+        self.water_classifier = nn.Linear(embedding_dim, 2)
         self.compound_classifier = nn.Linear(embedding_dim, num_compound_classes) if num_compound_classes > 0 else None
         self.concentration_classifier = (
             nn.Linear(embedding_dim, num_concentration_classes) if num_concentration_classes > 0 else None
@@ -74,7 +76,11 @@ class _TimeChannel3DCNN(nn.Module):
 
     def forward(self, X: torch.Tensor) -> dict[str, torch.Tensor]:
         embedding = self.forward_features(X)
-        outputs = {"embedding": embedding, "logits": self.classifier(embedding)}
+        outputs = {
+            "embedding": embedding,
+            "logits": self.classifier(embedding),
+            "water_logits": self.water_classifier(embedding),
+        }
         if self.compound_classifier is not None:
             outputs["compound_logits"] = self.compound_classifier(embedding)
         if self.concentration_classifier is not None:
@@ -195,6 +201,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
         embedding_dim: int,
         num_prototypes: int,
         dropout: float,
+        probe_spec: ProbeSpec | None = None,
         num_compound_classes: int = 0,
         num_concentration_classes: int = 0,
     ) -> None:
@@ -245,9 +252,31 @@ class _PureCNNDualPathwayNetwork(nn.Module):
         )
         self.spatial_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
         self.ts_projection = nn.Linear(self.spatial_aggregator.out_channels, embedding_dim)
+        self.prototype_layer = nn.Linear(embedding_dim, int(num_prototypes), bias=False)
 
-        self.prototype_layer = nn.Linear(embedding_dim, num_prototypes, bias=False)
+        self.probe_spec = probe_spec or ProbeSpec()
+        self.ts_self_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
+        self.st_self_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
+        self.ts_cross_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
+        self.st_cross_probe_decoder = ProbeDecoder(
+            embedding_dim=embedding_dim,
+            probe_spec=self.probe_spec,
+            dropout=dropout,
+        )
         self.classifier = nn.Linear(embedding_dim, num_classes)
+        self.water_classifier = nn.Linear(embedding_dim, 2)
         self.compound_classifier = nn.Linear(embedding_dim, num_compound_classes) if num_compound_classes > 0 else None
         self.concentration_classifier = (
             nn.Linear(embedding_dim, num_concentration_classes) if num_concentration_classes > 0 else None
@@ -309,14 +338,19 @@ class _PureCNNDualPathwayNetwork(nn.Module):
         return {
             "st_embedding": st_embedding,
             "ts_embedding": ts_embedding,
-            "embedding": fused_embedding,
             "st_prototypes": self.prototype_layer(st_embedding),
             "ts_prototypes": self.prototype_layer(ts_embedding),
+            "embedding": fused_embedding,
+            "pred_A_self": self.ts_self_probe_decoder(ts_embedding),
+            "pred_B_self": self.st_self_probe_decoder(st_embedding),
+            "pred_A_to_B": self.st_cross_probe_decoder(ts_embedding),
+            "pred_B_to_A": self.ts_cross_probe_decoder(st_embedding),
         }
 
     def forward(self, X: torch.Tensor) -> dict[str, torch.Tensor]:
         outputs = self.forward_features(X)
         outputs["logits"] = self.classifier(outputs["embedding"])
+        outputs["water_logits"] = self.water_classifier(outputs["embedding"])
         if self.compound_classifier is not None:
             outputs["compound_logits"] = self.compound_classifier(outputs["embedding"])
         if self.concentration_classifier is not None:

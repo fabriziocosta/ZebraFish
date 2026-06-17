@@ -27,7 +27,7 @@ def _format_loss_components_for_log(row: dict[str, float | int], *, prefix: str)
     ordered_names = [
         "loss",
         "action_loss",
-        "commutative_consistency_loss",
+        "water_vs_other_loss",
         "feature_alignment_loss",
         "compound_loss",
         "concentration_loss",
@@ -40,11 +40,49 @@ def _format_loss_components_for_log(row: dict[str, float | int], *, prefix: str)
     return " ".join(parts)
 
 
+def _balanced_cross_entropy(labels: torch.Tensor, *, num_classes: int, device: torch.device) -> nn.CrossEntropyLoss:
+    labels_cpu = labels.detach().to("cpu", dtype=torch.long)
+    counts = torch.bincount(labels_cpu, minlength=num_classes).to(torch.float32)
+    weights = torch.zeros(num_classes, dtype=torch.float32)
+    present = counts > 0
+    weights[present] = float(labels_cpu.numel()) / (float(num_classes) * counts[present])
+    return nn.CrossEntropyLoss(weight=weights.to(device))
+
+
+def _build_supervised_criteria(estimator, prepared: _PreparedData) -> nn.Module | dict[str, nn.Module]:
+    class_weighting = getattr(estimator, "class_weighting", None)
+    if class_weighting in {None, "none"}:
+        return nn.CrossEntropyLoss()
+    if class_weighting != "balanced":
+        raise ValueError("class_weighting must be one of 'balanced', 'none', or None")
+
+    criteria: dict[str, nn.Module] = {
+        "action": _balanced_cross_entropy(
+            prepared.y_train,
+            num_classes=len(estimator.classes_),
+            device=estimator.device_,
+        )
+    }
+    if prepared.compound_train is not None and estimator.compound_classes_ is not None:
+        criteria["compound"] = _balanced_cross_entropy(
+            prepared.compound_train,
+            num_classes=len(estimator.compound_classes_),
+            device=estimator.device_,
+        )
+    if prepared.concentration_train is not None and estimator.concentration_classes_ is not None:
+        criteria["concentration"] = _balanced_cross_entropy(
+            prepared.concentration_train,
+            num_classes=len(estimator.concentration_classes_),
+            device=estimator.device_,
+        )
+    return criteria
+
+
 def _loss_acronym(name: str) -> str:
     return {
         "loss": "L",
         "action_loss": "A",
-        "commutative_consistency_loss": "CC",
+        "water_vs_other_loss": "WO",
         "feature_alignment_loss": "FA",
         "compound_loss": "Co",
         "concentration_loss": "Cn",
@@ -55,7 +93,7 @@ def _build_epoch_log_layout(*, include_val: bool) -> tuple[list[tuple[str, str, 
     ordered_names = [
         "loss",
         "action_loss",
-        "commutative_consistency_loss",
+        "water_vs_other_loss",
         "feature_alignment_loss",
         "compound_loss",
         "concentration_loss",
@@ -74,7 +112,7 @@ def _build_epoch_log_layout(*, include_val: bool) -> tuple[list[tuple[str, str, 
         ("eta", "estimated_time_remaining"),
         ("trL", "train_loss"),
         ("trA", "train_action_loss"),
-        ("trCC", "train_commutative_consistency_loss"),
+        ("trWO", "train_water_vs_other_loss"),
         ("trFA", "train_feature_alignment_loss"),
         ("trCo", "train_compound_loss"),
         ("trCn", "train_concentration_loss"),
@@ -84,7 +122,7 @@ def _build_epoch_log_layout(*, include_val: bool) -> tuple[list[tuple[str, str, 
             [
                 ("vaL", "val_loss"),
                 ("vaA", "val_action_loss"),
-                ("vaCC", "val_commutative_consistency_loss"),
+                ("vaWO", "val_water_vs_other_loss"),
                 ("vaFA", "val_feature_alignment_loss"),
                 ("vaCo", "val_compound_loss"),
                 ("vaCn", "val_concentration_loss"),
@@ -109,6 +147,48 @@ def _build_epoch_log_layout(*, include_val: bool) -> tuple[list[tuple[str, str, 
     return columns, legend, header
 
 
+def _monitor_key_for_row(estimator, row: dict[str, float | int]) -> str:
+    monitor = str(getattr(estimator, "early_stopping_monitor", "loss") or "loss")
+    candidates = [monitor]
+    if not monitor.startswith(("train_", "val_")):
+        candidates = [f"val_{monitor}", f"train_{monitor}", monitor]
+    for candidate in candidates:
+        if candidate in row:
+            return candidate
+    if "val_loss" in row:
+        return "val_loss"
+    return "train_loss"
+
+
+def _smoothed_monitor_value(
+    estimator,
+    history_rows: list[dict[str, float | int]],
+    row: dict[str, float | int],
+    monitor_key: str,
+) -> tuple[float, float]:
+    raw_value = float(row[monitor_key])
+    smoothing = str(getattr(estimator, "early_stopping_smoothing", "none") or "none").lower()
+    window = max(1, int(getattr(estimator, "early_stopping_smoothing_window", 1) or 1))
+    if smoothing in {"none", "raw"} or window <= 1:
+        return raw_value, raw_value
+
+    values = [
+        float(history_row[monitor_key])
+        for history_row in history_rows
+        if monitor_key in history_row and np.isfinite(float(history_row[monitor_key]))
+    ]
+    values.append(raw_value)
+    recent = np.asarray(values[-window:], dtype=float)
+    if smoothing == "median":
+        return raw_value, float(np.median(recent))
+    if smoothing == "mean":
+        return raw_value, float(np.mean(recent))
+    raise ValueError(
+        "early_stopping_smoothing must be one of 'none', 'median', or 'mean', "
+        f"got {smoothing!r}"
+    )
+
+
 def _format_epoch_log_row(
     row: dict[str, float | int | str],
     *,
@@ -122,7 +202,7 @@ def _format_epoch_log_row(
     train_keys = {
         "train_loss",
         "train_action_loss",
-        "train_commutative_consistency_loss",
+        "train_water_vs_other_loss",
         "train_feature_alignment_loss",
         "train_compound_loss",
         "train_concentration_loss",
@@ -155,13 +235,68 @@ def _format_epoch_log_row(
     return " ".join(parts)
 
 
+def _load_compatible_state_dict(
+    model: nn.Module,
+    state_dict: dict[str, torch.Tensor],
+) -> tuple[list[str], list[str]]:
+    current_state = model.state_dict()
+    compatible_state = {
+        key: value.detach().cpu()
+        for key, value in state_dict.items()
+        if key in current_state and tuple(current_state[key].shape) == tuple(value.shape)
+    }
+    skipped_keys = sorted(key for key in state_dict if key not in compatible_state)
+    if compatible_state:
+        model.load_state_dict(compatible_state, strict=False)
+    return sorted(compatible_state), skipped_keys
+
+
+def _maybe_save_training_history_pdfs(
+    estimator,
+    history_rows: list[dict[str, float | int]],
+    epoch: int,
+) -> None:
+    plot_dir = getattr(estimator, "training_plot_dir", None)
+    if not plot_dir:
+        return
+    every_n_epochs = max(1, int(getattr(estimator, "training_plot_every_n_epochs", 1) or 1))
+    if int(epoch) % every_n_epochs != 0:
+        return
+
+    from pathlib import Path
+
+    from src.training.reporting import save_training_history_pdf
+
+    output_dir = Path(str(plot_dir)).expanduser()
+    title = str(getattr(estimator, "training_plot_title", "Training history"))
+    epoch_path = output_dir / f"epoch_{int(epoch):03d}.loss-curves.pdf"
+    latest_path = output_dir / "latest.loss-curves.pdf"
+    history_df = pd.DataFrame(history_rows)
+    save_training_history_pdf(history_df, epoch_path, title=title)
+    save_training_history_pdf(history_df, latest_path, title=title)
+
+
 def _fit_multitask_estimator(estimator, prepared: _PreparedData):
+    hot_start_state = None
+    if getattr(estimator, "hot_start", False) and hasattr(estimator, "model_"):
+        hot_start_state = {
+            key: value.detach().cpu()
+            for key, value in estimator.model_.state_dict().items()
+        }
+
     estimator.model_ = estimator._build_model_from_prepared(prepared)
     estimator.device_ = estimator._device()
     estimator.model_.to(estimator.device_)
     estimator.input_shape_ = tuple(int(size) for size in prepared.X_train.shape[1:])
     if hasattr(estimator, "_load_pretrained_weights_into_model"):
         estimator._load_pretrained_weights_into_model(estimator.model_)
+    if hot_start_state is not None:
+        loaded_keys, skipped_keys = _load_compatible_state_dict(estimator.model_, hot_start_state)
+        estimator.hot_start_loaded_keys_ = loaded_keys
+        estimator.hot_start_skipped_keys_ = skipped_keys
+    elif getattr(estimator, "hot_start", False):
+        estimator.hot_start_loaded_keys_ = []
+        estimator.hot_start_skipped_keys_ = []
     if getattr(estimator, "freeze_backbone", False) and hasattr(estimator, "_set_encoder_trainable"):
         estimator._set_encoder_trainable(estimator.model_, trainable=False)
 
@@ -181,7 +316,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
             val_tensors.append(prepared.concentration_val)
         val_loader = DataLoader(TensorDataset(*val_tensors), batch_size=estimator.batch_size, shuffle=False)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = _build_supervised_criteria(estimator, prepared)
     optimizer = torch.optim.Adam(
         [parameter for parameter in estimator.model_.parameters() if parameter.requires_grad],
         lr=estimator.learning_rate,
@@ -204,6 +339,8 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
+    stopped_early = False
+    early_stopping_start_epoch = max(1, int(getattr(estimator, "early_stopping_start_epoch", None) or 1))
     training_start = time.perf_counter()
     if estimator.verbose:
         _, legend, header = _build_epoch_log_layout(include_val=val_loader is not None)
@@ -283,19 +420,29 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
         else:
             metric = float(row["train_loss"])
 
-        improved = metric < (best_metric - float(estimator.early_stopping_min_delta))
-        if improved:
-            best_metric = metric
-            best_epoch = epoch
-            epochs_without_improvement = 0
-            best_state = deepcopy(estimator.model_.state_dict())
-        else:
-            epochs_without_improvement += 1
+        monitor_key = _monitor_key_for_row(estimator, row)
+        monitor_raw, monitor_metric = _smoothed_monitor_value(estimator, history_rows, row, monitor_key)
+        row["monitor_metric_raw"] = monitor_raw
+        row["monitor_metric"] = monitor_metric
+        row["monitor_key"] = monitor_key
 
-        if scheduler is not None:
-            scheduler.step(metric)
+        should_monitor = epoch >= early_stopping_start_epoch
+        improved = False
+        if should_monitor:
+            improved = monitor_metric < (best_metric - float(estimator.early_stopping_min_delta))
+            if improved:
+                best_metric = monitor_metric
+                best_epoch = epoch
+                epochs_without_improvement = 0
+                best_state = deepcopy(estimator.model_.state_dict())
+            else:
+                epochs_without_improvement += 1
+
+        if scheduler is not None and should_monitor:
+            scheduler.step(monitor_metric)
 
         history_rows.append(row)
+        _maybe_save_training_history_pdfs(estimator, history_rows, epoch)
         if estimator.verbose:
             elapsed = time.perf_counter() - training_start
             avg_epoch_seconds = elapsed / epoch
@@ -311,13 +458,24 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
                 )
             )
 
-        if estimator.early_stopping_patience is not None and epochs_without_improvement >= estimator.early_stopping_patience:
+        if (
+            should_monitor
+            and estimator.early_stopping_patience is not None
+            and epochs_without_improvement >= estimator.early_stopping_patience
+        ):
+            stopped_early = True
             if estimator.verbose:
                 print(
                     f"early_stop epoch={epoch:03d} best_epoch={best_epoch:03d} "
                     f"best_metric={best_metric:.4f}"
                 )
             break
+
+    if estimator.verbose and not stopped_early:
+        print(
+            f"select_best epoch={len(history_rows):03d} best_epoch={best_epoch or len(history_rows):03d} "
+            f"best_metric={best_metric:.4f}"
+        )
 
     estimator.model_.load_state_dict(best_state)
     estimator.model_.eval()
@@ -338,13 +496,32 @@ def _collect_output_batches(estimator, X: torch.Tensor | np.ndarray) -> dict[str
             X_batch = X_batch.to(estimator.device_, non_blocking=True)
             outputs = estimator.model_(X_batch)
             for key, value in outputs.items():
+                if not isinstance(value, torch.Tensor):
+                    continue
                 collected.setdefault(key, []).append(value.detach().cpu().numpy())
     return {key: np.concatenate(values, axis=0) for key, values in collected.items()}
 
 
 def _predict_proba_from_estimator(estimator, X: torch.Tensor | np.ndarray) -> dict[str, np.ndarray]:
     outputs = _collect_output_batches(estimator, X)
-    result = {"action": torch.softmax(torch.from_numpy(outputs["logits"]), dim=1).numpy()}
+    action_logits = torch.from_numpy(outputs["logits"])
+    use_hierarchical_action = (
+        "water_logits" in outputs
+        and float(getattr(estimator, "water_vs_other_weight", 0.0)) > 0.0
+        and action_logits.shape[1] > 2
+        and 0 in getattr(estimator, "class_to_index_", {})
+    )
+    if use_hierarchical_action:
+        water_index = int(estimator.class_to_index_[0])
+        drug_indices = [index for index in range(action_logits.shape[1]) if index != water_index]
+        water_proba = torch.softmax(torch.from_numpy(outputs["water_logits"]), dim=1)
+        drug_action_proba = torch.softmax(action_logits[:, drug_indices], dim=1)
+        action_proba = torch.zeros_like(action_logits)
+        action_proba[:, water_index] = water_proba[:, 0]
+        action_proba[:, drug_indices] = water_proba[:, 1:2] * drug_action_proba
+        result = {"action": action_proba.numpy()}
+    else:
+        result = {"action": torch.softmax(action_logits, dim=1).numpy()}
     if "compound_logits" in outputs:
         result["compound"] = torch.softmax(torch.from_numpy(outputs["compound_logits"]), dim=1).numpy()
     if "concentration_logits" in outputs:

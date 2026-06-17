@@ -144,6 +144,8 @@ The current implementation can train the shared embedding against three supervis
 
 Controls remain action label `0` and are collapsed to dedicated control classes for the auxiliary compound and concentration heads.
 
+When `water_vs_other_weight > 0`, the baseline and commutative supervised classifiers also add a persistent binary water-vs-drug head and compose final action probabilities hierarchically.
+
 At inference time, `predict(...)` and `predict_proba(...)` return dictionaries keyed by those targets rather than a single array.
 
 ## 2. Pure-CNN commutative dual-pathway model
@@ -182,7 +184,10 @@ $$
 The network then produces:
 
 - branch prototype logits from $z^{ST}$ and $z^{TS}$
+- structured self probe predictions from each branch embedding
+- structured cross probe predictions from the opposite branch embedding
 - action logits from the fused embedding $z$
+- binary water-vs-drug logits from the fused embedding $z$
 - optional compound logits from the fused embedding $z$
 - optional concentration logits from the fused embedding $z$
 
@@ -282,33 +287,81 @@ Global average pool
 Projection -> z^(TS): (N, d)
 ```
 
-### 2.6 Losses
+### 2.6 Probe ontology
 
-The model uses three loss components:
+Commutative encoder pretraining uses a fixed masked-probe ontology instead of reconstructing the full input volume. The probe types are:
 
-1. supervised classification loss on the fused logits
-2. prototype-consistency loss between the two branches
-3. feature-alignment loss between $z^{ST}$ and $z^{TS}$
+- `local`: fixed local voxel/time samples from the input tensor
+- `region_time`: coarse region-level temporal summaries
+- `derivative`: temporal derivatives of the region-level summaries
+- `frequency`: low-frequency magnitude summaries of region traces
+- `correlation`: pairwise correlations between coarse region traces
+
+Every probe type is present in the output dictionary for every batch. A binary mask selects which entries are supervised at a given training step; training masks guarantee at least one observed entry per probe type, while validation uses full masks for deterministic model selection.
+
+### 2.7 Pretraining losses
+
+During unlabeled commutative pretraining, self heads predict the input-derived probe-target dictionary. Cross heads predict detached self-head outputs from the opposite branch, so cross-probes remain teacher-student signals after warmup instead of switching back to raw probe targets:
+
+- `pred_A_self`: Path A embedding decoded by the Path A self head
+- `pred_B_self`: Path B embedding decoded by the Path B self head
+- `pred_A_to_B`: Path A embedding decoded by the Path B cross head
+- `pred_B_to_A`: Path B embedding decoded by the Path A cross head
+
+For each probe type, loss is normalized by the number of observed mask entries. The total pretraining loss is:
+
+$$
+\mathcal L
+=
+\mathcal L_{\text{self}}
++ \lambda_{\text{cross}} \mathcal L_{\text{cross}}
++ \lambda_{\text{proto}} \mathcal L_{\text{proto}}
++ \lambda_{\text{latent}} \mathcal L_{\text{latent}}.
+$$
+
+Prototype alignment maps `z^{ST}` and `z^{TS}` through the shared `prototype_layer` and applies a symmetric swapped soft cross-entropy between the prototype assignment distributions. `lambda_cross` and `lambda_proto` are scheduled with warmup plus optional linear ramp. `latent_alignment_weight` defaults to zero; legacy `lambda_align` is still accepted for old configs but should not be used for new experiments.
+
+### 2.8 Supervised losses
+
+For supervised classifier training and fine-tuning, the model uses the fused embedding for classification. The default supervised objective is:
+
+1. supervised action classification loss on the fused logits
+2. optional auxiliary classification losses for compound and concentration
+3. optional weak latent alignment controlled by `latent_alignment_weight`
+
+When `LossWeightConfig.water_vs_other_weight > 0`, action classification uses a hierarchical control-aware objective:
+
+1. a dedicated binary head predicts water/control versus drug
+2. the multiclass action head is trained only on non-water examples, over the surviving drug action classes
+3. the final action probabilities are composed as
+
+$$
+P(y=\text{water}) = P(b=\text{water})
+$$
+
+and, for every non-water action class $c$,
+
+$$
+P(y=c) = P(b=\text{drug}) P(y=c \mid b=\text{drug}).
+$$
+
+This preserves a direct water-vs-drug decision during multiclass fine-tuning instead of relying on the multiclass softmax alone to maintain the control boundary.
 
 The implemented total loss is
 
 $$
 \mathcal L =
-\mathcal L_{\text{cls}}
- + \alpha \mathcal L_{\text{swap}}
- + \beta \mathcal L_{\text{feat}}.
+\mathcal L_{\text{action}}
++ \lambda_{\text{water}} \mathcal L_{\text{water-vs-drug}}
++ \lambda_{\text{latent}} \mathcal L_{\text{latent}}
++ \mathcal L_{\text{aux}}.
 $$
 
-The weights correspond to:
-
-- `consistency_weight = \alpha`
-- `feature_weight = \beta`
-
-In the repository implementation, optional auxiliary cross-entropy losses for compound and concentration classification are added on top of this total objective using the same fused embedding.
+Supervised `fit()` does not add a separate branch-consistency objective. This avoids applying a direct branch-alignment objective after masked-probe pretraining.
 
 At inference time, the estimator returns target-keyed prediction and probability dictionaries for `action`, `compound`, and `concentration`.
 
-### 2.7 Main hyperparameters
+### 2.9 Main hyperparameters
 
 Spatial-first branch:
 
@@ -329,11 +382,29 @@ Temporal-first branch:
 Shared heads:
 
 - `embedding_dim`
-- `num_prototypes`
+- `probe_local_count`
+- `probe_region_grid`
+- `probe_time_bins`
+- `probe_frequency_bins`
+- `probe_mask_probability`
+- `probe_alpha_local`
+- `probe_alpha_region_time`
+- `probe_alpha_derivative`
+- `probe_alpha_frequency`
+- `probe_alpha_correlation`
+- `lambda_cross`
 - `prototype_temperature`
+- `prototype_alignment_weight`
+- `prototype_warmup_epochs`
+- `prototype_ramp_epochs`
+- `latent_alignment_weight`
+- `lambda_align` (deprecated alias for old configs)
+- `cross_warmup_epochs`
+- `cross_ramp_epochs`
+- `teacher_student_warmup_epochs` (deprecated no-op)
 - `dropout`
 
-### 2.8 Strengths and limitations
+### 2.10 Strengths and limitations
 
 Strengths:
 
@@ -353,7 +424,7 @@ Implemented as `CommutativeTransformerClassifier` in [`src/ml.py`](../src/ml.py)
 
 ### 3.1 Purpose
 
-This model keeps the same commutative training objective as the pure-CNN version, but replaces the branch aggregators with factorized transformer stacks.
+This model keeps the same commutative pretraining objective and supervised loss structure as the pure-CNN version, but replaces the branch aggregators with factorized transformer stacks.
 
 It is a more expressive model family, but also substantially heavier. Token count is the critical engineering constraint.
 
@@ -508,8 +579,6 @@ Transformer capacity:
 Shared heads:
 
 - `embedding_dim`
-- `num_prototypes`
-- `prototype_temperature`
 
 ### 3.6 Engineering constraints
 
@@ -542,15 +611,26 @@ Limitations:
 - patch-size choices strongly affect tractability
 - more exposed to overfitting on small supervised datasets
 
-### 3.8 Multi-head supervision
+### 3.8 Probe pretraining and multi-head supervision
 
-Like the pure-CNN commutative model, the transformer variant uses the fused embedding for:
+Like the pure-CNN commutative model, the transformer variant uses the same fixed probe ontology during unlabeled pretraining:
+
+- `local`
+- `region_time`
+- `derivative`
+- `frequency`
+- `correlation`
+
+For supervised training, it uses the fused embedding for:
 
 - action classification
+- binary water-vs-drug classification when `water_vs_other_weight > 0`
 - optional compound classification
 - optional concentration classification
 
-while keeping the branch-consistency and feature-alignment losses as the commutative part of the training objective.
+with optional weak latent alignment controlled by `latent_alignment_weight`.
+
+The transformer classifier uses the same hierarchical action objective as the CNN backbones: water/control is handled by a persistent binary head, and non-water action probabilities are distributed conditionally over the drug classes.
 
 ## 4. Choosing between the three
 
