@@ -1,5 +1,5 @@
 unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
-pretrained_encoder_path: artifacts/pretrained_commutative_cnn/encoder_state_v8.pt
+pretrained_encoder_path: artifacts/pretrained_commutative_cnn/encoder_state_v9.pt
 validation_fraction: 0.15
 train_num_random_rotations: 0
 rotation_range_degrees: 0.0
@@ -82,21 +82,21 @@ model_config:
   - 2
   probe_time_bins: 8
   probe_frequency_bins: 4
-  dropout: 0.15
+  dropout: 0.25
   verbose: true
 optimization_config:
   batch_size: 8
-  epochs: 90
-  learning_rate: 0.00015
-  weight_decay: 0.0003
-  early_stopping_patience: 16
+  epochs: 70
+  learning_rate: 7.5e-05
+  weight_decay: 0.00075
+  early_stopping_patience: 8
   early_stopping_min_delta: 5.0e-05
-  early_stopping_start_epoch: 36
-  early_stopping_monitor: loss
+  early_stopping_start_epoch: 18
+  early_stopping_monitor: self_probe_loss
   early_stopping_smoothing: median
-  early_stopping_smoothing_window: 5
-  scheduler_patience: 5
-  scheduler_factor: 0.75
+  early_stopping_smoothing_window: 3
+  scheduler_patience: 3
+  scheduler_factor: 0.5
   scheduler_min_lr: 1.0e-06
   training_plot_dir: artifacts/pretrained_commutative_cnn/loss_plots
   training_plot_every_n_epochs: 2
@@ -112,19 +112,19 @@ loss_weight_config:
   water_vs_other_weight: 0.0
   compound_weight: 0.2
   concentration_weight: 0.2
-  lambda_cross: 0.07
+  lambda_cross: 0.02
   lambda_align: 0.0
   prototype_temperature: 0.25
-  prototype_alignment_weight: 0.03
+  prototype_alignment_weight: 0.0
   prototype_warmup_epochs: 16
   prototype_ramp_epochs: 36
   latent_alignment_weight: 0.0
-  cross_warmup_epochs: 16
-  cross_ramp_epochs: 36
+  cross_warmup_epochs: 20
+  cross_ramp_epochs: 50
   teacher_student_warmup_epochs: 0
-  probe_mask_probability: 0.6
+  probe_mask_probability: 1.0
   probe_alpha_local: 1.0
   probe_alpha_region_time: 1.0
-  probe_alpha_derivative: 0.5
-  probe_alpha_frequency: 0.25
-  probe_alpha_correlation: 0.1
+  probe_alpha_derivative: 0.25
+  probe_alpha_frequency: 0.1
+  probe_alpha_correlation: 0.05
