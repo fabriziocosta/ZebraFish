@@ -1,5 +1,5 @@
 unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
-pretrained_encoder_path: artifacts/pretrained_commutative_cnn/encoder_state_v9.pt
+pretrained_encoder_path: artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/10C_pretrain_commutative_cnn_20260623_093629_encoder_state.pt
 validation_fraction: 0.15
 train_num_random_rotations: 0
 rotation_range_degrees: 0.0
@@ -83,22 +83,23 @@ model_config:
   probe_time_bins: 8
   probe_frequency_bins: 4
   dropout: 0.25
+  normalization: group
   verbose: true
 optimization_config:
   batch_size: 8
   epochs: 70
-  learning_rate: 7.5e-05
-  weight_decay: 0.00075
-  early_stopping_patience: 8
+  learning_rate: 3.0e-05
+  weight_decay: 0.001
+  early_stopping_patience: 12
   early_stopping_min_delta: 5.0e-05
-  early_stopping_start_epoch: 18
+  early_stopping_start_epoch: 8
   early_stopping_monitor: self_probe_loss
   early_stopping_smoothing: median
   early_stopping_smoothing_window: 3
   scheduler_patience: 3
   scheduler_factor: 0.5
   scheduler_min_lr: 1.0e-06
-  training_plot_dir: artifacts/pretrained_commutative_cnn/loss_plots
+  training_plot_dir: artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/loss_plots/pretraining
   training_plot_every_n_epochs: 2
   training_plot_smoothing_window: 5
   validation_split: 0.0
@@ -112,15 +113,15 @@ loss_weight_config:
   water_vs_other_weight: 0.0
   compound_weight: 0.2
   concentration_weight: 0.2
-  lambda_cross: 0.02
+  lambda_cross: 0.0
   lambda_align: 0.0
   prototype_temperature: 0.25
   prototype_alignment_weight: 0.0
   prototype_warmup_epochs: 16
   prototype_ramp_epochs: 36
   latent_alignment_weight: 0.0
-  cross_warmup_epochs: 20
-  cross_ramp_epochs: 50
+  cross_warmup_epochs: 0
+  cross_ramp_epochs: 0
   teacher_student_warmup_epochs: 0
   probe_mask_probability: 1.0
   probe_alpha_local: 1.0

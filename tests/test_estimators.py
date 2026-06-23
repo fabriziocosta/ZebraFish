@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+from torch import nn
 
 from src.ml import (
     CommutativeCNNClassifier,
@@ -137,6 +138,30 @@ class EstimatorSmokeTests(unittest.TestCase):
         self.assertIsInstance(params["optimization_config"], OptimizationConfig)
         self.assertIsInstance(params["model_config"], CommutativeCNNConfig)
         self._run_estimator(estimator)
+
+    def test_commutative_cnn_config_can_select_group_normalization(self) -> None:
+        estimator = CommutativeCNNClassifier(
+            model_config=CommutativeCNNConfig(
+                spatial_conv_channels=(4,),
+                temporal_st_channels=(4,),
+                temporal_ts_channels=(4,),
+                spatial_agg_channels=(4,),
+                patch_size_z=1,
+                patch_size_xy=8,
+                embedding_dim=4,
+                normalization="group",
+                verbose=False,
+            ),
+            optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+        )
+
+        estimator.fit(self.X, self.y)
+
+        normalization_layers = [
+            module for module in estimator.model_.modules() if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm3d, nn.GroupNorm))
+        ]
+        self.assertTrue(normalization_layers)
+        self.assertTrue(all(isinstance(module, nn.GroupNorm) for module in normalization_layers))
 
     def test_commutative_cnn_fit_logs_selected_best_epoch_when_not_early_stopped(self) -> None:
         estimator = CommutativeCNNClassifier(

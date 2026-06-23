@@ -10,6 +10,22 @@ from src.models.common import _as_tuple
 from src.models.probes import ProbeDecoder, ProbeSpec
 
 
+def _normalization_layer(kind: str, channels: int, *, dimensions: int) -> nn.Module:
+    normalized_kind = str(kind).lower()
+    if normalized_kind == "batch":
+        return nn.BatchNorm3d(channels) if dimensions == 3 else nn.BatchNorm1d(channels)
+    if normalized_kind == "instance":
+        return nn.InstanceNorm3d(channels, affine=True) if dimensions == 3 else nn.InstanceNorm1d(channels, affine=True)
+    if normalized_kind == "group":
+        groups = min(8, channels)
+        while channels % groups != 0:
+            groups -= 1
+        return nn.GroupNorm(groups, channels)
+    if normalized_kind in {"none", "identity"}:
+        return nn.Identity()
+    raise ValueError("normalization must be one of 'batch', 'group', 'instance', 'none', or 'identity'")
+
+
 class _TimeChannel3DCNN(nn.Module):
     def __init__(
         self,
@@ -96,6 +112,7 @@ class _Conv1DStack(nn.Module):
         channels: Sequence[int],
         kernel_sizes: Sequence[int],
         dropout: float,
+        normalization: str = "batch",
     ) -> None:
         super().__init__()
         blocks: list[nn.Module] = []
@@ -111,7 +128,7 @@ class _Conv1DStack(nn.Module):
                     bias=False,
                 )
             )
-            blocks.append(nn.BatchNorm1d(int(out_channels)))
+            blocks.append(_normalization_layer(normalization, int(out_channels), dimensions=1))
             blocks.append(nn.ReLU(inplace=True))
             if dropout > 0:
                 blocks.append(nn.Dropout(p=dropout))
@@ -137,6 +154,7 @@ class _Conv3DBackbone(nn.Module):
         pool_kernel_xy: Sequence[int],
         pool_stride_z: Sequence[int],
         pool_stride_xy: Sequence[int],
+        normalization: str = "batch",
     ) -> None:
         super().__init__()
 
@@ -153,7 +171,7 @@ class _Conv3DBackbone(nn.Module):
                     bias=False,
                 )
             )
-            blocks.append(nn.BatchNorm3d(int(out_channels)))
+            blocks.append(_normalization_layer(normalization, int(out_channels), dimensions=3))
             blocks.append(nn.ReLU(inplace=True))
 
             pool_kernel = _as_tuple(pool_kernel_z[block_index], pool_kernel_xy[block_index])
@@ -201,6 +219,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
         embedding_dim: int,
         num_prototypes: int,
         dropout: float,
+        normalization: str = "batch",
         probe_spec: ProbeSpec | None = None,
         num_compound_classes: int = 0,
         num_concentration_classes: int = 0,
@@ -222,6 +241,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
             pool_kernel_xy=spatial_pool_kernel_xy,
             pool_stride_z=spatial_pool_stride_z,
             pool_stride_xy=spatial_pool_stride_xy,
+            normalization=normalization,
         )
         self.frame_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
         self.temporal_st = _Conv1DStack(
@@ -229,6 +249,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
             channels=temporal_st_channels,
             kernel_sizes=temporal_st_kernel_sizes,
             dropout=dropout,
+            normalization=normalization,
         )
         self.st_projection = nn.Linear(self.temporal_st.out_channels, embedding_dim)
 
@@ -237,6 +258,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
             channels=temporal_ts_channels,
             kernel_sizes=temporal_ts_kernel_sizes,
             dropout=dropout,
+            normalization=normalization,
         )
         self.spatial_aggregator = _Conv3DBackbone(
             in_channels=self.temporal_ts.out_channels,
@@ -249,6 +271,7 @@ class _PureCNNDualPathwayNetwork(nn.Module):
             pool_kernel_xy=spatial_agg_pool_kernel_xy,
             pool_stride_z=spatial_agg_pool_stride_z,
             pool_stride_xy=spatial_agg_pool_stride_xy,
+            normalization=normalization,
         )
         self.spatial_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
         self.ts_projection = nn.Linear(self.spatial_aggregator.out_channels, embedding_dim)

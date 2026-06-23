@@ -100,6 +100,7 @@ class CommutativeCNNConfig:
     probe_time_bins: int = 8
     probe_frequency_bins: int = 4
     dropout: float = 0.2
+    normalization: str = "batch"
     verbose: bool = True
 
 

@@ -379,6 +379,7 @@ class CommutativeCNNClassifier(
         probe_alpha_frequency: float = 1.0,
         probe_alpha_correlation: float = 1.0,
         dropout: float = 0.2,
+        normalization: str = "batch",
         batch_size: int = 16,
         epochs: int = 20,
         learning_rate: float = 1e-3,
@@ -457,6 +458,7 @@ class CommutativeCNNClassifier(
         self.probe_alpha_frequency = probe_alpha_frequency
         self.probe_alpha_correlation = probe_alpha_correlation
         self.dropout = dropout
+        self.normalization = normalization
         self.batch_size = batch_size
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -540,6 +542,7 @@ class CommutativeCNNClassifier(
             embedding_dim=self.embedding_dim,
             num_prototypes=self.num_prototypes,
             dropout=self.dropout,
+            normalization=self.normalization,
             probe_spec=ProbeSpec(
                 region_grid=tuple(int(size) for size in self.probe_region_grid),
                 time_bins=int(self.probe_time_bins),
