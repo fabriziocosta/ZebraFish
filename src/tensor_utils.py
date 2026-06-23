@@ -1901,6 +1901,7 @@ def plot_tensor_embedding_2d(
     *,
     title: str | None = None,
     ax=None,
+    output_path: str | Path | None = None,
     marker_column: str | None = "compound",
     display_control: bool = True,
     edge_color_column: str | None = None,
@@ -2151,4 +2152,8 @@ def plot_tensor_embedding_2d(
 
     fig.subplots_adjust(right=0.68)
     fig.tight_layout(rect=(0, 0, 0.68, 1))
+    if output_path is not None:
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_file, format="pdf", bbox_inches="tight")
     return fig, ax

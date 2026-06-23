@@ -15,11 +15,13 @@ from src.ml import (
     OptimizationConfig,
     CommutativeCNNClassifier,
     CommutativeCNNConfig,
+    MultitaskEvaluationResult,
     TimeChannel3DCNNClassifier,
     TimeChannel3DCNNConfig,
     evaluate_multitask_estimator,
     fit_chunked_water_vs_other_hot_start,
     persist_experiment_artifacts,
+    persist_pretraining_artifacts,
     prepare_multitask_experiment_data,
     prepare_water_vs_other_pretraining_data,
 )
@@ -104,6 +106,98 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(Path(artifacts.checkpoint_path).exists())
             persisted_config = json.loads(Path(artifacts.config_path).read_text(encoding="utf-8"))
             self.assertEqual(persisted_config["dataset_artifact_path"], "/tmp/example-dataset.pt")
+
+    def test_timestamped_persist_writes_confusions_predictions_and_logbook(self) -> None:
+        experiment = prepare_multitask_experiment_data(
+            self.dataset,
+            holdout_fraction=0.25,
+            validation_fraction_within_train=0.25,
+            random_state=0,
+        )
+        estimator = TimeChannel3DCNNClassifier(
+            model_config=TimeChannel3DCNNConfig(conv_channels=(4,), embedding_dim=6),
+            optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+            loss_weight_config=LossWeightConfig(compound_weight=0.1, concentration_weight=0.1),
+        )
+        estimator.fit(
+            experiment.X_train,
+            experiment.y_train.to_numpy(),
+            validation_data=(experiment.splits.X_val, experiment.splits.y_val),
+            compound_y=None if experiment.compound_train is None else experiment.compound_train.to_numpy(),
+            concentration_y=None if experiment.concentration_train is None else experiment.concentration_train.to_numpy(),
+            validation_compound_y=experiment.splits.compound_val,
+            validation_concentration_y=experiment.splits.concentration_val,
+        )
+        reports = evaluate_multitask_estimator(
+            estimator,
+            experiment.splits.X_holdout,
+            experiment.y_true_holdout,
+            label_maps=experiment.label_maps,
+            class_labels=experiment.class_labels,
+        )
+        evaluation = MultitaskEvaluationResult(
+            predictions=estimator.predict(experiment.splits.X_holdout),
+            probabilities=estimator.predict_proba(experiment.splits.X_holdout),
+            reports=reports,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            logbook_path = Path(tmpdir) / "EXPERIMENTS_LOGBOOK.md"
+            artifacts = persist_experiment_artifacts(
+                output_dir=tmpdir,
+                estimator=estimator,
+                reports=reports,
+                config={"model": "TimeChannel3DCNNClassifier"},
+                experiment_prefix="test_finetune",
+                experiment_id="test_finetune_20260101_010203",
+                evaluation=evaluation,
+                experiment=experiment,
+                analysis="Observed test analysis.",
+                next_round_proposal="Run the next test proposal.",
+                logbook_path=logbook_path,
+            )
+            self.assertEqual(artifacts.experiment_id, "test_finetune_20260101_010203")
+            self.assertTrue(Path(artifacts.output_dir).name.endswith("010203"))
+            self.assertTrue(Path(artifacts.config_path).exists())
+            self.assertTrue(Path(artifacts.summary_metrics_path).exists())
+            self.assertTrue((Path(artifacts.confusion_dir) / "test_finetune_20260101_010203_action_confusion_counts.csv").exists())
+            self.assertTrue((Path(artifacts.predictions_dir) / "test_finetune_20260101_010203_action_predictions.csv").exists())
+            self.assertIn("Observed test analysis.", logbook_path.read_text(encoding="utf-8"))
+
+    def test_persist_pretraining_artifacts_writes_timestamped_history_and_summary(self) -> None:
+        class FakePretrainingEstimator:
+            def __init__(self) -> None:
+                self.pretrain_history_ = pd.DataFrame(
+                    {
+                        "epoch": [1, 2],
+                        "train_loss": [1.0, 0.8],
+                        "val_loss": [1.2, 0.9],
+                    }
+                )
+                self.pretrain_best_epoch_ = 2
+                self.pretrain_best_metric_ = 0.9
+
+            def save_pretrained_encoder(self, path):
+                Path(path).write_bytes(b"encoder")
+                return Path(path)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            logbook_path = Path(tmpdir) / "EXPERIMENTS_LOGBOOK.md"
+            artifacts = persist_pretraining_artifacts(
+                output_dir=tmpdir,
+                estimator=FakePretrainingEstimator(),
+                config={"model": "fake"},
+                experiment_prefix="test_pretrain",
+                experiment_id="test_pretrain_20260101_010203",
+                analysis="Pretraining analysis.",
+                next_round_proposal="Pretraining proposal.",
+                logbook_path=logbook_path,
+            )
+            self.assertTrue(Path(artifacts.history_path).exists())
+            self.assertTrue(Path(artifacts.summary_metrics_path).exists())
+            self.assertTrue(Path(artifacts.checkpoint_path).exists())
+            summary = pd.read_csv(artifacts.summary_metrics_path)
+            self.assertIn("best_epoch", set(summary["metric"]))
+            self.assertIn("Pretraining analysis.", logbook_path.read_text(encoding="utf-8"))
 
     def test_prepare_multitask_experiment_accepts_serialized_metadata_records_payload(self) -> None:
         raw_dataset = {

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, is_dataclass
+from datetime import datetime
 import json
 from pathlib import Path
+import re
+import shutil
 import time
 from typing import Any
 
@@ -17,6 +20,7 @@ from sklearn.model_selection import train_test_split
 from src.training.data import augment_training_tensors_with_rotations, split_labeled_tensor_dataset_by_instance
 from src.training.loop import _format_eta
 from src.training.reporting import (
+    build_confusion_matrix_frames,
     build_multitask_classification_reports,
     display_multitask_reports_and_confusions,
     plot_embedding_projection,
@@ -65,6 +69,18 @@ class ExperimentArtifacts:
     summary_metrics_path: str
     per_class_dir: str
     checkpoint_path: str
+    experiment_id: str | None = None
+    confusion_dir: str | None = None
+    predictions_dir: str | None = None
+    logbook_path: str | None = None
+
+
+@dataclass(frozen=True)
+class ExperimentRun:
+    experiment_id: str
+    run_dir: str
+    loss_plot_dir: str
+    figure_dir: str
 
 
 @dataclass
@@ -99,6 +115,8 @@ def _unlabeled_dataset_chunk_paths(path: str | Path) -> list[Path]:
 
 
 def _to_json_compatible(value: Any) -> Any:
+    if is_dataclass(value) and not isinstance(value, type):
+        return _to_json_compatible(asdict(value))
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, dict):
@@ -106,6 +124,259 @@ def _to_json_compatible(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_to_json_compatible(item) for item in value]
     return value
+
+
+def _sanitize_experiment_prefix(prefix: str) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(prefix).strip())
+    sanitized = sanitized.strip("._-")
+    if not sanitized:
+        raise ValueError("experiment_prefix must contain at least one alphanumeric character")
+    return sanitized
+
+
+def make_experiment_id(experiment_prefix: str, *, timestamp: datetime | None = None) -> str:
+    timestamp_value = timestamp or datetime.now()
+    return f"{_sanitize_experiment_prefix(experiment_prefix)}_{timestamp_value:%Y%m%d_%H%M%S}"
+
+
+def _append_experiments_logbook_entry(
+    *,
+    experiment_id: str,
+    experiment_kind: str,
+    artifact_dir: Path,
+    key_paths: dict[str, Path | str | list[Path | str] | tuple[Path | str, ...] | None],
+    config: dict[str, Any] | Any,
+    analysis: str | None,
+    next_round_proposal: str | None,
+    logbook_path: str | Path | None,
+) -> str | None:
+    if logbook_path is None:
+        return None
+
+    path = Path(logbook_path)
+    if not path.exists():
+        path.write_text(
+            "# Experiments Logbook\n\n"
+            "This file records pretraining and fine-tuning runs by experiment id. "
+            "Each entry links the timestamped artifacts, summarizes what happened, "
+            "and states the proposed next round.\n",
+            encoding="utf-8",
+        )
+
+    compact_config = _to_json_compatible(config)
+    config_lines = json.dumps(compact_config, indent=2, sort_keys=True).splitlines()
+    if len(config_lines) > 28:
+        config_block = "\n".join(config_lines[:28] + ["  ..."])
+    else:
+        config_block = "\n".join(config_lines)
+
+    path_lines = [
+        f"- `{name}`: {_format_logbook_path_value(value)}"
+        for name, value in key_paths.items()
+        if value is not None
+    ]
+    entry = [
+        "",
+        f"## {experiment_id}",
+        "",
+        f"- kind: `{experiment_kind}`",
+        f"- artifact_dir: {_markdown_artifact_link(artifact_dir)}",
+        *path_lines,
+        "",
+        "### Analysis",
+        "",
+        (analysis or "TODO: summarize the observed losses, metrics, and failure modes."),
+        "",
+        "### Next Round Proposal",
+        "",
+        (next_round_proposal or "TODO: state the next experiment and the exact change being tested."),
+        "",
+        "### Config Snapshot",
+        "",
+        "```json",
+        config_block,
+        "```",
+        "",
+    ]
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\n".join(entry))
+    return str(path)
+
+
+def _markdown_artifact_link(path: Path | str) -> str:
+    path_text = str(path)
+    label = Path(path_text).name or path_text
+    target = path_text.replace(" ", "%20")
+    return f"[{label}]({target})"
+
+
+def _format_logbook_path_value(value: Path | str | list[Path | str] | tuple[Path | str, ...]) -> str:
+    if isinstance(value, (list, tuple)):
+        return ", ".join(_markdown_artifact_link(item) for item in value)
+    return _markdown_artifact_link(value)
+
+
+def create_experiment_run(output_dir: str | Path, experiment_prefix: str) -> ExperimentRun:
+    experiment_id = make_experiment_id(experiment_prefix)
+    run_dir = Path(output_dir) / "runs" / experiment_id
+    loss_plot_dir = run_dir / "loss_plots"
+    figure_dir = run_dir / "figures"
+    loss_plot_dir.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    return ExperimentRun(
+        experiment_id=experiment_id,
+        run_dir=str(run_dir),
+        loss_plot_dir=str(loss_plot_dir),
+        figure_dir=str(figure_dir),
+    )
+
+
+def _artifact_run_paths(
+    output_dir: str | Path,
+    *,
+    experiment_prefix: str | None,
+    experiment_id: str | None = None,
+) -> tuple[Path, str | None, dict[str, Path]]:
+    base_output_path = Path(output_dir)
+    if experiment_prefix is None:
+        paths = {
+            "config": base_output_path / "config.json",
+            "history": base_output_path / "history.csv",
+            "summary": base_output_path / "summary_metrics.csv",
+            "checkpoint": base_output_path / "model_state.pt",
+            "per_class_dir": base_output_path / "per_class_reports",
+            "confusion_dir": base_output_path / "confusion_matrices",
+            "predictions_dir": base_output_path / "predictions",
+        }
+        return base_output_path, None, paths
+
+    if experiment_id is None:
+        experiment_id = make_experiment_id(experiment_prefix)
+    else:
+        experiment_id = _sanitize_experiment_prefix(experiment_id)
+    run_dir = base_output_path / "runs" / experiment_id
+    paths = {
+        "config": run_dir / f"{experiment_id}_config.json",
+        "history": run_dir / f"{experiment_id}_history.csv",
+        "summary": run_dir / f"{experiment_id}_summary_metrics.csv",
+        "checkpoint": run_dir / f"{experiment_id}_model_state.pt",
+        "per_class_dir": run_dir / "per_class_reports",
+        "confusion_dir": run_dir / "confusion_matrices",
+        "predictions_dir": run_dir / "predictions",
+    }
+    return run_dir, experiment_id, paths
+
+
+def _summary_frames_from_reports(reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]]) -> pd.DataFrame:
+    summary_frames: list[pd.DataFrame] = []
+    for target, (_, summary_df) in reports.items():
+        target_summary = summary_df.rename_axis("metric").reset_index()
+        target_summary.insert(0, "target", target)
+        summary_frames.append(target_summary)
+    if not summary_frames:
+        return pd.DataFrame(columns=["target", "metric", "value"])
+    return pd.concat(summary_frames, ignore_index=True)
+
+
+def _save_multitask_prediction_tables(
+    *,
+    predictions_dir: Path,
+    experiment_id: str | None,
+    evaluation: MultitaskEvaluationResult,
+    experiment: MultitaskExperimentData,
+) -> dict[str, Path]:
+    predictions_dir.mkdir(parents=True, exist_ok=True)
+    prefix = f"{experiment_id}_" if experiment_id else ""
+    output_paths: dict[str, Path] = {}
+    for target, y_true in experiment.y_true_holdout.items():
+        if target not in evaluation.predictions:
+            continue
+        y_true_arr = np.asarray(y_true, dtype=int)
+        y_pred_arr = np.asarray(evaluation.predictions[target], dtype=int)
+        label_map = experiment.label_maps.get(target, {})
+        table = pd.DataFrame(
+            {
+                "true_label": y_true_arr,
+                "true_name": [label_map.get(int(label), str(int(label))) for label in y_true_arr],
+                "pred_label": y_pred_arr,
+                "pred_name": [label_map.get(int(label), str(int(label))) for label in y_pred_arr],
+            }
+        )
+        probabilities = evaluation.probabilities.get(target)
+        class_labels = experiment.class_labels.get(target, [])
+        if probabilities is not None:
+            probabilities_arr = np.asarray(probabilities, dtype=float)
+            for column_index, label in enumerate(class_labels):
+                label_name = label_map.get(int(label), str(int(label)))
+                safe_label_name = _sanitize_experiment_prefix(label_name)
+                table[f"proba_{safe_label_name}"] = probabilities_arr[:, column_index]
+        path = predictions_dir / f"{prefix}{target}_predictions.csv"
+        table.to_csv(path, index=False)
+        output_paths[target] = path
+    return output_paths
+
+
+def _save_multitask_confusion_matrices(
+    *,
+    confusion_dir: Path,
+    experiment_id: str | None,
+    evaluation: MultitaskEvaluationResult,
+    experiment: MultitaskExperimentData,
+) -> dict[str, Path]:
+    confusion_dir.mkdir(parents=True, exist_ok=True)
+    prefix = f"{experiment_id}_" if experiment_id else ""
+    output_paths: dict[str, Path] = {}
+    for target, y_true in experiment.y_true_holdout.items():
+        if target not in evaluation.predictions:
+            continue
+        counts_df, fractions_df = build_confusion_matrix_frames(
+            y_true,
+            evaluation.predictions[target],
+            class_labels=experiment.class_labels.get(target),
+            label_map=experiment.label_maps.get(target),
+        )
+        counts_path = confusion_dir / f"{prefix}{target}_confusion_counts.csv"
+        fractions_path = confusion_dir / f"{prefix}{target}_confusion_row_fractions.csv"
+        counts_df.to_csv(counts_path)
+        fractions_df.to_csv(fractions_path)
+        output_paths[f"{target}_counts"] = counts_path
+        output_paths[f"{target}_row_fractions"] = fractions_path
+    return output_paths
+
+
+def _copy_pdf_artifacts(
+    *,
+    source_dirs: list[str | Path] | None,
+    destination_dir: Path,
+    experiment_id: str | None,
+) -> list[Path]:
+    if not source_dirs:
+        return []
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    copied_paths: list[Path] = []
+    prefix = f"{experiment_id}_" if experiment_id else ""
+    for source_dir in source_dirs:
+        source_path = Path(source_dir)
+        if not source_path.exists():
+            continue
+        for pdf_path in sorted(source_path.rglob("*.pdf")):
+            relative_stem = "_".join(pdf_path.relative_to(source_path).with_suffix("").parts)
+            destination_path = destination_dir / f"{prefix}{_sanitize_experiment_prefix(relative_stem)}.pdf"
+            shutil.copy2(pdf_path, destination_path)
+            copied_paths.append(destination_path)
+    return copied_paths
+
+
+def _latest_loss_pdf_paths(loss_plot_dir: Path) -> list[Path]:
+    if not loss_plot_dir.exists():
+        return []
+    return sorted(loss_plot_dir.rglob("*latest*.pdf"))
+
+
+def _figure_pdf_paths(figure_dir: Path) -> list[Path]:
+    if not figure_dir.exists():
+        return []
+    return sorted(figure_dir.rglob("*.pdf"))
 
 
 def prepare_multitask_experiment_data(
@@ -808,29 +1079,84 @@ def persist_experiment_artifacts(
     estimator,
     reports: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
     config: dict[str, Any],
+    experiment_prefix: str | None = None,
+    experiment_id: str | None = None,
+    evaluation: MultitaskEvaluationResult | None = None,
+    experiment: MultitaskExperimentData | None = None,
+    analysis: str | None = None,
+    next_round_proposal: str | None = None,
+    logbook_path: str | Path | None = "EXPERIMENTS_LOGBOOK.md",
+    loss_plot_dirs: list[str | Path] | None = None,
 ) -> ExperimentArtifacts:
-    output_path = Path(output_dir)
-    per_class_dir = output_path / "per_class_reports"
+    output_path, resolved_experiment_id, paths = _artifact_run_paths(
+        output_dir,
+        experiment_prefix=experiment_prefix,
+        experiment_id=experiment_id,
+    )
+    per_class_dir = paths["per_class_dir"]
+    confusion_dir = paths["confusion_dir"]
+    predictions_dir = paths["predictions_dir"]
+    figure_dir = output_path / "figures"
     output_path.mkdir(parents=True, exist_ok=True)
     per_class_dir.mkdir(parents=True, exist_ok=True)
 
-    config_path = output_path / "config.json"
-    history_path = output_path / "history.csv"
-    summary_path = output_path / "summary_metrics.csv"
-    checkpoint_path = output_path / "model_state.pt"
+    config_path = paths["config"]
+    history_path = paths["history"]
+    summary_path = paths["summary"]
+    checkpoint_path = paths["checkpoint"]
 
     with config_path.open("w", encoding="utf-8") as handle:
         json.dump(_to_json_compatible(config), handle, indent=2, sort_keys=True)
 
     estimator.history_.to_csv(history_path, index=False)
-    summary_frames: list[pd.DataFrame] = []
     for target, (per_class_df, summary_df) in reports.items():
-        per_class_df.to_csv(per_class_dir / f"{target}.csv")
-        target_summary = summary_df.rename_axis("metric").reset_index()
-        target_summary.insert(0, "target", target)
-        summary_frames.append(target_summary)
-    pd.concat(summary_frames, ignore_index=True).to_csv(summary_path, index=False)
+        prefix = f"{resolved_experiment_id}_" if resolved_experiment_id else ""
+        per_class_df.to_csv(per_class_dir / f"{prefix}{target}_per_class.csv")
+    _summary_frames_from_reports(reports).to_csv(summary_path, index=False)
+
+    if evaluation is not None and experiment is not None:
+        _save_multitask_confusion_matrices(
+            confusion_dir=confusion_dir,
+            experiment_id=resolved_experiment_id,
+            evaluation=evaluation,
+            experiment=experiment,
+        )
+        _save_multitask_prediction_tables(
+            predictions_dir=predictions_dir,
+            experiment_id=resolved_experiment_id,
+            evaluation=evaluation,
+            experiment=experiment,
+        )
+
+    copied_loss_pdfs = _copy_pdf_artifacts(
+        source_dirs=loss_plot_dirs,
+        destination_dir=output_path / "loss_plots",
+        experiment_id=resolved_experiment_id,
+    )
     torch.save(estimator.model_.state_dict(), checkpoint_path)
+
+    logbook_output_path = _append_experiments_logbook_entry(
+        experiment_id=resolved_experiment_id or Path(output_path).name,
+        experiment_kind="fine_tuning",
+        artifact_dir=output_path,
+        key_paths={
+            "config": config_path,
+            "history": history_path,
+            "summary_metrics": summary_path,
+            "checkpoint": checkpoint_path,
+            "per_class_reports": per_class_dir,
+            "confusion_matrices": confusion_dir if evaluation is not None and experiment is not None else None,
+            "predictions": predictions_dir if evaluation is not None and experiment is not None else None,
+            "loss_pdfs": output_path / "loss_plots" if copied_loss_pdfs else None,
+            "latest_loss_pdfs": _latest_loss_pdf_paths(output_path / "loss_plots") or None,
+            "figures": figure_dir if figure_dir.exists() else None,
+            "figure_pdfs": _figure_pdf_paths(figure_dir) or None,
+        },
+        config=config,
+        analysis=analysis,
+        next_round_proposal=next_round_proposal,
+        logbook_path=logbook_path if resolved_experiment_id else None,
+    )
 
     return ExperimentArtifacts(
         output_dir=str(output_path),
@@ -839,4 +1165,108 @@ def persist_experiment_artifacts(
         summary_metrics_path=str(summary_path),
         per_class_dir=str(per_class_dir),
         checkpoint_path=str(checkpoint_path),
+        experiment_id=resolved_experiment_id,
+        confusion_dir=str(confusion_dir) if evaluation is not None and experiment is not None else None,
+        predictions_dir=str(predictions_dir) if evaluation is not None and experiment is not None else None,
+        logbook_path=logbook_output_path,
+    )
+
+
+def _build_pretraining_summary(estimator) -> pd.DataFrame:
+    history_df = pd.DataFrame(getattr(estimator, "pretrain_history_", pd.DataFrame()))
+    rows: list[dict[str, object]] = []
+    if hasattr(estimator, "pretrain_best_epoch_"):
+        rows.append({"metric": "best_epoch", "value": int(estimator.pretrain_best_epoch_)})
+    if hasattr(estimator, "pretrain_best_metric_"):
+        rows.append({"metric": "best_metric", "value": float(estimator.pretrain_best_metric_)})
+    if not history_df.empty:
+        rows.append({"metric": "n_epochs_recorded", "value": int(len(history_df))})
+        for column in history_df.columns:
+            if column == "epoch" or not pd.api.types.is_numeric_dtype(history_df[column]):
+                continue
+            values = history_df[column].dropna()
+            if values.empty:
+                continue
+            final_value = float(values.iloc[-1])
+            min_index = int(values.idxmin())
+            rows.append({"metric": f"final_{column}", "value": final_value})
+            rows.append({"metric": f"min_{column}", "value": float(values.loc[min_index])})
+            rows.append({"metric": f"min_{column}_epoch", "value": int(history_df.loc[min_index, "epoch"])})
+    return pd.DataFrame(rows, columns=["metric", "value"])
+
+
+def persist_pretraining_artifacts(
+    *,
+    output_dir: str | Path,
+    estimator,
+    config: dict[str, Any] | Any,
+    experiment_prefix: str,
+    experiment_id: str | None = None,
+    pretrained_encoder_path: str | Path | None = None,
+    analysis: str | None = None,
+    next_round_proposal: str | None = None,
+    logbook_path: str | Path | None = "EXPERIMENTS_LOGBOOK.md",
+    loss_plot_dirs: list[str | Path] | None = None,
+) -> ExperimentArtifacts:
+    output_path, resolved_experiment_id, paths = _artifact_run_paths(
+        output_dir,
+        experiment_prefix=experiment_prefix,
+        experiment_id=experiment_id,
+    )
+    output_path.mkdir(parents=True, exist_ok=True)
+    config_path = paths["config"]
+    history_path = paths["history"]
+    summary_path = paths["summary"]
+    checkpoint_path = output_path / f"{resolved_experiment_id}_encoder_state.pt"
+
+    config_payload = _to_json_compatible(config)
+    if pretrained_encoder_path is not None:
+        config_payload = dict(config_payload)
+        config_payload["pretrained_encoder_path"] = str(pretrained_encoder_path)
+    with config_path.open("w", encoding="utf-8") as handle:
+        json.dump(config_payload, handle, indent=2, sort_keys=True)
+
+    history_df = pd.DataFrame(getattr(estimator, "pretrain_history_", pd.DataFrame()))
+    history_df.to_csv(history_path, index=False)
+    _build_pretraining_summary(estimator).to_csv(summary_path, index=False)
+
+    if hasattr(estimator, "save_pretrained_encoder"):
+        estimator.save_pretrained_encoder(checkpoint_path)
+    elif pretrained_encoder_path is not None:
+        shutil.copy2(pretrained_encoder_path, checkpoint_path)
+
+    copied_loss_pdfs = _copy_pdf_artifacts(
+        source_dirs=loss_plot_dirs,
+        destination_dir=output_path / "loss_plots",
+        experiment_id=resolved_experiment_id,
+    )
+
+    logbook_output_path = _append_experiments_logbook_entry(
+        experiment_id=resolved_experiment_id or Path(output_path).name,
+        experiment_kind="pretraining",
+        artifact_dir=output_path,
+        key_paths={
+            "config": config_path,
+            "history": history_path,
+            "summary_metrics": summary_path,
+            "checkpoint": checkpoint_path,
+            "loss_pdfs": output_path / "loss_plots" if copied_loss_pdfs else None,
+            "latest_loss_pdfs": _latest_loss_pdf_paths(output_path / "loss_plots") or None,
+            "latest_encoder_pointer": pretrained_encoder_path,
+        },
+        config=config_payload,
+        analysis=analysis,
+        next_round_proposal=next_round_proposal,
+        logbook_path=logbook_path,
+    )
+
+    return ExperimentArtifacts(
+        output_dir=str(output_path),
+        config_path=str(config_path),
+        history_path=str(history_path),
+        summary_metrics_path=str(summary_path),
+        per_class_dir="",
+        checkpoint_path=str(checkpoint_path),
+        experiment_id=resolved_experiment_id,
+        logbook_path=logbook_output_path,
     )

@@ -325,6 +325,30 @@ def build_multitask_classification_reports(
     return results
 
 
+def build_confusion_matrix_frames(
+    y_true: Iterable[int],
+    y_pred: Iterable[int],
+    *,
+    class_labels: Sequence[int] | None = None,
+    label_map: dict[int, str] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    y_true_arr = np.asarray(list(y_true))
+    y_pred_arr = np.asarray(list(y_pred))
+    if class_labels is None:
+        class_labels = sorted(np.unique(np.concatenate([y_true_arr, y_pred_arr])))
+    class_labels = list(class_labels)
+    tick_labels = [label_map.get(int(label), str(label)) for label in class_labels] if label_map else [str(label) for label in class_labels]
+
+    cm_abs = confusion_matrix(y_true_arr, y_pred_arr, labels=class_labels)
+    row_sums = cm_abs.sum(axis=1, keepdims=True)
+    cm_frac = np.divide(cm_abs, row_sums, out=np.zeros_like(cm_abs, dtype=float), where=row_sums > 0)
+    counts_df = pd.DataFrame(cm_abs, index=tick_labels, columns=tick_labels)
+    fractions_df = pd.DataFrame(cm_frac, index=tick_labels, columns=tick_labels)
+    counts_df.index.name = "true_class"
+    fractions_df.index.name = "true_class"
+    return counts_df, fractions_df
+
+
 def plot_confusion_matrices(
     y_true: Iterable[int],
     y_pred: Iterable[int],
@@ -341,9 +365,14 @@ def plot_confusion_matrices(
     class_labels = list(class_labels)
     tick_labels = [label_map.get(int(label), str(label)) for label in class_labels] if label_map else [str(label) for label in class_labels]
 
-    cm_abs = confusion_matrix(y_true_arr, y_pred_arr, labels=class_labels)
-    row_sums = cm_abs.sum(axis=1, keepdims=True)
-    cm_frac = np.divide(cm_abs, row_sums, out=np.zeros_like(cm_abs, dtype=float), where=row_sums > 0)
+    counts_df, fractions_df = build_confusion_matrix_frames(
+        y_true_arr,
+        y_pred_arr,
+        class_labels=class_labels,
+        label_map=label_map,
+    )
+    cm_abs = counts_df.to_numpy()
+    cm_frac = fractions_df.to_numpy()
 
     if axes is None:
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
