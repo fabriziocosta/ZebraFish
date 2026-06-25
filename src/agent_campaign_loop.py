@@ -134,8 +134,21 @@ def _campaign_lock_path(config: dict[str, Any]) -> Path:
     return _campaign_root(config) / "campaign.lock"
 
 
+def _campaign_terminate_lock_path(config: dict[str, Any]) -> Path:
+    return _campaign_root(config) / "campaign.terminate.lock"
+
+
 def _acquire_campaign_lock(config: dict[str, Any]) -> Path:
     path = _campaign_lock_path(config)
+    return _acquire_pid_lock(path, label="Campaign")
+
+
+def _acquire_terminate_lock(config: dict[str, Any]) -> Path:
+    path = _campaign_terminate_lock_path(config)
+    return _acquire_pid_lock(path, label="Campaign termination")
+
+
+def _acquire_pid_lock(path: Path, *, label: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     pid = os.getpid()
     for attempt in range(2):
@@ -147,11 +160,11 @@ def _acquire_campaign_lock(config: dict[str, Any]) -> Path:
                 path.unlink(missing_ok=True)
                 continue
             owner = f" pid={existing_pid}" if existing_pid is not None else ""
-            raise RuntimeError(f"Campaign lock already exists at {path}.{owner}")
+            raise RuntimeError(f"{label} lock already exists at {path}.{owner}")
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(json.dumps({"pid": pid, "created_at": _now_iso()}, indent=2))
         return path
-    raise RuntimeError(f"Could not acquire campaign lock at {path}")
+    raise RuntimeError(f"Could not acquire {label.lower()} lock at {path}")
 
 
 def _read_lock_pid(path: Path) -> int | None:
@@ -283,8 +296,11 @@ def _trial_count(campaign_config: dict[str, Any]) -> int:
         for path in trials_root.iterdir():
             if not path.is_dir():
                 continue
-            manifest = _read_json(path / "trial_manifest.json")
-            if _manifest_counts_against_budget(manifest):
+            manifest_path = path / "trial_manifest.json"
+            manifest = _read_json(manifest_path)
+            if manifest_path.exists() and _manifest_counts_against_budget(manifest):
+                trial_ids.add(path.name)
+            elif not manifest_path.exists() and _trial_dir_without_manifest_counts(path):
                 trial_ids.add(path.name)
 
     state = _read_json(_campaign_state_path(campaign_config))
@@ -296,8 +312,12 @@ def _trial_count(campaign_config: dict[str, Any]) -> int:
 
 def _manifest_counts_against_budget(manifest: dict[str, Any]) -> bool:
     if not manifest:
-        return True
+        return False
     return bool(manifest.get("trial_configs") or manifest.get("stage_runs"))
+
+
+def _trial_dir_without_manifest_counts(path: Path) -> bool:
+    return any((path / name).exists() for name in ("configs", "stage_state", "logs", "trial_summary.json"))
 
 
 def _state_counts_against_budget(state: dict[str, Any]) -> bool:
@@ -994,7 +1014,7 @@ def _upsert_init_logbook(
         f"- Stages: `{ ' -> '.join(str(stage) for stage in campaign_config['campaign']['stages']) }`",
         f"- Objective: `{campaign_config['objective'].get('target')}.{campaign_config['objective'].get('primary_metric')}`",
         "",
-        "### Next Things To Try",
+        "### Previous Results And Next Plan",
         "",
         decision.logbook_markdown or decision.reason or "Start the configured baseline trial and evaluate downstream fine-tune metrics.",
         "",
@@ -1107,7 +1127,12 @@ def _build_init_prompt(config: dict[str, Any], snapshot: dict[str, Any], trial_i
     return "\n\n".join(
         [
             "You are initializing a ZebraFish experiment campaign.",
-            "Inspect the current status, recent logs, and logbook tail. Write the next things to try before the first stage launches.",
+            "Inspect the current status, recent logs, old experiment artifacts, existing ledgers, and logbook tail before the first stage launches.",
+            (
+                "In logbook_markdown, write concise human-readable markdown with these headings: "
+                "Previous results reviewed, Next experiment to run, Why this should help, Patch to apply, Monitoring plan. "
+                "Mention the concrete old evidence you used; if evidence is weak or from latest-folder fallback, say so."
+            ),
             "The controller will launch the first campaign stage after this decision unless you return stop_campaign.",
             f"Proposed trial id: {trial_id}",
             f"Objective:\n{json.dumps(config.get('objective', {}), indent=2, sort_keys=True)}",
@@ -1115,7 +1140,11 @@ def _build_init_prompt(config: dict[str, Any], snapshot: dict[str, Any], trial_i
             f"Logbook rule:\n{prompts.get('update_logbook', '')}",
             f"Parameter patching rule:\n{prompts.get('patch_parameters', '')}",
             f"Decision schema:\n{prompts.get('decision_schema', '')}",
-            "Return propose_trial when you have a concrete first trial patch. Return update_logbook or no_action only if the baseline config should be launched unchanged.",
+            (
+                "Return propose_trial when you have a concrete first trial patch. "
+                "Return update_logbook or no_action only if the baseline config should be launched unchanged. "
+                "Keep logbook_markdown under 1200 words and trial_patch compact."
+            ),
             "Initialization snapshot JSON:",
             json.dumps(snapshot, indent=2, sort_keys=True),
         ]
@@ -1254,20 +1283,7 @@ def initialize_campaign_trial(
     try:
         decision = request_init_decision(campaign_config, snapshot, trial_id, client=client)
     except Exception as exc:
-        state = {
-            "campaign_id": campaign_id,
-            "status": "agent_decision_failed",
-            "phase": "initializing",
-            "current_trial_id": trial_id,
-            "current_trial_dir": str(trial_dir),
-            "current_stage_index": 0,
-            "current_stage": campaign_config["campaign"]["stages"][0],
-            "stage_state_path": str(_stage_state_path(trial_dir, campaign_config["campaign"]["stages"][0])),
-            "trial_configs": {},
-            "init_snapshot_path": str(snapshot_path),
-            "agent_decision_error": f"{type(exc).__name__}: {exc}",
-            "updated_at": _now_iso(),
-        }
+        state = _init_failure_state(campaign_config, trial_id=trial_id, trial_dir=trial_dir, snapshot_path=snapshot_path, exc=exc)
         if _is_openai_credits_exhausted(exc):
             _write_json(trial_dir / "trial_manifest.json", _trial_manifest(campaign_config, state))
             _mark_openai_credits_exhausted(campaign_config, state, exc, stream=stream)
@@ -1280,14 +1296,49 @@ def initialize_campaign_trial(
                 flush=True,
             )
         return state
-    return _apply_init_decision(
-        campaign_config,
-        loop_config,
-        trial_id=trial_id,
-        decision=decision,
-        stream=stream,
-        allow_existing_trial_dir=True,
-    )
+    try:
+        return _apply_init_decision(
+            campaign_config,
+            loop_config,
+            trial_id=trial_id,
+            decision=decision,
+            stream=stream,
+            allow_existing_trial_dir=True,
+        )
+    except ValueError as exc:
+        state = _init_failure_state(campaign_config, trial_id=trial_id, trial_dir=trial_dir, snapshot_path=snapshot_path, exc=exc)
+        _write_json(_campaign_state_path(campaign_config), state)
+        _write_json(trial_dir / "trial_manifest.json", _trial_manifest(campaign_config, state))
+        print(
+            f"campaign initialization decision rejected trial={trial_id} error={state['agent_decision_error']}",
+            file=stream,
+            flush=True,
+        )
+        return state
+
+
+def _init_failure_state(
+    campaign_config: dict[str, Any],
+    *,
+    trial_id: str,
+    trial_dir: Path,
+    snapshot_path: Path,
+    exc: Exception,
+) -> dict[str, Any]:
+    return {
+        "campaign_id": campaign_config["campaign"]["id"],
+        "status": "agent_decision_failed",
+        "phase": "initializing",
+        "current_trial_id": trial_id,
+        "current_trial_dir": str(trial_dir),
+        "current_stage_index": 0,
+        "current_stage": campaign_config["campaign"]["stages"][0],
+        "stage_state_path": str(_stage_state_path(trial_dir, campaign_config["campaign"]["stages"][0])),
+        "trial_configs": {},
+        "init_snapshot_path": str(snapshot_path),
+        "agent_decision_error": f"{type(exc).__name__}: {exc}",
+        "updated_at": _now_iso(),
+    }
 
 
 def _apply_init_decision(
@@ -1361,14 +1412,19 @@ def retry_initialization_decision(
         else:
             _mark_agent_decision_failed(campaign_config, state, exc, stream=stream)
         return state
-    return _apply_init_decision(
-        campaign_config,
-        loop_config,
-        trial_id=trial_id,
-        decision=decision,
-        stream=stream,
-        allow_existing_trial_dir=True,
-    )
+    try:
+        return _apply_init_decision(
+            campaign_config,
+            loop_config,
+            trial_id=trial_id,
+            decision=decision,
+            stream=stream,
+            allow_existing_trial_dir=True,
+        )
+    except ValueError as exc:
+        state["agent_decision_error"] = f"{type(exc).__name__}: {exc}"
+        _mark_agent_decision_failed(campaign_config, state, exc, stream=stream)
+        return state
 
 
 def apply_campaign_decision(
@@ -1577,13 +1633,20 @@ def run_campaign(
                 if not once and not first_poll:
                     sleep_fn(float(poll_seconds))
                 first_poll = False
+                if not dry_run:
+                    latest_state = _read_json(state_path)
+                    if latest_state:
+                        state = latest_state
 
                 if state.get("status") == "openai_credits_exhausted":
                     action = "openai_credits_exhausted"
                     reason = "OpenAI API credits exhausted; terminating campaign loop."
-                elif state.get("status") in {"campaign_completed", "analysis_completed"}:
+                elif state.get("status") in {"campaign_completed", "analysis_completed", "terminated", "termination_race_stopped"}:
                     action = "no_action"
                     reason = f"campaign state is {state.get('status')}"
+                elif state.get("status") == "terminating":
+                    action = "wait_terminating"
+                    reason = "campaign termination is in progress"
                 elif state.get("status") == "agent_decision_failed":
                     if not dry_run and state.get("phase") == "initializing":
                         state = retry_initialization_decision(
@@ -1688,7 +1751,7 @@ def run_campaign(
                 )
                 if state.get("status") == "openai_credits_exhausted":
                     return 1
-                if state.get("status") in {"campaign_completed", "analysis_completed"}:
+                if state.get("status") in {"campaign_completed", "analysis_completed", "terminated", "termination_race_stopped"}:
                     return 0
                 if once:
                     return 0
@@ -1724,22 +1787,75 @@ def status_command(campaign_config: dict[str, Any], *, stream: TextIO = sys.stdo
     return 0
 
 
-def _mark_stage_terminated(state: dict[str, Any], *, pid: int, reason: str, signal_name: str) -> None:
+def _mark_stage_process_state(
+    state: dict[str, Any],
+    *,
+    status: str,
+    pid: int,
+    reason: str,
+    signal_name: str | None,
+) -> None:
     stage_state_path = state.get("stage_state_path")
     if not stage_state_path:
         return
     path = Path(str(stage_state_path))
     stage_state = _read_json(path)
+    timestamp_key = f"{status}_at"
     stage_state.update(
         {
-            "status": "terminated",
-            "terminated_at": _now_iso(),
-            "terminated_pid": pid,
-            "termination_signal": signal_name,
+            "status": status,
+            timestamp_key: _now_iso(),
+            f"{status}_pid": pid,
             "termination_reason": reason,
         }
     )
+    if signal_name is not None:
+        stage_state["termination_signal"] = signal_name
     _write_json(path, stage_state)
+    run_status_path = stage_state.get("run_status_path")
+    if run_status_path:
+        run_status = _read_json(Path(str(run_status_path)))
+        run_status.update(
+            {
+                "status": status,
+                timestamp_key: stage_state[timestamp_key],
+                f"{status}_pid": pid,
+                "termination_reason": reason,
+            }
+        )
+        if signal_name is not None:
+            run_status["termination_signal"] = signal_name
+        _write_json(Path(str(run_status_path)), run_status)
+
+
+def _mark_campaign_process_state(
+    campaign_config: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    status: str,
+    pid: int,
+    reason: str,
+    signal_name: str | None,
+) -> None:
+    timestamp = _now_iso()
+    timestamp_key = f"{status}_at"
+    state.update(
+        {
+            "status": status,
+            "phase": status,
+            timestamp_key: timestamp,
+            f"{status}_pid": pid,
+            "termination_reason": reason,
+            "updated_at": timestamp,
+        }
+    )
+    if signal_name is not None:
+        state["termination_signal"] = signal_name
+    if isinstance(state.get("active_launch_state"), dict):
+        state["active_launch_state"]["status"] = status
+        state["active_launch_state"][timestamp_key] = timestamp
+    _persist_campaign_state(campaign_config, state)
+    _mark_stage_process_state(state, status=status, pid=pid, reason=reason, signal_name=signal_name)
 
 
 def _mark_campaign_terminated(
@@ -1750,22 +1866,31 @@ def _mark_campaign_terminated(
     reason: str,
     signal_name: str,
 ) -> None:
-    state.update(
-        {
-            "status": "terminated",
-            "phase": "terminated",
-            "terminated_at": _now_iso(),
-            "terminated_pid": pid,
-            "termination_signal": signal_name,
-            "termination_reason": reason,
-            "updated_at": _now_iso(),
-        }
+    _mark_campaign_process_state(
+        campaign_config,
+        state,
+        status="terminated",
+        pid=pid,
+        reason=reason,
+        signal_name=signal_name,
     )
-    if isinstance(state.get("active_launch_state"), dict):
-        state["active_launch_state"]["status"] = "terminated"
-        state["active_launch_state"]["terminated_at"] = state["terminated_at"]
-    _persist_campaign_state(campaign_config, state)
-    _mark_stage_terminated(state, pid=pid, reason=reason, signal_name=signal_name)
+
+
+def _mark_campaign_termination_race_stopped(
+    campaign_config: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    pid: int,
+    reason: str,
+) -> None:
+    _mark_campaign_process_state(
+        campaign_config,
+        state,
+        status="termination_race_stopped",
+        pid=pid,
+        reason=reason,
+        signal_name=None,
+    )
 
 
 def terminate_campaign(
@@ -1773,52 +1898,66 @@ def terminate_campaign(
     *,
     reason: str = "terminated by campaign CLI",
     force_after: float | None = None,
+    require_running: bool = False,
     stream: TextIO = sys.stdout,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> int:
-    loop_config = _load_loop_config(campaign_config)
-    state_path = _campaign_state_path(campaign_config)
-    state = _read_json(state_path)
-    if not state:
-        print(f"no running campaign found campaign={campaign_config['campaign']['id']} state=missing", file=stream, flush=True)
-        return 0
-
-    pid, _status, pid_source = _active_campaign_pid(campaign_config, loop_config, state)
-    if pid is None:
-        print(
-            f"no running campaign found campaign={campaign_config['campaign']['id']} "
-            f"trial={state.get('current_trial_id')} stage={state.get('current_stage')}",
-            file=stream,
-            flush=True,
-        )
-        return 0
-
+    terminate_lock = _acquire_terminate_lock(campaign_config)
     try:
-        os.killpg(pid, signal.SIGTERM)
-    except ProcessLookupError:
+        loop_config = _load_loop_config(campaign_config)
+        state_path = _campaign_state_path(campaign_config)
+        state = _read_json(state_path)
+        if not state:
+            print(f"no running campaign found campaign={campaign_config['campaign']['id']} state=missing", file=stream, flush=True)
+            return 1 if require_running else 0
+
+        pid, _status, pid_source = _active_campaign_pid(campaign_config, loop_config, state)
+        if pid is None:
+            print(
+                f"no running campaign found campaign={campaign_config['campaign']['id']} "
+                f"trial={state.get('current_trial_id')} stage={state.get('current_stage')}",
+                file=stream,
+                flush=True,
+            )
+            return 1 if require_running else 0
+
+        _mark_campaign_process_state(
+            campaign_config,
+            state,
+            status="terminating",
+            pid=pid,
+            reason=reason,
+            signal_name="SIGTERM",
+        )
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            _mark_campaign_termination_race_stopped(campaign_config, state, pid=pid, reason=reason)
+            print(
+                f"campaign process already stopped campaign={campaign_config['campaign']['id']} pid={pid}; state marked termination_race_stopped",
+                file=stream,
+                flush=True,
+            )
+            return 0
+
+        signal_name = "SIGTERM"
+        if force_after is not None:
+            sleep_fn(float(force_after))
+            if experiment_loop._is_process_running(pid):
+                os.killpg(pid, signal.SIGKILL)
+                signal_name = "SIGKILL"
+
+        _mark_campaign_terminated(campaign_config, state, pid=pid, reason=reason, signal_name=signal_name)
         print(
-            f"campaign process already stopped campaign={campaign_config['campaign']['id']} pid={pid}",
+            f"campaign terminated campaign={campaign_config['campaign']['id']} "
+            f"trial={state.get('current_trial_id')} stage={state.get('current_stage')} "
+            f"pid={pid} pid_source={pid_source} signal={signal_name}",
             file=stream,
             flush=True,
         )
         return 0
-
-    signal_name = "SIGTERM"
-    if force_after is not None and force_after >= 0:
-        sleep_fn(float(force_after))
-        if experiment_loop._is_process_running(pid):
-            os.killpg(pid, signal.SIGKILL)
-            signal_name = "SIGKILL"
-
-    _mark_campaign_terminated(campaign_config, state, pid=pid, reason=reason, signal_name=signal_name)
-    print(
-        f"campaign terminated campaign={campaign_config['campaign']['id']} "
-        f"trial={state.get('current_trial_id')} stage={state.get('current_stage')} "
-        f"pid={pid} pid_source={pid_source} signal={signal_name}",
-        file=stream,
-        flush=True,
-    )
-    return 0
+    finally:
+        _release_campaign_lock(terminate_lock)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -1850,6 +1989,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Seconds to wait after SIGTERM before sending SIGKILL. Omit to avoid escalation.",
     )
+    terminate_parser.add_argument(
+        "--require-running",
+        action="store_true",
+        help="Return nonzero if no running process is found.",
+    )
     return parser
 
 
@@ -1859,6 +2003,8 @@ def main(argv: list[str] | None = None) -> int:
     config = load_campaign_config(args.campaign)
     if getattr(args, "poll_seconds", None) is not None:
         config["campaign"]["poll_seconds"] = int(args.poll_seconds)
+    if args.command == "terminate" and args.force_after is not None and args.force_after <= 0:
+        parser.error("--force-after must be greater than 0")
     if args.command == "status":
         return status_command(config)
     if args.command == "terminate":
@@ -1866,6 +2012,7 @@ def main(argv: list[str] | None = None) -> int:
             config,
             reason=args.reason,
             force_after=args.force_after,
+            require_running=args.require_running,
         )
     if args.command == "run":
         return run_campaign(

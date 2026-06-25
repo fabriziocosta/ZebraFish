@@ -150,3 +150,55 @@ Visual assessment of `epoch_108.loss-curves.pdf`: validation and training self-p
 ### Next Round Proposal
 
 Rerun 10C through the new `.py` harness so live history CSVs and runner status JSON are written. Keep no-cross pressure for the immediate rerun only if the goal is to obtain a complete baseline checkpoint; otherwise reduce the total epoch target and add explicit decision points from raw CSV history before spending another long run. Do not run 13C from this interrupted run because no checkpoint was persisted.
+
+<!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260625_115021_08a733:start -->
+## Campaign Start: cnn_pretrain_finetune_20260625_115021_08a733
+
+- Campaign: `cnn_pretrain_finetune`
+- Trial folder: [artifacts/campaigns/cnn_pretrain_finetune/trials/cnn_pretrain_finetune_20260625_115021_08a733](artifacts/campaigns/cnn_pretrain_finetune/trials/cnn_pretrain_finetune_20260625_115021_08a733)
+- Stages: `10C -> 13C`
+- Objective: `compound.macro_f1`
+
+### Previous Results And Next Plan
+
+### Previous results reviewed
+- Complete 13C evidence used: [20260622 fine-tune run folder](artifacts/nb13C_commutative_cnn_full_finetune), with [config](artifacts/nb13C_commutative_cnn_full_finetune/config.json), [history](artifacts/nb13C_commutative_cnn_full_finetune/history.csv), [summary metrics](artifacts/nb13C_commutative_cnn_full_finetune/summary_metrics.csv), and [loss PDFs](artifacts/nb13C_commutative_cnn_full_finetune/loss_plots/fine_tune/latest.loss-curves.pdf). Key fact: action performed moderately (macro-F1 ~0.405), but compound was not actually optimized in final phase (`compound_weight=0.0`), so compound metrics are not decision-grade for this objective.
+- Complete 10C evidence used: [20260623 pretrain run folder](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629), [config](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/10C_pretrain_commutative_cnn_20260623_093629_config.json), [history](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/10C_pretrain_commutative_cnn_20260623_093629_history.csv), [summary](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/10C_pretrain_commutative_cnn_20260623_093629_summary_metrics.csv), [latest PDF](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/loss_plots/pretraining/latest.loss-curves.pdf). This is the last stable completed pretrain.
+- Weak/latest-fallback evidence noted: [13C 20260624 incomplete](artifacts/nb13C_commutative_cnn_full_finetune/runs/13C_finetune_commutative_cnn_20260624_162408/loss_plots/fine_tune/latest.loss-curves.pdf) and [10C 20260624 interrupted](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260624_164930/loss_plots/pretraining/latest.loss-curves.pdf) came from latest-folder fallback with low reliability and no persisted metrics/checkpoint; treated only as deterministic interruption/staleness evidence.
+
+### Next experiment to run
+Run the proposed full chain `cnn_pretrain_finetune_20260625_115021_08a733` with a compound-focused 13C loss rebalance (keep 10C config unchanged for this first launch).
+
+### Why this should help
+- Campaign objective is **13C compound macro-F1** (required primary metric). The only completed 13C run cannot satisfy this objective because compound supervision was effectively off in the decisive phase.
+- Reweighting 13C toward compound creates directly attributable pressure on the target head while keeping enough action weight to satisfy the action accuracy guardrail (`>=0.3`).
+- Using a minimal patch isolates causality for the first scored trial.
+
+### Patch to apply
+- 13C loss-weight rebalance:
+  - increase `compound_weight` to `0.80`
+  - reduce `action_weight` to `0.65`
+  - keep light auxiliary supervision with `concentration_weight=0.05`
+  - keep small boundary pressure with `water_vs_other_weight=0.03`
+
+### Monitoring plan
+- Primary gate: 13C **compound macro-F1** from summary metrics (required).
+- Tie-breakers: `roc_auc_ovr_macro`, `balanced_accuracy`, `accuracy` on compound.
+- Guardrail: verify `action.accuracy >= 0.30`; if violated, revert part of action down-weight in next patch.
+- Artifact checks before scoring: ensure the new 13C run has persisted config/history/summary/checkpoint/confusion outputs (not just loss PDFs). If artifacts are missing again, classify as deterministic failure and do not use for model selection.
+
+### Initial Trial Patch
+
+```json
+{
+  "13C": {
+    "loss_weight_config": {
+      "action_weight": 0.65,
+      "compound_weight": 0.8,
+      "concentration_weight": 0.05,
+      "water_vs_other_weight": 0.03
+    }
+  }
+}
+```
+<!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260625_115021_08a733:end -->

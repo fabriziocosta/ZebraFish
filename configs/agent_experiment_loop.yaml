@@ -26,6 +26,7 @@ experiments:
       - optimization_config
       - loss_weight_config
       - model_config.dropout
+      - model_config.normalization
     next: "13C"
   "13C":
     label: 13C fine-tuning

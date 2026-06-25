@@ -3,8 +3,10 @@ campaign:
   loop_config: configs/agent_experiment_loop.yaml
   poll_seconds: 18000
   trial_budget: 20
-  max_patch_leaf_count: 2
+  max_patch_leaf_count: 4
   stages: ["12T", "15T"]
+agent:
+  max_output_tokens: 6000
 objective:
   target: compound
   primary_metric: macro_f1
@@ -27,7 +29,7 @@ prompts:
     Explain what happened, what likely limited the result, and what the next trial changes.
   patch_parameters: |
     Return small trial_patch mappings keyed by experiment id. Only patch allowlisted YAML paths from configs/agent_experiment_loop.yaml.
-    Prefer one or two attributable changes per trial.
+    Prefer one or two attributable changes per trial. Paired loss weights count as one conceptual change.
   decision_schema: |
     Return a single JSON object with this shape:
     {

@@ -86,7 +86,7 @@ The model may request only these actions:
 
 `launch_next` is only honored after deterministic completion of the active run and only for the configured `next` experiment.
 
-Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed. Campaign configs also set `max_patch_leaf_count`, so the model cannot bundle a broad multi-change sweep into one trial. Proposed patches are validated before the logbook records them as the next trial.
+Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed. Campaign configs also set `max_patch_leaf_count`, so the model cannot bundle a broad multi-change sweep into one trial. The current campaign configs allow up to four YAML leaf edits, enough for two schedule controls plus a paired loss-weight change. Proposed patches are validated before the logbook records them as the next trial.
 
 ## Campaign Control
 
@@ -139,7 +139,7 @@ Leaderboards use guardrail-aware ranking. The raw objective score is recorded fo
 
 Stale-but-live processes are not launch gates. If a stage is still running but has not produced new artifacts for the configured stale threshold, the campaign records `running_stale` and keeps monitoring. It does not call the model path that can launch another trial until the process exits, completes, or is explicitly terminated outside the default loop.
 
-Campaign child processes can be terminated explicitly without owning the original terminal. `./run_campaign terminate` selects the most recently updated live known campaign. You can also specify a campaign command name, campaign id, or YAML path. Termination sends `SIGTERM` to the active training process group, marks campaign and stage state as `terminated`, and preserves all artifacts. `--force-after <seconds>` escalates to `SIGKILL` if the process is still alive after the grace interval.
+Campaign child processes can be terminated explicitly without owning the original terminal. `./run_campaign terminate` terminates the only live known campaign; if multiple campaigns are live, it refuses and prints the candidates so you must choose one explicitly. You can specify a campaign command name, campaign id, or YAML path. Termination first marks campaign and stage state as `terminating`, then sends `SIGTERM` to the active training process group, then marks campaign, stage, and runner status state as `terminated`. Artifacts are preserved. `--force-after <seconds>` escalates to `SIGKILL` if the process is still alive after the positive grace interval. `--require-running` makes the command return nonzero if nothing was actually running.
 
 Completed campaigns and completed analyses do not automatically restart. Use `--new-trial` when you explicitly want to begin another trial from an existing campaign state.
 
@@ -220,11 +220,13 @@ Use `Ctrl-C` to stop the harness. By default this does not terminate the trainin
 .venv/bin/python scripts/agent_experiment_loop.py run --terminate-child-on-exit
 ```
 
-Terminate the most recent live campaign from a separate terminal:
+Terminate the only live known campaign from a separate terminal:
 
 ```bash
 ./run_campaign terminate
 ```
+
+If both `cnn` and `transformer` are live, this command refuses and prints both candidates instead of guessing.
 
 Terminate a specific campaign:
 
@@ -238,6 +240,12 @@ Escalate after a grace period:
 
 ```bash
 ./run_campaign terminate cnn --force-after 30
+```
+
+Require an active process for scripting:
+
+```bash
+./run_campaign terminate cnn --require-running
 ```
 
 If the state file points to a completed or failed run, `--start-at` launches a fresh run by default. Use `--resume` to inspect the existing state instead. Use `--new-run` to force a fresh run, or `--reset-state` to delete the state file before starting.

@@ -76,17 +76,22 @@ def _known_live_campaigns() -> list[tuple[str, dict[str, str], dict[str, object]
     return live
 
 
-def resolve_default_live_campaign() -> str | None:
+def resolve_default_live_campaign() -> tuple[str | None, int]:
     live = _known_live_campaigns()
     if not live:
-        return None
+        return None, 0
+    if len(live) > 1:
+        print("multiple running campaigns found; specify one explicitly:")
+        for name, metadata, status in sorted(live, key=lambda item: item[0]):
+            print(f"  {name:<12} campaign_id={status.get('campaign_id')} pid={status.get('pid')} config={metadata['config']}")
+        return None, 2
     live.sort(key=lambda item: float(item[2].get("state_mtime") or 0), reverse=True)
     name, metadata, status = live[0]
     print(
         f"selected live campaign {name} ({status.get('campaign_id')}) "
         f"pid={status.get('pid')} from {metadata['config']}"
     )
-    return metadata["config"]
+    return metadata["config"], 0
 
 
 def terminate_command(argv: list[str]) -> int:
@@ -95,22 +100,29 @@ def terminate_command(argv: list[str]) -> int:
         epilog=available_campaigns_text(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("campaign", nargs="?", help="Campaign name, campaign id, or YAML path. Defaults to the most recent live known campaign.")
+    parser.add_argument("campaign", nargs="?", help="Campaign name, campaign id, or YAML path. Defaults only when exactly one known campaign is live.")
     parser.add_argument("--campaign-id", default=None, help="Campaign id such as cnn_pretrain_finetune.")
     parser.add_argument("--reason", default="terminated by run_campaign CLI", help="Reason recorded in campaign state.")
     parser.add_argument("--force-after", type=float, default=None, help="Seconds after SIGTERM before SIGKILL escalation.")
+    parser.add_argument("--require-running", action="store_true", help="Return nonzero if no running process is found.")
     args = parser.parse_args(argv)
+    if args.force_after is not None and args.force_after <= 0:
+        parser.error("--force-after must be greater than 0")
     target = args.campaign_id or args.campaign
     if target:
         config_path = resolve_campaign(target)
     else:
-        config_path = resolve_default_live_campaign()
+        config_path, code = resolve_default_live_campaign()
         if config_path is None:
-            print("no running campaign found")
-            return 0
+            if code == 0:
+                print("no running campaign found")
+                return 1 if args.require_running else 0
+            return code
     forwarded = ["terminate", "--campaign", config_path, "--reason", args.reason]
     if args.force_after is not None:
         forwarded.extend(["--force-after", str(args.force_after)])
+    if args.require_running:
+        forwarded.append("--require-running")
     return campaign_main(forwarded)
 
 
