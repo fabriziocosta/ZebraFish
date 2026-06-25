@@ -1,7 +1,7 @@
 agent:
   model: gpt-5.3-codex
   reasoning_effort: medium
-  poll_seconds: 18000
+  poll_seconds: 3600
   max_output_tokens: 2000
   api_key_env: OPENAI_API_KEY
 controller:

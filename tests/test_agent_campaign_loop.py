@@ -86,7 +86,7 @@ class AgentCampaignLoopTests(unittest.TestCase):
 agent:
   model: gpt-5.3-codex
   reasoning_effort: medium
-  poll_seconds: 18000
+  poll_seconds: 3600
   api_key_env: OPENAI_API_KEY
 state:
   path: {root / 'single_state.json'}
@@ -122,7 +122,7 @@ prompts:
 campaign:
   id: test_campaign
   loop_config: {loop_config}
-  poll_seconds: 18000
+  poll_seconds: 3600
   stages: ["10C", "13C"]
 objective:
   target: compound
@@ -152,7 +152,7 @@ prompts:
             loop_path = self._write_loop_config(root)
             campaign_path = self._write_campaign_config(root, loop_path)
             config = load_campaign_config(campaign_path)
-            self.assertEqual(config["campaign"]["poll_seconds"], 18000)
+            self.assertEqual(config["campaign"]["poll_seconds"], 3600)
             self.assertEqual(config["campaign"]["max_patch_leaf_count"], 2)
             self.assertTrue(config["artifacts"]["state_path"].endswith("campaign_state.json"))
             self.assertEqual(config["objective"]["target"], "compound")
@@ -251,6 +251,7 @@ prompts:
             self.assertEqual(state["current_stage"], "10C")
             patched_config = Path(state["trial_configs"]["10C"]).read_text(encoding="utf-8")
             self.assertIn("epochs: 3", patched_config)
+            self.assertIn(f"experiment_output_dir: {root / 'campaign_artifacts' / 'trial_a' / 'outputs' / '10C'}", patched_config)
             self.assertIn("Try a short first campaign trial", (root / "logbook.md").read_text(encoding="utf-8"))
             self.assertIn("campaign initialization analysis: trial_a", stream.getvalue())
             self.assertIn("Try a short first campaign trial", stream.getvalue())
@@ -471,7 +472,7 @@ prompts:
             campaign_path = self._write_campaign_config(root, loop_path)
             campaign_config = load_campaign_config(campaign_path)
             campaign_config["campaign"]["trial_budget"] = 1
-            (Path(campaign_config["artifacts"]["root"]) / "trials" / "existing_trial" / "configs").mkdir(parents=True)
+            (Path(campaign_config["artifacts"]["root"]) / "existing_trial" / "configs").mkdir(parents=True)
             loop_config = load_loop_config(loop_path)
             with mock.patch("src.agent_experiment_loop.launch_experiment") as launch, self.assertRaisesRegex(
                 RuntimeError, "budget exhausted"
@@ -486,7 +487,7 @@ prompts:
             campaign_path = self._write_campaign_config(root, loop_path)
             campaign_config = load_campaign_config(campaign_path)
             campaign_config["campaign"]["trial_budget"] = 1
-            orphan = Path(campaign_config["artifacts"]["root"]) / "trials" / "orphan_trial"
+            orphan = Path(campaign_config["artifacts"]["root"]) / "orphan_trial"
             orphan.mkdir(parents=True)
             (orphan / "init_snapshot.json").write_text("{}", encoding="utf-8")
             loop_config = load_loop_config(loop_path)
@@ -1054,7 +1055,7 @@ prompts:
             campaign_path = self._write_campaign_config(root, loop_path)
             campaign_config = load_campaign_config(campaign_path)
             loop_config = load_loop_config(loop_path)
-            (Path(campaign_config["artifacts"]["root"]) / "trials" / "same_trial").mkdir(parents=True)
+            (Path(campaign_config["artifacts"]["root"]) / "same_trial").mkdir(parents=True)
             with mock.patch("src.agent_experiment_loop.launch_experiment") as launch, self.assertRaisesRegex(
                 FileExistsError, "already exists"
             ):

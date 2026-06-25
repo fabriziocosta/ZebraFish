@@ -42,7 +42,7 @@ def load_loop_config(path: str | Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"{target} must contain a mapping")
     payload.setdefault("agent", {})
-    payload["agent"].setdefault("poll_seconds", 18000)
+    payload["agent"].setdefault("poll_seconds", 3600)
     payload["agent"].setdefault("model", "gpt-5.3-codex")
     payload["agent"].setdefault("reasoning_effort", "medium")
     payload["agent"].setdefault("max_output_tokens", 2000)
@@ -594,7 +594,7 @@ def run_loop(
     elif dry_run and start_at:
         state = launch_experiment(config, start_at, dry_run=True)
 
-    poll_seconds = int(config.get("agent", {}).get("poll_seconds", 18000))
+    poll_seconds = int(config.get("agent", {}).get("poll_seconds", 3600))
     next_poll = datetime.now() if once else datetime.now() + timedelta(seconds=poll_seconds)
     print(
         f"agent loop started experiment={state.get('active_experiment')} poll_seconds={poll_seconds} "

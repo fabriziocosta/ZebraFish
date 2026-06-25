@@ -49,7 +49,7 @@ class AgentExperimentLoopTests(unittest.TestCase):
 agent:
   model: gpt-5.3-codex
   reasoning_effort: medium
-  poll_seconds: 18000
+  poll_seconds: 3600
   api_key_env: OPENAI_API_KEY
 state:
   path: state.json
@@ -87,7 +87,7 @@ prompts:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = self._write_config(tmpdir)
             config = load_loop_config(config_path)
-            self.assertEqual(config["agent"]["poll_seconds"], 18000)
+            self.assertEqual(config["agent"]["poll_seconds"], 3600)
             self.assertEqual(config["agent"]["reasoning_effort"], "medium")
 
     def test_missing_api_key_errors_before_state_write(self) -> None:

@@ -1,7 +1,7 @@
 campaign:
   id: transformer_pretrain_finetune
   loop_config: configs/agent_experiment_loop.yaml
-  poll_seconds: 18000
+  poll_seconds: 3600
   trial_budget: 20
   max_patch_leaf_count: 4
   stages: ["12T", "15T"]

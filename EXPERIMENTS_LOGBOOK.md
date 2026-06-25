@@ -2,14 +2,24 @@
 
 This file records pretraining and fine-tuning runs by experiment id. Each entry links the timestamped artifacts, summarizes what happened, and states the proposed next round.
 
+## Artifact Cleanup: 2026-06-25
+
+Legacy artifact folders outside `artifacts/campaigns/` were pruned after migrating the campaign harness to campaign-owned trial folders. Older logbook entries below still preserve the historical analysis, but their legacy artifact links should be read as records of the original locations, not as live local files.
+
+Pruned folders:
+
+- `artifacts/pretrained_commutative_cnn`
+- `artifacts/pretrained_commutative_transformer`
+- `artifacts/nb13C_commutative_cnn_full_finetune`
+
 ## 10C_pretrain_commutative_cnn_legacy_20260619_163630
 
 - kind: `pretraining`
 - artifact_dir: [pretrained_commutative_cnn](artifacts/pretrained_commutative_cnn)
 - config: [config.yaml](artifacts/pretrained_commutative_cnn/config.yaml)
 - checkpoint: [encoder_state_v9.pt](artifacts/pretrained_commutative_cnn/encoder_state_v9.pt)
-- loss_pdfs: [loss_plots](artifacts/pretrained_commutative_cnn/loss_plots)
-- latest_loss_pdfs: [latest.loss-curves.pdf](artifacts/pretrained_commutative_cnn/loss_plots/latest.loss-curves.pdf)
+- loss_pdfs: pruned legacy top-level loss plot folder on 2026-06-25 after migration to timestamped run folders
+- latest_loss_pdfs: pruned with legacy top-level loss plot folder
 
 ### Analysis
 
@@ -155,7 +165,7 @@ Rerun 10C through the new `.py` harness so live history CSVs and runner status J
 ## Campaign Start: cnn_pretrain_finetune_20260625_115021_08a733
 
 - Campaign: `cnn_pretrain_finetune`
-- Trial folder: [artifacts/campaigns/cnn_pretrain_finetune/trials/cnn_pretrain_finetune_20260625_115021_08a733](artifacts/campaigns/cnn_pretrain_finetune/trials/cnn_pretrain_finetune_20260625_115021_08a733)
+- Trial folder: [artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_115021_08a733](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_115021_08a733)
 - Stages: `10C -> 13C`
 - Objective: `compound.macro_f1`
 

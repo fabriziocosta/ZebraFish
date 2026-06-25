@@ -190,7 +190,8 @@ def ensure_default_cnn_configs() -> None:
 def run_10c_pretraining(config_path: str | Path = DEFAULT_10C_CONFIG_PATH) -> Path:
     config_path = Path(config_path)
     config = load_commutative_cnn_pretraining_config(config_path) if config_path.exists() else default_10c_pretraining_config()
-    experiment_output_dir = Path("artifacts/pretrained_commutative_cnn")
+    raw_config = read_yaml_mapping(config_path) if config_path.exists() else {}
+    experiment_output_dir = Path(raw_config.get("experiment_output_dir", "artifacts/pretrained_commutative_cnn"))
     experiment_run = create_experiment_run(experiment_output_dir, "10C_pretrain_commutative_cnn")
     run_dir = Path(experiment_run.run_dir)
     update_agent_run_status(status="running", experiment="10C", experiment_id=experiment_run.experiment_id, run_dir=run_dir)
@@ -253,7 +254,10 @@ def run_10c_pretraining(config_path: str | Path = DEFAULT_10C_CONFIG_PATH) -> Pa
     )
     model.pretrain(X_train, validation_data=X_val)
     pretrained_encoder_path = model.save_pretrained_encoder(pretrained_encoder_path)
-    latest_pretraining_config_path = write_commutative_cnn_pretraining_config(resolved_config)
+    latest_pretraining_config_path = write_commutative_cnn_pretraining_config(
+        resolved_config,
+        experiment_output_dir / "config.yaml",
+    )
     print(f"Updated latest commutative CNN pretraining config at {latest_pretraining_config_path}", flush=True)
     persist_pretraining_artifacts(
         output_dir=experiment_output_dir,

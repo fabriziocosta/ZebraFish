@@ -173,16 +173,19 @@ Campaign runs write:
 - `artifacts/campaigns/<campaign_id>/trials.csv`
 - `artifacts/campaigns/<campaign_id>/trials.jsonl`
 - `artifacts/campaigns/<campaign_id>/leaderboard.csv`
-- `artifacts/campaigns/<campaign_id>/trials/<trial_id>/trial_manifest.json`
-- `artifacts/campaigns/<campaign_id>/trials/<trial_id>/init_snapshot.json` during initialization
-- `artifacts/campaigns/<campaign_id>/trials/<trial_id>/trial_summary.json`
+- `artifacts/campaigns/<campaign_id>/<trial_id>/trial_manifest.json`
+- `artifacts/campaigns/<campaign_id>/<trial_id>/init_snapshot.json` during initialization
+- `artifacts/campaigns/<campaign_id>/<trial_id>/trial_summary.json`
 - per-stage state and logs under the trial folder.
+- per-stage run outputs under `artifacts/campaigns/<campaign_id>/<trial_id>/outputs/<stage>/`.
+
+Campaign trial folders deliberately do not use an extra `trials/` nesting level. A trial id is already globally mnemonic and timestamped, so the direct layout keeps links shorter and makes it clear that the folder is the complete unit of evidence for that trial.
 
 Campaign state and machine-readable ledgers are written through temporary files and atomic replacement to reduce the chance of partial JSON, CSV, or JSONL files after interruption.
 
 ## Artifacts
 
-Each experiment run writes into its timestamped run folder. The training loops write live CSV history files next to the live loss PDFs:
+Each campaign-launched experiment run writes into a timestamped run folder under the campaign trial, for example `artifacts/campaigns/cnn_pretrain_finetune/<trial_id>/outputs/10C/runs/<experiment_id>/`. The training loops write live CSV history files next to the live loss PDFs:
 
 - `latest.history.csv`
 - `epoch_XXX.history.csv`
@@ -205,10 +208,10 @@ The poll interval is configured in `configs/agent_experiment_loop.yaml`:
 
 ```yaml
 agent:
-  poll_seconds: 18000
+  poll_seconds: 3600
 ```
 
-This example polls every 5 hours. You can override it at runtime:
+This example polls every 1 hour. You can override it at runtime:
 
 ```bash
 .venv/bin/python scripts/agent_experiment_loop.py run --poll-seconds 3600

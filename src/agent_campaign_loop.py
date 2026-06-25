@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import signal
 import sys
 import time
@@ -84,7 +83,7 @@ def load_campaign_config(path: str | Path) -> dict[str, Any]:
     campaign = payload["campaign"]
     campaign.setdefault("id", target.stem)
     campaign.setdefault("loop_config", "configs/agent_experiment_loop.yaml")
-    campaign.setdefault("poll_seconds", 18000)
+    campaign.setdefault("poll_seconds", 3600)
     campaign.setdefault("trial_budget", 20)
     campaign.setdefault("max_patch_leaf_count", 2)
     campaign.setdefault("stages", [])
@@ -210,7 +209,11 @@ def _trial_id(campaign_id: str, start_trial: str | None = None) -> str:
 
 
 def _trial_dir(config: dict[str, Any], trial_id: str) -> Path:
-    return _campaign_root(config) / "trials" / trial_id
+    return _campaign_root(config) / trial_id
+
+
+def _stage_output_root(trial_dir: Path, stage: str) -> Path:
+    return trial_dir / "outputs" / stage
 
 
 def _latest_file_tails(dirs: list[str | Path], *, limit: int = 4, max_lines: int = 40) -> list[dict[str, str]]:
@@ -274,9 +277,10 @@ def _copy_stage_configs(
         if stage in trial_patch:
             _validate_trial_patch(loop_config, {stage: trial_patch[stage]})
             patched = merge_dicts(read_yaml_mapping(source), trial_patch[stage])
-            write_yaml_mapping(target, patched)
         else:
-            shutil.copy2(source, target)
+            patched = read_yaml_mapping(source)
+        patched["experiment_output_dir"] = str(_stage_output_root(trial_dir, stage))
+        write_yaml_mapping(target, patched)
         copied[stage] = str(target)
     return copied
 
@@ -291,23 +295,39 @@ def _trial_count(campaign_config: dict[str, Any]) -> int:
                 if trial_id:
                     trial_ids.add(trial_id)
 
-    trials_root = _campaign_root(campaign_config) / "trials"
-    if trials_root.exists():
-        for path in trials_root.iterdir():
-            if not path.is_dir():
-                continue
-            manifest_path = path / "trial_manifest.json"
-            manifest = _read_json(manifest_path)
-            if manifest_path.exists() and _manifest_counts_against_budget(manifest):
-                trial_ids.add(path.name)
-            elif not manifest_path.exists() and _trial_dir_without_manifest_counts(path):
-                trial_ids.add(path.name)
+    for path in _iter_campaign_trial_dirs(campaign_config):
+        manifest_path = path / "trial_manifest.json"
+        manifest = _read_json(manifest_path)
+        if manifest_path.exists() and _manifest_counts_against_budget(manifest):
+            trial_ids.add(path.name)
+        elif not manifest_path.exists() and _trial_dir_without_manifest_counts(path):
+            trial_ids.add(path.name)
 
     state = _read_json(_campaign_state_path(campaign_config))
     current_trial_id = str(state.get("current_trial_id") or "").strip()
     if current_trial_id and _state_counts_against_budget(state):
         trial_ids.add(current_trial_id)
     return len(trial_ids)
+
+
+def _iter_campaign_trial_dirs(campaign_config: dict[str, Any]) -> list[Path]:
+    root = _campaign_root(campaign_config)
+    if not root.exists():
+        return []
+    ignored_names = {
+        "trials",
+        "campaign.lock",
+        "campaign.terminate.lock",
+        "campaign_state.json",
+        "trials.csv",
+        "trials.jsonl",
+        "leaderboard.csv",
+    }
+    return [
+        path
+        for path in root.iterdir()
+        if path.is_dir() and path.name not in ignored_names and _trial_dir_without_manifest_counts(path)
+    ]
 
 
 def _manifest_counts_against_budget(manifest: dict[str, Any]) -> bool:
@@ -401,6 +421,13 @@ def _loop_config_for_stage(
     loop_config["state"]["log_dir"] = str(_stage_log_dir(trial_dir, stage))
     for experiment, params_path in trial_configs.items():
         loop_config["experiments"][experiment]["params_yaml"] = params_path
+        try:
+            params = read_yaml_mapping(params_path)
+        except FileNotFoundError:
+            params = {}
+        experiment_output_dir = params.get("experiment_output_dir")
+        if experiment_output_dir:
+            loop_config["experiments"][experiment]["artifact_root"] = str(experiment_output_dir)
     return loop_config
 
 
@@ -1587,7 +1614,7 @@ def run_campaign(
     lock_path = _acquire_campaign_lock(campaign_config) if not dry_run else None
 
     try:
-        poll_seconds = int(campaign_config["campaign"].get("poll_seconds", campaign_config["agent"].get("poll_seconds", 18000)))
+        poll_seconds = int(campaign_config["campaign"].get("poll_seconds", campaign_config["agent"].get("poll_seconds", 3600)))
         state_path = _campaign_state_path(campaign_config)
         state = _read_json(state_path)
         if new_trial and state and not dry_run:
