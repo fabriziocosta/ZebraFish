@@ -10,7 +10,7 @@ The interpretive part is model-assisted. Once a run has completed, failed, or be
 
 Each experiment is treated as an immutable attempt. It gets a timestamped folder containing the resolved configuration, live loss histories, live PDFs, final metrics, plots, checkpoints, and status records where available. The logbook is the human-readable index over those attempts. It should explain what happened, point to the actual artifacts, and state the next hypothesis to test.
 
-This architecture is meant to support slow iteration without noisy supervision. A pretraining run may take many hours, so the harness sleeps for the configured poll interval and prints only a bounded status update. If interrupted with `Ctrl-C`, the harness stops; the training process is left running by default unless explicit termination is requested.
+This architecture is meant to support slow iteration without noisy supervision. A pretraining run may take many hours, so the harness sleeps for the configured poll interval and prints only a bounded status update. If interrupted with `Ctrl-C`, the harness stops; the training process is left running by default unless explicit termination is requested through the CLI.
 
 This repository can run the 10C pretraining and 13C fine-tuning experiments through a local polling harness:
 
@@ -86,7 +86,7 @@ The model may request only these actions:
 
 `launch_next` is only honored after deterministic completion of the active run and only for the configured `next` experiment.
 
-Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed. Campaign configs also set `max_patch_leaf_count`, so the model cannot bundle a broad multi-change sweep into one trial.
+Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed. Campaign configs also set `max_patch_leaf_count`, so the model cannot bundle a broad multi-change sweep into one trial. Proposed patches are validated before the logbook records them as the next trial.
 
 ## Campaign Control
 
@@ -108,11 +108,13 @@ The model may propose only a structured campaign decision:
 - `update_logbook`
 - `stop_campaign`
 
-For initialization, `propose_trial` may include a `trial_patch` keyed by experiment id, such as `10C` or `13C`. The controller writes the plan into the logbook before launching. If the model returns no patch, the campaign launches the copied baseline configs unchanged. If the init model call fails for a transient reason, the campaign persists `phase: initializing` and retries the initialization decision on the next poll instead of pretending an empty trial has results to analyze.
+The OpenAI request uses strict structured output. To keep that strict schema compatible with arbitrary YAML patch keys, `trial_patch` is returned as a JSON-encoded string and decoded locally. For initialization, `propose_trial` may include a decoded `trial_patch` keyed by experiment id, such as `10C` or `13C`. The controller writes the plan into the logbook before launching. If the model returns no patch, the campaign launches the copied baseline configs unchanged. If the init model call fails for a transient reason, the campaign persists `phase: initializing` and retries the initialization decision on the next poll instead of pretending an empty trial has results to analyze.
 
 After pretraining completes, the campaign controller wires the generated per-run pretraining config into the fine-tune config. It prefers the resolved config artifact reported by the completed stage status and only falls back to scanning the run folder. Fine-tuning therefore uses the exact checkpoint from the current trial, not whichever checkpoint happens to be latest globally.
 
 The campaign objective is evaluated only after the final fine-tune stage completes. Pretraining losses are diagnostic evidence; they are not the primary score.
+
+The objective separates substitute metrics from tie-breakers. `primary_metric` is the main optimization target. If `required_primary_metric` is true, the trial is not eligible unless that metric is present. `fallback_metrics` are used only when substitution is allowed. `tie_breaker_metrics` rank otherwise comparable eligible trials without changing the primary score.
 
 At campaign decision points, stdout includes a bounded markdown block:
 
@@ -129,11 +131,15 @@ proposed trial patch:
 
 The same analysis is upserted into `EXPERIMENTS_LOGBOOK.md` with artifact links. When PDF plots are linked from a completed campaign trial, the controller also tries to render first-page PNG previews into the trial folder and embeds those PNGs inline in the logbook. If local PDF rendering is unavailable, the PDF links are still written with a preview-unavailable note.
 
-Non-dry campaign runs acquire `artifacts/campaigns/<campaign_id>/campaign.lock`. A second live campaign process for the same campaign is rejected; stale locks are cleared only when the recorded PID no longer exists.
+Non-dry campaign runs acquire `artifacts/campaigns/<campaign_id>/campaign.lock`. A second live campaign process for the same campaign is rejected; stale locks are cleared only when the recorded PID no longer exists. `--new-trial` also refuses to start over a campaign state whose current stage still has a running process.
 
 Trial launch is staged through `status: launching` before the child process starts. This means the campaign state and manifest exist before training is handed to the runner. If launch fails, the campaign state is marked failed with the launch error.
 
-Leaderboards use guardrail-aware ranking. The raw objective score is recorded for every completed trial, but `leaderboard.csv` includes only trials that pass configured guardrails such as `action.accuracy`. Eligible trials are sorted by the selected objective metric plus configured fallback metrics as tie-breakers, for example macro-F1 first and ROC-AUC as a secondary signal when available.
+Leaderboards use guardrail-aware ranking. The raw objective score is recorded for every completed trial, but `leaderboard.csv` includes only trials that pass configured guardrails such as `action.accuracy`. Eligible trials are sorted by the selected objective metric plus configured tie-breaker metrics, for example macro-F1 first and ROC-AUC as a secondary signal when available.
+
+Stale-but-live processes are not launch gates. If a stage is still running but has not produced new artifacts for the configured stale threshold, the campaign records `running_stale` and keeps monitoring. It does not call the model path that can launch another trial until the process exits, completes, or is explicitly terminated outside the default loop.
+
+Campaign child processes can be terminated explicitly without owning the original terminal. `./run_campaign terminate` selects the most recently updated live known campaign. You can also specify a campaign command name, campaign id, or YAML path. Termination sends `SIGTERM` to the active training process group, marks campaign and stage state as `terminated`, and preserves all artifacts. `--force-after <seconds>` escalates to `SIGKILL` if the process is still alive after the grace interval.
 
 Completed campaigns and completed analyses do not automatically restart. Use `--new-trial` when you explicitly want to begin another trial from an existing campaign state.
 
@@ -171,6 +177,8 @@ Campaign runs write:
 - `artifacts/campaigns/<campaign_id>/trials/<trial_id>/init_snapshot.json` during initialization
 - `artifacts/campaigns/<campaign_id>/trials/<trial_id>/trial_summary.json`
 - per-stage state and logs under the trial folder.
+
+Campaign state and machine-readable ledgers are written through temporary files and atomic replacement to reduce the chance of partial JSON, CSV, or JSONL files after interruption.
 
 ## Artifacts
 
@@ -210,6 +218,26 @@ Use `Ctrl-C` to stop the harness. By default this does not terminate the trainin
 
 ```bash
 .venv/bin/python scripts/agent_experiment_loop.py run --terminate-child-on-exit
+```
+
+Terminate the most recent live campaign from a separate terminal:
+
+```bash
+./run_campaign terminate
+```
+
+Terminate a specific campaign:
+
+```bash
+./run_campaign terminate cnn
+./run_campaign terminate --campaign-id cnn_pretrain_finetune
+./run_campaign terminate configs/experiment_campaigns/cnn_campaign.yaml
+```
+
+Escalate after a grace period:
+
+```bash
+./run_campaign terminate cnn --force-after 30
 ```
 
 If the state file points to a completed or failed run, `--start-at` launches a fresh run by default. Use `--resume` to inspect the existing state instead. Use `--new-run` to force a fresh run, or `--reset-state` to delete the state file before starting.

@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from src.agent_campaign_loop import main as campaign_main
+from src.agent_campaign_loop import campaign_live_status, load_campaign_config, main as campaign_main
 
 
 CAMPAIGNS: dict[str, dict[str, str]] = {
@@ -50,11 +50,68 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def resolve_campaign(value: str) -> str:
     if value in CAMPAIGNS:
         return CAMPAIGNS[value]["config"]
+    for metadata in CAMPAIGNS.values():
+        try:
+            if load_campaign_config(metadata["config"])["campaign"]["id"] == value:
+                return metadata["config"]
+        except Exception:
+            continue
     path = Path(value)
     if path.exists():
         return str(path)
     known = ", ".join(sorted(CAMPAIGNS))
     raise SystemExit(f"Unknown campaign {value!r}; use one of {known}, or pass a YAML path.")
+
+
+def _known_live_campaigns() -> list[tuple[str, dict[str, str], dict[str, object]]]:
+    live = []
+    for name, metadata in CAMPAIGNS.items():
+        try:
+            config = load_campaign_config(metadata["config"])
+            status = campaign_live_status(config)
+        except Exception:
+            continue
+        if status.get("running"):
+            live.append((name, metadata, status))
+    return live
+
+
+def resolve_default_live_campaign() -> str | None:
+    live = _known_live_campaigns()
+    if not live:
+        return None
+    live.sort(key=lambda item: float(item[2].get("state_mtime") or 0), reverse=True)
+    name, metadata, status = live[0]
+    print(
+        f"selected live campaign {name} ({status.get('campaign_id')}) "
+        f"pid={status.get('pid')} from {metadata['config']}"
+    )
+    return metadata["config"]
+
+
+def terminate_command(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Terminate the active training child for a campaign.",
+        epilog=available_campaigns_text(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("campaign", nargs="?", help="Campaign name, campaign id, or YAML path. Defaults to the most recent live known campaign.")
+    parser.add_argument("--campaign-id", default=None, help="Campaign id such as cnn_pretrain_finetune.")
+    parser.add_argument("--reason", default="terminated by run_campaign CLI", help="Reason recorded in campaign state.")
+    parser.add_argument("--force-after", type=float, default=None, help="Seconds after SIGTERM before SIGKILL escalation.")
+    args = parser.parse_args(argv)
+    target = args.campaign_id or args.campaign
+    if target:
+        config_path = resolve_campaign(target)
+    else:
+        config_path = resolve_default_live_campaign()
+        if config_path is None:
+            print("no running campaign found")
+            return 0
+    forwarded = ["terminate", "--campaign", config_path, "--reason", args.reason]
+    if args.force_after is not None:
+        forwarded.extend(["--force-after", str(args.force_after)])
+    return campaign_main(forwarded)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -72,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
             print(available_campaigns_text(), file=sys.stderr)
             return 2
         return campaign_main(["status", "--campaign", resolve_campaign(argv[1])])
+    if argv[0] == "terminate":
+        return terminate_command(argv[1:])
     args = parser.parse_args(argv)
     forwarded = ["run", "--campaign", resolve_campaign(args.campaign)]
     if args.poll_seconds is not None:

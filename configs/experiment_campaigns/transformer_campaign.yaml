@@ -8,7 +8,9 @@ campaign:
 objective:
   target: compound
   primary_metric: macro_f1
-  fallback_metrics: [balanced_accuracy, accuracy, roc_auc_ovr_macro]
+  required_primary_metric: true
+  fallback_metrics: [balanced_accuracy, accuracy]
+  tie_breaker_metrics: [roc_auc_ovr_macro, balanced_accuracy, accuracy]
   maximize: true
   minimums:
     action.accuracy: 0.30
@@ -32,6 +34,6 @@ prompts:
       "decision": "no_action|propose_trial|update_logbook|stop_campaign",
       "reason": "short reason",
       "logbook_markdown": "optional markdown",
-      "trial_patch": {"12T": {"optional": "mapping"}, "15T": {"optional": "mapping"}}
+      "trial_patch": "JSON string, for example {\"12T\":{\"optimization_config\":{\"epochs\":3}}}"
     }
     Do not include markdown fences or text outside the JSON object.

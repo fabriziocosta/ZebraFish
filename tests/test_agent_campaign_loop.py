@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import signal
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,10 +12,12 @@ from unittest import mock
 from src.agent_campaign_loop import (
     CampaignDecision,
     _acquire_campaign_lock,
+    _campaign_decision_text_format,
     _release_campaign_lock,
     _render_pdf_preview_png,
     _write_trial_outputs,
     apply_campaign_decision,
+    campaign_live_status,
     collect_init_snapshot,
     initialize_campaign_trial,
     load_campaign_config,
@@ -22,6 +25,7 @@ from src.agent_campaign_loop import (
     run_campaign,
     score_metrics,
     start_trial,
+    terminate_campaign,
     wire_pretrain_checkpoint_into_finetune_config,
 )
 from src.agent_experiment_loop import load_loop_config
@@ -120,7 +124,9 @@ campaign:
 objective:
   target: compound
   primary_metric: macro_f1
-  fallback_metrics: [accuracy, roc_auc_ovr_macro]
+  required_primary_metric: true
+  fallback_metrics: [accuracy]
+  tie_breaker_metrics: [roc_auc_ovr_macro, accuracy]
   minimums:
     action.accuracy: 0.30
 artifacts:
@@ -163,7 +169,8 @@ prompts:
                 {
                     "target": "compound",
                     "primary_metric": "macro_f1",
-                    "fallback_metrics": ["roc_auc_ovr_macro"],
+                    "fallback_metrics": ["balanced_accuracy"],
+                    "tie_breaker_metrics": ["roc_auc_ovr_macro"],
                     "minimums": {"action.accuracy": 0.30},
                 },
             )
@@ -301,6 +308,22 @@ prompts:
             parse_campaign_decision(json.dumps({"decision": "run_shell", "reason": "bad"}))
         with self.assertRaisesRegex(ValueError, "non-empty"):
             parse_campaign_decision(json.dumps({"decision": "no_action", "reason": ""}))
+        parsed = parse_campaign_decision(
+            json.dumps(
+                {
+                    "decision": "propose_trial",
+                    "reason": "string patch",
+                    "trial_patch": "{\"10C\":{\"optimization_config\":{\"epochs\":3}}}",
+                }
+            )
+        )
+        self.assertEqual(parsed.trial_patch, {"10C": {"optimization_config": {"epochs": 3}}})
+
+    def test_campaign_decision_schema_is_strict(self) -> None:
+        text_format = _campaign_decision_text_format(["10C", "13C"])
+        self.assertTrue(text_format["format"]["strict"])
+        self.assertFalse(text_format["format"]["schema"]["additionalProperties"])
+        self.assertEqual(text_format["format"]["schema"]["properties"]["trial_patch"]["type"], "string")
 
     def test_dry_run_once_does_not_call_openai(self) -> None:
         class RaisingClient:
@@ -525,6 +548,281 @@ prompts:
             state = json.loads(Path(campaign_config["artifacts"]["state_path"]).read_text(encoding="utf-8"))
             self.assertEqual(state["status"], "openai_credits_exhausted")
             self.assertIn("credits appear to be exhausted", stream.getvalue())
+
+    def test_run_campaign_refuses_new_trial_when_current_stage_is_running(self) -> None:
+        class RaisingClient:
+            @property
+            def responses(self):
+                raise AssertionError("OpenAI should not be called when new trial is refused")
+
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            trial_dir = root / "trial_running"
+            stage_state = trial_dir / "stage_state" / "10C.json"
+            stage_state.parent.mkdir(parents=True)
+            stage_state.write_text(
+                json.dumps({"active_experiment": "10C", "pid": 999, "status": "running"}),
+                encoding="utf-8",
+            )
+            Path(campaign_config["artifacts"]["state_path"]).parent.mkdir(parents=True)
+            Path(campaign_config["artifacts"]["state_path"]).write_text(
+                json.dumps(
+                    {
+                        "campaign_id": "test_campaign",
+                        "status": "running",
+                        "current_trial_id": "trial_running",
+                        "current_trial_dir": str(trial_dir),
+                        "current_stage": "10C",
+                        "current_stage_index": 0,
+                        "stage_state_path": str(stage_state),
+                        "trial_configs": {
+                            "10C": str(root / "params10.yaml"),
+                            "13C": str(root / "params13.yaml"),
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch("src.agent_experiment_loop._is_process_running", return_value=True):
+                stream = io.StringIO()
+                code = run_campaign(campaign_config, once=True, new_trial=True, client=RaisingClient(), stream=stream)
+            self.assertEqual(code, 1)
+            self.assertIn("refusing to start a new campaign trial", stream.getvalue())
+
+    def test_running_stale_does_not_call_openai_or_launch_next_trial(self) -> None:
+        class RaisingClient:
+            @property
+            def responses(self):
+                raise AssertionError("OpenAI should not be called for live stale process")
+
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            trial_dir = root / "trial_stale"
+            stage_state = trial_dir / "stage_state" / "10C.json"
+            stage_state.parent.mkdir(parents=True)
+            stage_state.write_text(
+                json.dumps(
+                    {
+                        "active_experiment": "10C",
+                        "pid": 999,
+                        "status": "running",
+                        "stale_polls": 99,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state_path = Path(campaign_config["artifacts"]["state_path"])
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "campaign_id": "test_campaign",
+                        "status": "running",
+                        "current_trial_id": "trial_stale",
+                        "current_trial_dir": str(trial_dir),
+                        "current_stage": "10C",
+                        "current_stage_index": 0,
+                        "stage_state_path": str(stage_state),
+                        "trial_configs": {
+                            "10C": str(root / "params10.yaml"),
+                            "13C": str(root / "params13.yaml"),
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch("src.agent_experiment_loop._is_process_running", return_value=True), mock.patch(
+                "src.agent_experiment_loop.launch_experiment"
+            ) as launch:
+                stream = io.StringIO()
+                code = run_campaign(campaign_config, once=True, client=RaisingClient(), stream=stream)
+            self.assertEqual(code, 0)
+            launch.assert_not_called()
+            self.assertIn("action=wait_stale", stream.getvalue())
+
+    def test_terminate_campaign_marks_campaign_and_stage_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            trial_dir = root / "trial_running"
+            stage_state = trial_dir / "stage_state" / "10C.json"
+            stage_state.parent.mkdir(parents=True)
+            stage_state.write_text(
+                json.dumps({"active_experiment": "10C", "pid": 999, "status": "running"}),
+                encoding="utf-8",
+            )
+            state_path = Path(campaign_config["artifacts"]["state_path"])
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "campaign_id": "test_campaign",
+                        "status": "running",
+                        "current_trial_id": "trial_running",
+                        "current_trial_dir": str(trial_dir),
+                        "current_stage": "10C",
+                        "current_stage_index": 0,
+                        "stage_state_path": str(stage_state),
+                        "trial_configs": {
+                            "10C": str(root / "params10.yaml"),
+                            "13C": str(root / "params13.yaml"),
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch("src.agent_experiment_loop._is_process_running", return_value=True), mock.patch(
+                "os.killpg"
+            ) as killpg:
+                stream = io.StringIO()
+                code = terminate_campaign(campaign_config, reason="stop test", stream=stream)
+            self.assertEqual(code, 0)
+            killpg.assert_called_once_with(999, signal.SIGTERM)
+            campaign_state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(campaign_state["status"], "terminated")
+            self.assertEqual(campaign_state["termination_reason"], "stop test")
+            updated_stage_state = json.loads(stage_state.read_text(encoding="utf-8"))
+            self.assertEqual(updated_stage_state["status"], "terminated")
+            self.assertEqual(updated_stage_state["terminated_pid"], 999)
+            self.assertIn("campaign terminated", stream.getvalue())
+
+    def test_terminate_campaign_escalates_when_force_after_is_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            trial_dir = root / "trial_running"
+            stage_state = trial_dir / "stage_state" / "10C.json"
+            stage_state.parent.mkdir(parents=True)
+            stage_state.write_text(
+                json.dumps({"active_experiment": "10C", "pid": 999, "status": "running"}),
+                encoding="utf-8",
+            )
+            state_path = Path(campaign_config["artifacts"]["state_path"])
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "campaign_id": "test_campaign",
+                        "status": "running",
+                        "current_trial_id": "trial_running",
+                        "current_trial_dir": str(trial_dir),
+                        "current_stage": "10C",
+                        "current_stage_index": 0,
+                        "stage_state_path": str(stage_state),
+                        "trial_configs": {
+                            "10C": str(root / "params10.yaml"),
+                            "13C": str(root / "params13.yaml"),
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch("src.agent_experiment_loop._is_process_running", return_value=True), mock.patch(
+                "os.killpg"
+            ) as killpg:
+                code = terminate_campaign(campaign_config, force_after=0, stream=io.StringIO(), sleep_fn=lambda _seconds: None)
+            self.assertEqual(code, 0)
+            self.assertEqual(killpg.mock_calls, [mock.call(999, signal.SIGTERM), mock.call(999, signal.SIGKILL)])
+            campaign_state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(campaign_state["termination_signal"], "SIGKILL")
+
+    def test_terminate_campaign_no_running_process_is_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            Path(campaign_config["artifacts"]["state_path"]).parent.mkdir(parents=True)
+            Path(campaign_config["artifacts"]["state_path"]).write_text(
+                json.dumps({"campaign_id": "test_campaign", "status": "analysis_completed"}),
+                encoding="utf-8",
+            )
+            with mock.patch("os.killpg") as killpg:
+                stream = io.StringIO()
+                code = terminate_campaign(campaign_config, stream=stream)
+            self.assertEqual(code, 0)
+            killpg.assert_not_called()
+            self.assertIn("no running campaign found", stream.getvalue())
+
+    def test_campaign_live_status_reports_running_pid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            trial_dir = root / "trial_running"
+            stage_state = trial_dir / "stage_state" / "10C.json"
+            stage_state.parent.mkdir(parents=True)
+            stage_state.write_text(
+                json.dumps({"active_experiment": "10C", "pid": 999, "status": "running"}),
+                encoding="utf-8",
+            )
+            state_path = Path(campaign_config["artifacts"]["state_path"])
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "campaign_id": "test_campaign",
+                        "status": "running",
+                        "current_trial_id": "trial_running",
+                        "current_trial_dir": str(trial_dir),
+                        "current_stage": "10C",
+                        "current_stage_index": 0,
+                        "stage_state_path": str(stage_state),
+                        "trial_configs": {
+                            "10C": str(root / "params10.yaml"),
+                            "13C": str(root / "params13.yaml"),
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch("src.agent_experiment_loop._is_process_running", return_value=True):
+                status = campaign_live_status(campaign_config)
+            self.assertTrue(status["running"])
+            self.assertEqual(status["pid"], 999)
+
+    def test_apply_campaign_propose_trial_validates_patch_size_before_logbook_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            campaign_config["campaign"]["max_patch_leaf_count"] = 1
+            loop_config = load_loop_config(loop_path)
+            state = {
+                "current_trial_id": "completed_trial",
+                "current_trial_dir": str(root / "completed_trial"),
+                "stage_runs": {},
+                "trial_configs": {},
+            }
+            with mock.patch("src.agent_experiment_loop.launch_experiment") as launch, self.assertRaisesRegex(
+                ValueError, "max_patch_leaf_count"
+            ):
+                apply_campaign_decision(
+                    campaign_config,
+                    loop_config,
+                    state,
+                    CampaignDecision(
+                        decision="propose_trial",
+                        reason="too many changes",
+                        logbook_markdown="This should not be written.",
+                        trial_patch={"10C": {"optimization_config": {"epochs": 4, "learning_rate": 0.001}}},
+                    ),
+                    stream=io.StringIO(),
+                )
+            launch.assert_not_called()
+            self.assertFalse((root / "logbook.md").exists())
 
     def test_campaign_lock_rejects_second_live_owner(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
