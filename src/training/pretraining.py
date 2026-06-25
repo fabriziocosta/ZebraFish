@@ -16,6 +16,7 @@ from src.models.common import _ensure_tensor_5d
 from src.models.probes import PROBE_TYPES, build_probe_masks, build_probe_targets, masked_probe_loss
 from src.training.losses import prototype_consistency_loss
 from src.training.loop import _format_eta
+from src.training.reporting import plot_grouped_independent_axis_history
 
 
 def _probe_alpha_weights(estimator) -> dict[str, float]:
@@ -167,7 +168,13 @@ def _plot_loss_group(ax, history_df: pd.DataFrame, columns: list[str], *, title:
     )
 
 
-def _save_pretraining_loss_pdf(history_rows: list[dict[str, float | int]], output_path: Path, *, smoothing_window: int) -> Path:
+def _save_pretraining_loss_pdf(
+    history_rows: list[dict[str, float | int]],
+    output_path: Path,
+    *,
+    smoothing_window: int,
+    estimator=None,
+) -> Path:
     history_df = pd.DataFrame(history_rows)
     if history_df.empty:
         return output_path
@@ -175,109 +182,49 @@ def _save_pretraining_loss_pdf(history_rows: list[dict[str, float | int]], outpu
     import matplotlib.pyplot as plt
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10), squeeze=False)
+    cross_active = float(getattr(estimator, "lambda_cross", 1.0) if estimator is not None else history_df.get("train_lambda_cross", pd.Series([0.0])).max()) > 0.0
+    proto_active = float(getattr(estimator, "prototype_alignment_weight", 1.0) if estimator is not None else history_df.get("train_lambda_proto", pd.Series([0.0])).max()) > 0.0
+    latent_active = float(
+        getattr(estimator, "latent_alignment_weight", 0.0) if estimator is not None else 0.0
+    ) > 0.0 or float(getattr(estimator, "lambda_align", 0.0) if estimator is not None else 0.0) > 0.0
+
+    groups = [
+        ("Total Loss", ["train_loss", "val_loss", "monitor_metric"]),
+        ("Self-Probe Loss", ["train_self_probe_loss", "val_self_probe_loss"]),
+    ]
+    if cross_active:
+        groups.append(("Cross-Probe Loss", ["train_cross_probe_loss", "val_cross_probe_loss", "train_lambda_cross"]))
+    for probe_type in PROBE_TYPES:
+        groups.append(
+            (
+                f"{probe_type.replace('_', ' ').title()} Self-Probe Loss",
+                [f"train_self_probe_{probe_type}_loss", f"val_self_probe_{probe_type}_loss"],
+            )
+        )
+        if cross_active:
+            groups.append(
+                (
+                    f"{probe_type.replace('_', ' ').title()} Cross-Probe Loss",
+                    [f"train_cross_probe_{probe_type}_loss", f"val_cross_probe_{probe_type}_loss"],
+                )
+            )
+
+    alignment_columns = []
+    if proto_active:
+        alignment_columns.extend(["train_prototype_alignment_loss", "val_prototype_alignment_loss", "train_lambda_proto"])
+    if latent_active:
+        alignment_columns.extend(["train_latent_alignment_loss", "val_latent_alignment_loss", "train_feature_alignment_loss", "val_feature_alignment_loss"])
+    if alignment_columns:
+        groups.append(("Active Alignment And Weights", alignment_columns))
     try:
-        summary_columns = [
-            "train_loss",
-            "val_loss",
-            "train_self_probe_loss",
-            "val_self_probe_loss",
-            "train_cross_probe_loss",
-            "val_cross_probe_loss",
-            "monitor_metric",
-        ]
-        _plot_loss_group(
-            axes[0, 0],
+        fig, _ = plot_grouped_independent_axis_history(
             history_df,
-            [column for column in summary_columns if column in history_df.columns],
-            title="Summary Losses",
+            groups,
+            title="Commutative Pretraining Loss Curves",
+            max_curves_per_panel=4,
             smoothing_window=smoothing_window,
+            show_raw=True,
         )
-        _plot_loss_group(
-            axes[0, 1],
-            history_df,
-            [f"val_self_probe_{probe_type}_loss" for probe_type in PROBE_TYPES]
-            + [f"val_cross_probe_{probe_type}_loss" for probe_type in PROBE_TYPES],
-            title="Validation Probe Losses",
-            smoothing_window=smoothing_window,
-        )
-        _plot_loss_group(
-            axes[1, 0],
-            history_df,
-            [f"train_self_probe_{probe_type}_loss" for probe_type in PROBE_TYPES]
-            + [f"train_cross_probe_{probe_type}_loss" for probe_type in PROBE_TYPES],
-            title="Training Probe Losses",
-            smoothing_window=smoothing_window,
-        )
-
-        aux_ax = axes[1, 1]
-        epochs = history_df["epoch"].to_numpy(dtype=float)
-        aux_values = []
-        for column in [
-            "train_prototype_alignment_loss",
-            "val_prototype_alignment_loss",
-            "train_latent_alignment_loss",
-            "val_latent_alignment_loss",
-            "train_feature_alignment_loss",
-            "val_feature_alignment_loss",
-        ]:
-            if column in history_df.columns:
-                values = history_df[column].astype(float)
-                aux_values.append(values.to_numpy())
-                (line,) = aux_ax.plot(epochs, values.to_numpy(), linewidth=1.0, alpha=0.22, label=column)
-                aux_ax.plot(
-                    epochs,
-                    _rolling_median(values, smoothing_window).to_numpy(),
-                    linewidth=2.0,
-                    color=line.get_color(),
-                )
-        if "train_lambda_cross" in history_df.columns:
-            lambda_ax = aux_ax.twinx()
-            lambda_ax.plot(
-                epochs,
-                history_df["train_lambda_cross"].astype(float).to_numpy(),
-                color="black",
-                linewidth=2.0,
-                linestyle="--",
-                label="train_lambda_cross",
-            )
-            lambda_ax.set_ylabel("lambda_cross")
-            lambda_ax.legend(
-                fontsize="x-small",
-                loc="upper center",
-                bbox_to_anchor=(0.75, -0.24),
-                frameon=True,
-            )
-            if "train_lambda_proto" in history_df.columns:
-                lambda_ax.plot(
-                    epochs,
-                    history_df["train_lambda_proto"].astype(float).to_numpy(),
-                    color="tab:green",
-                    linewidth=2.0,
-                    linestyle=":",
-                    label="train_lambda_proto",
-                )
-                lambda_ax.legend(
-                    fontsize="x-small",
-                    loc="upper center",
-                    bbox_to_anchor=(0.75, -0.24),
-                    frameon=True,
-                )
-        aux_ax.set_title("Alignment And Cross Weight")
-        aux_ax.set_xlabel("Epoch")
-        aux_ax.set_ylabel("Loss")
-        if aux_values and np.nanmax(np.concatenate(aux_values)) > 0:
-            aux_ax.set_yscale("log", nonpositive="clip")
-        aux_ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.35)
-        aux_ax.legend(
-            fontsize="x-small",
-            loc="upper center",
-            bbox_to_anchor=(0.25, -0.24),
-            frameon=True,
-        )
-
-        fig.suptitle("Commutative Pretraining Loss Curves")
-        fig.tight_layout(rect=(0, 0.04, 1, 0.97))
         with tempfile.NamedTemporaryFile(
             mode="wb",
             suffix=output_path.suffix,
@@ -307,8 +254,12 @@ def _maybe_save_pretraining_loss_pdfs(estimator, history_rows: list[dict[str, fl
     smoothing_window = max(1, int(getattr(estimator, "training_plot_smoothing_window", 5) or 5))
     epoch_path = output_dir / f"epoch_{int(epoch):03d}.loss-curves.pdf"
     latest_path = output_dir / "latest.loss-curves.pdf"
-    _save_pretraining_loss_pdf(history_rows, epoch_path, smoothing_window=smoothing_window)
-    _save_pretraining_loss_pdf(history_rows, latest_path, smoothing_window=smoothing_window)
+    history_df = pd.DataFrame(history_rows)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    history_df.to_csv(output_dir / f"epoch_{int(epoch):03d}.history.csv", index=False)
+    history_df.to_csv(output_dir / "latest.history.csv", index=False)
+    _save_pretraining_loss_pdf(history_rows, epoch_path, smoothing_window=smoothing_window, estimator=estimator)
+    _save_pretraining_loss_pdf(history_rows, latest_path, smoothing_window=smoothing_window, estimator=estimator)
 
 
 def _compute_commutative_pretraining_loss(
@@ -414,6 +365,8 @@ def _pretrain_commutative_estimator(
     estimator.device_ = estimator._device()
     estimator.input_shape_ = tuple(int(size) for size in X_train.shape[1:])
     estimator.model_.to(estimator.device_)
+    if hasattr(estimator, "_load_pretrained_weights_into_model"):
+        estimator._load_pretrained_weights_into_model(estimator.model_)
 
     train_loader = DataLoader(
         TensorDataset(X_train),

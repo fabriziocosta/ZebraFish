@@ -234,6 +234,35 @@ class EstimatorSmokeTests(unittest.TestCase):
             self.assertTrue(frozen_parameters)
             self.assertFalse(any(frozen_parameters))
 
+    def test_commutative_cnn_pretrain_loads_pretrained_state_path_for_continuation(self) -> None:
+        model_config = CommutativeCNNConfig(
+            spatial_conv_channels=(4,),
+            temporal_st_channels=(4,),
+            temporal_ts_channels=(4,),
+            spatial_agg_channels=(4,),
+            patch_size_z=1,
+            patch_size_xy=8,
+            embedding_dim=4,
+            probe_time_bins=4,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = CommutativeCNNClassifier(
+                model_config=model_config,
+                optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+            )
+            first.pretrain(self.X, epochs=1)
+            checkpoint_path = first.save_pretrained_encoder(Path(tmpdir) / "encoder.pt")
+
+            continuation = CommutativeCNNClassifier(
+                model_config=model_config,
+                optimization_config=OptimizationConfig(batch_size=4, epochs=1, validation_split=0.0, verbose=False),
+                pretrained_state_path=checkpoint_path,
+            )
+            continuation.pretrain(self.X, epochs=1)
+
+        self.assertTrue(hasattr(continuation, "pretrained_loaded_keys_"))
+        self.assertGreater(len(continuation.pretrained_loaded_keys_), 0)
+
     def test_commutative_transformer_estimator_with_configs(self) -> None:
         estimator = CommutativeTransformerClassifier(
             model_config=CommutativeTransformerConfig(

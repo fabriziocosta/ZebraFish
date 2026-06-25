@@ -1,0 +1,109 @@
+agent:
+  model: gpt-5.3-codex
+  reasoning_effort: medium
+  poll_seconds: 18000
+  max_output_tokens: 2000
+  api_key_env: OPENAI_API_KEY
+controller:
+  stale_polls_before_analysis: 2
+state:
+  path: artifacts/agent_experiment_loop/state.json
+  log_dir: artifacts/agent_experiment_loop/logs
+logbook:
+  path: EXPERIMENTS_LOGBOOK.md
+experiments:
+  "10C":
+    label: 10C pretraining
+    kind: pretrain
+    family: cnn
+    runner: 10C_pretrain_commutative_cnn_encoder.py
+    params_yaml: configs/experiments/10C_pretrain_next.yaml
+    artifact_root: artifacts/pretrained_commutative_cnn
+    prefix: 10C_pretrain_commutative_cnn
+    required_completion_artifacts: [history, summary_metrics, checkpoint]
+    stale_polls_before_analysis: 2
+    allowed_patch_paths:
+      - optimization_config
+      - loss_weight_config
+      - model_config.dropout
+    next: "13C"
+  "13C":
+    label: 13C fine-tuning
+    kind: finetune
+    family: cnn
+    runner: 13C_finetune_pretrained_commutative_cnn_classifier.py
+    params_yaml: configs/experiments/13C_finetune_next.yaml
+    artifact_root: artifacts/nb13C_commutative_cnn_full_finetune
+    prefix: 13C_finetune_commutative_cnn
+    required_completion_artifacts: [history, summary_metrics, checkpoint, confusion_matrices, umap_pdf]
+    stale_polls_before_analysis: 2
+    allowed_patch_paths:
+      - holdout_fraction
+      - validation_fraction_within_train
+      - train_num_random_rotations
+      - rotation_range_degrees
+      - freeze_backbone
+      - hot_start
+      - run_binary_hot_start
+      - optimization_config
+      - loss_weight_config
+    next: null
+  "12T":
+    label: 12T transformer pretraining
+    kind: pretrain
+    family: transformer
+    runner: 12T_pretrain_commutative_transformer_encoder.py
+    params_yaml: configs/experiments/12T_pretrain_next.yaml
+    artifact_root: artifacts/pretrained_commutative_transformer
+    prefix: 12T_pretrain_commutative_transformer
+    required_completion_artifacts: [history, summary_metrics, checkpoint]
+    stale_polls_before_analysis: 3
+    allowed_patch_paths:
+      - optimization_config
+      - loss_weight_config
+      - model_config.dropout
+      - model_config.attention_dropout
+    next: "15T"
+  "15T":
+    label: 15T transformer fine-tuning
+    kind: finetune
+    family: transformer
+    runner: 15T_finetune_pretrained_commutative_transformer_classifier.py
+    params_yaml: configs/experiments/15T_finetune_next.yaml
+    artifact_root: artifacts/nb15T_commutative_transformer_full_finetune
+    prefix: 15T_finetune_commutative_transformer
+    required_completion_artifacts: [history, summary_metrics, checkpoint, confusion_matrices, umap_pdf]
+    stale_polls_before_analysis: 3
+    allowed_patch_paths:
+      - holdout_fraction
+      - validation_fraction_within_train
+      - train_num_random_rotations
+      - rotation_range_degrees
+      - freeze_backbone
+      - optimization_config
+      - loss_weight_config
+    next: null
+prompts:
+  improvement_goal: |
+    Improve compound discrimination without collapsing action classification. Prefer small, attributable parameter changes.
+    Use pretraining evidence first; use fine-tuning holdout metrics, confusion matrices, AUC/accuracy, and UMAP plots to decide the next change.
+  analysis_policy: |
+    The controller handles waiting, completion, and failure detection. Only analyze completed, failed, or stale runs.
+    Use raw CSV metrics/losses and artifact links as evidence. Prefer no_action when there is not enough evidence to propose a change.
+  update_logbook: |
+    Write concise markdown suitable for EXPERIMENTS_LOGBOOK.md. Reference artifact paths directly.
+    Include what happened, evidence from raw CSV metrics/losses, links to PDFs, and the proposed next round.
+  patch_parameters: |
+    Return only small YAML parameter patches. Explain why each changed value addresses the observed failure mode.
+    Do not patch unrelated keys.
+  status_decision: |
+    Return a single JSON object with this shape:
+    {
+      "decision": "no_action|update_logbook|patch_next_params|launch_next",
+      "experiment": "one configured experiment id",
+      "reason": "short reason",
+      "logbook_markdown": "optional markdown",
+      "parameters_patch": {"optional": "mapping"}
+    }
+    launch_next is only a request; the controller will ignore it unless the active run is deterministically complete.
+    Do not include markdown fences or any text outside the JSON object.

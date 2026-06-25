@@ -1,0 +1,52 @@
+dataset_artifact_path: null
+pretraining_config_path: artifacts/pretrained_commutative_transformer/config.yaml
+experiment_output_dir: artifacts/nb15T_commutative_transformer_full_finetune
+holdout_fraction: 0.25
+validation_fraction_within_train: 0.2
+train_num_random_rotations: 6
+rotation_range_degrees: 12.0
+freeze_backbone: false
+optimization_config:
+  batch_size: 8
+  epochs: 100
+  learning_rate: 5.0e-05
+  weight_decay: 0.003
+  early_stopping_patience: 8
+  early_stopping_min_delta: 0.0
+  early_stopping_start_epoch: null
+  early_stopping_monitor: loss
+  early_stopping_smoothing: none
+  early_stopping_smoothing_window: 1
+  scheduler_patience: 2
+  scheduler_factor: 0.7
+  scheduler_min_lr: 1.0e-06
+  training_plot_dir: null
+  training_plot_every_n_epochs: 1
+  training_plot_smoothing_window: 5
+  validation_split: 0.0
+  random_state: 0
+  standardize: true
+  device: null
+  verbose: true
+  class_weighting: null
+loss_weight_config:
+  action_weight: 1.0
+  water_vs_other_weight: 0.0
+  compound_weight: 0.05
+  concentration_weight: 0.05
+  lambda_cross: 1.0
+  lambda_align: 0.0
+  prototype_temperature: 0.1
+  prototype_alignment_weight: 1.0
+  prototype_warmup_epochs: 0
+  prototype_ramp_epochs: 0
+  latent_alignment_weight: 0.0
+  cross_warmup_epochs: 5
+  cross_ramp_epochs: 5
+  teacher_student_warmup_epochs: 0
+  probe_mask_probability: 0.25
+  probe_alpha_local: 1.0
+  probe_alpha_region_time: 1.0
+  probe_alpha_derivative: 1.0
+  probe_alpha_frequency: 1.0
+  probe_alpha_correlation: 1.0

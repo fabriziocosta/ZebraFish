@@ -27,6 +27,10 @@ def _humanize_loss_name(name: str) -> str:
     return " ".join(part.capitalize() for part in parts)
 
 
+def _humanize_metric_name(name: str) -> str:
+    return _humanize_loss_name(name.removeprefix("train_").removeprefix("val_"))
+
+
 def _loess_smooth_1d(values: np.ndarray, frac: float = 0.25) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     n = values.size
@@ -62,6 +66,178 @@ def _loess_smooth_1d(values: np.ndarray, frac: float = 0.25) -> np.ndarray:
     return smoothed
 
 
+def _rolling_median_smooth_1d(values: np.ndarray, window: int) -> np.ndarray:
+    return (
+        pd.Series(np.asarray(values, dtype=float))
+        .rolling(window=max(1, int(window)), min_periods=1)
+        .median()
+        .to_numpy(dtype=float)
+    )
+
+
+def _chunk_columns(columns: list[str], max_curves_per_panel: int) -> list[list[str]]:
+    if max_curves_per_panel < 1:
+        raise ValueError("max_curves_per_panel must be at least 1")
+    return [columns[start : start + max_curves_per_panel] for start in range(0, len(columns), max_curves_per_panel)]
+
+
+def _should_use_log_axis(column: str, values: np.ndarray) -> bool:
+    if "lambda" in column or column.endswith("_weight"):
+        return False
+    finite_values = values[np.isfinite(values)]
+    return bool(finite_values.size and np.nanmax(finite_values) > 0 and np.nanmin(finite_values) > 0)
+
+
+def plot_independent_axis_curves(
+    ax,
+    history_df: pd.DataFrame,
+    columns: Sequence[str],
+    *,
+    title: str,
+    smoothing_window: int | None = None,
+    loess_frac: float | None = None,
+    show_raw: bool = True,
+) -> list:
+    """Plot up to a few curves with one y-axis per curve."""
+    if "epoch" not in history_df.columns:
+        raise ValueError("history must contain an epoch column")
+    valid_columns = [
+        column
+        for column in columns
+        if column in history_df.columns and history_df[column].notna().any()
+    ]
+    if not valid_columns:
+        ax.set_visible(False)
+        return []
+    if len(valid_columns) > 4:
+        raise ValueError("plot_independent_axis_curves accepts at most 4 columns")
+
+    epoch_values = history_df["epoch"].to_numpy(dtype=float)
+    colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+    axes = []
+    handles = []
+    labels = []
+    for index, column in enumerate(valid_columns):
+        curve_ax = ax if index == 0 else ax.twinx()
+        axes.append(curve_ax)
+        if index > 0:
+            curve_ax.spines["right"].set_position(("axes", 1.0 + 0.12 * (index - 1)))
+            curve_ax.spines["right"].set_visible(True)
+            curve_ax.grid(False)
+
+        series = history_df[column].astype(float)
+        valid_mask = series.notna().to_numpy()
+        curve_epochs = epoch_values[valid_mask]
+        values = series.to_numpy(dtype=float)[valid_mask]
+        color = colors[index % len(colors)] if colors else None
+        label = column
+
+        if show_raw or (smoothing_window is None and loess_frac is None):
+            (raw_line,) = curve_ax.plot(
+                curve_epochs,
+                values,
+                linewidth=1.2,
+                alpha=0.25 if smoothing_window is not None or loess_frac is not None else 0.9,
+                color=color,
+                label=label,
+            )
+            color = raw_line.get_color()
+        if smoothing_window is not None:
+            (smooth_line,) = curve_ax.plot(
+                curve_epochs,
+                _rolling_median_smooth_1d(values, smoothing_window),
+                linewidth=2.2,
+                alpha=0.95,
+                color=color,
+                label=label if not show_raw else "_nolegend_",
+            )
+            handles.append(smooth_line if show_raw else smooth_line)
+        elif loess_frac is not None:
+            (smooth_line,) = curve_ax.plot(
+                curve_epochs,
+                _loess_smooth_1d(values, frac=loess_frac),
+                linewidth=2.6,
+                alpha=0.95,
+                color=color,
+                label=label if not show_raw else "_nolegend_",
+            )
+            handles.append(smooth_line if show_raw else smooth_line)
+        else:
+            handles.append(raw_line)
+        labels.append(label)
+
+        curve_ax.set_ylabel(_humanize_metric_name(column), color=color)
+        curve_ax.tick_params(axis="y", colors=color)
+        curve_ax.spines["left" if index == 0 else "right"].set_color(color)
+        if _should_use_log_axis(column, values):
+            curve_ax.set_yscale("log", nonpositive="clip")
+
+    ax.set_title(title)
+    ax.set_xlabel("Epoch")
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.3)
+    ax.legend(
+        handles,
+        labels,
+        fontsize="x-small",
+        ncol=min(2, len(labels)),
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.24),
+        frameon=True,
+    )
+    return axes
+
+
+def plot_grouped_independent_axis_history(
+    history_df: pd.DataFrame,
+    groups: Sequence[tuple[str, Sequence[str]]],
+    *,
+    title: str,
+    max_curves_per_panel: int = 4,
+    smoothing_window: int | None = None,
+    loess_frac: float | None = None,
+    show_raw: bool = True,
+):
+    panels: list[tuple[str, list[str]]] = []
+    for group_title, columns in groups:
+        valid_columns = [
+            column
+            for column in columns
+            if column in history_df.columns and history_df[column].notna().any()
+        ]
+        chunks = _chunk_columns(valid_columns, max_curves_per_panel)
+        for chunk_index, chunk in enumerate(chunks, start=1):
+            suffix = f" {chunk_index}" if len(chunks) > 1 else ""
+            panels.append((f"{group_title}{suffix}", chunk))
+    if not panels:
+        raise ValueError("history does not contain any requested curve columns")
+
+    n_cols = 2 if len(panels) > 1 else 1
+    n_rows = int(np.ceil(len(panels) / n_cols))
+    fig, axes_grid = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(10 * n_cols, 4.8 * n_rows),
+        squeeze=False,
+    )
+    primary_axes = axes_grid.reshape(-1)
+    for index, (panel_title, columns) in enumerate(panels):
+        plot_independent_axis_curves(
+            primary_axes[index],
+            history_df,
+            columns,
+            title=panel_title,
+            smoothing_window=smoothing_window,
+            loess_frac=loess_frac,
+            show_raw=show_raw,
+        )
+    for empty_ax in primary_axes[len(panels) :]:
+        empty_ax.set_visible(False)
+
+    fig.suptitle(title)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.98), w_pad=4.5, h_pad=4.0)
+    return fig, primary_axes[: len(panels)]
+
+
 def plot_training_history(
     history,
     *,
@@ -69,6 +245,7 @@ def plot_training_history(
     title: str = "Training history",
     loess_frac: float | None = None,
     show_raw: bool = True,
+    excluded_loss_names: Sequence[str] | None = None,
 ):
     if isinstance(history, pd.DataFrame):
         history_df = history
@@ -81,6 +258,7 @@ def plot_training_history(
     if history_df.empty:
         raise ValueError("history is empty")
 
+    excluded_loss_name_set = set(excluded_loss_names or [])
     loss_names = sorted(
         {
             column.removeprefix("train_")
@@ -109,90 +287,42 @@ def plot_training_history(
             name,
         ),
     )
+    loss_names = [name for name in loss_names if name not in excluded_loss_name_set]
     if not loss_names:
         raise ValueError("history does not contain any train_*_loss columns")
 
-    if ax is not None and len(loss_names) != 1:
-        raise ValueError("ax can only be provided when plotting a single loss panel")
+    groups = []
+    for loss_name in loss_names:
+        columns = [f"train_{loss_name}"]
+        val_key = f"val_{loss_name}"
+        if val_key in history_df.columns:
+            columns.append(val_key)
+        groups.append((_humanize_loss_name(loss_name), columns))
 
     if ax is not None:
-        axes = np.asarray([ax], dtype=object)
+        if len(groups) != 1:
+            raise ValueError("ax can only be provided when plotting a single loss panel")
         fig = ax.figure
-    else:
-        n_panels = len(loss_names)
-        n_cols = 2 if n_panels > 1 else 1
-        n_rows = int(np.ceil(n_panels / n_cols))
-        fig, axes_grid = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 3.8 * n_rows), squeeze=False)
-        axes = axes_grid.reshape(-1)
-
-    for index, loss_name in enumerate(loss_names):
-        panel_ax = axes[index]
-        train_key = f"train_{loss_name}"
-        val_key = f"val_{loss_name}"
-        epoch_values = history_df["epoch"].to_numpy()
-        train_values = history_df[train_key].to_numpy(dtype=float)
-        train_color = None
-        if show_raw or loess_frac is None:
-            (train_line,) = panel_ax.plot(
-                epoch_values,
-                train_values,
-                linewidth=1.8,
-                alpha=0.3 if loess_frac is not None and show_raw else 1.0,
-                label="Train",
-            )
-            train_color = train_line.get_color()
-        if loess_frac is not None:
-            panel_ax.plot(
-                epoch_values,
-                _loess_smooth_1d(train_values, frac=loess_frac),
-                linewidth=3.0,
-                alpha=0.9,
-                color=train_color,
-                label="_nolegend_",
-            )
-        if val_key in history_df.columns and history_df[val_key].notna().any():
-            val_series = history_df[val_key].astype(float)
-            valid_mask = val_series.notna().to_numpy()
-            val_epoch_values = epoch_values[valid_mask]
-            val_values = val_series.to_numpy()[valid_mask]
-            val_color = None
-            if show_raw or loess_frac is None:
-                (val_line,) = panel_ax.plot(
-                    val_epoch_values,
-                    val_values,
-                    linewidth=1.8,
-                    alpha=0.3 if loess_frac is not None and show_raw else 1.0,
-                    label="Val",
-                )
-                val_color = val_line.get_color()
-            if loess_frac is not None and len(val_values) > 0:
-                panel_ax.plot(
-                    val_epoch_values,
-                    _loess_smooth_1d(val_values, frac=loess_frac),
-                    linewidth=3.0,
-                    alpha=0.9,
-                    color=val_color,
-                    label="_nolegend_",
-                )
-        panel_ax.set_xlabel("Epoch")
-        panel_ax.set_ylabel("Loss")
-        panel_ax.set_title(_humanize_loss_name(loss_name))
-        panel_ax.grid(True, alpha=0.25)
-        panel_ax.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.24),
-            ncol=2,
-            fontsize="small",
-            frameon=True,
+        plot_independent_axis_curves(
+            ax,
+            history_df,
+            groups[0][1],
+            title=groups[0][0],
+            loess_frac=loess_frac,
+            show_raw=show_raw,
         )
+        fig.suptitle(title)
+        fig.tight_layout(rect=(0, 0.04, 1, 0.98))
+        return fig, ax
 
-    if ax is None and len(axes) > len(loss_names):
-        for empty_ax in axes[len(loss_names) :]:
-            empty_ax.set_visible(False)
-
-    fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0.04, 1, 0.98))
-    return fig, (axes[: len(loss_names)] if ax is None else ax)
+    return plot_grouped_independent_axis_history(
+        history_df,
+        groups,
+        title=title,
+        max_curves_per_panel=4,
+        loess_frac=loess_frac,
+        show_raw=show_raw,
+    )
 
 
 def save_training_history_pdf(
@@ -202,10 +332,17 @@ def save_training_history_pdf(
     title: str = "Training history",
     loess_frac: float | None = None,
     show_raw: bool = True,
+    excluded_loss_names: Sequence[str] | None = None,
 ) -> Path:
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig, _ = plot_training_history(history, title=title, loess_frac=loess_frac, show_raw=show_raw)
+    fig, _ = plot_training_history(
+        history,
+        title=title,
+        loess_frac=loess_frac,
+        show_raw=show_raw,
+        excluded_loss_names=excluded_loss_names,
+    )
     try:
         with tempfile.NamedTemporaryFile(
             mode="wb",

@@ -154,14 +154,14 @@ def _append_experiments_logbook_entry(
         return None
 
     path = Path(logbook_path)
+    header = (
+        "# Experiments Logbook\n\n"
+        "This file records pretraining and fine-tuning runs by experiment id. "
+        "Each entry links the timestamped artifacts, summarizes what happened, "
+        "and states the proposed next round.\n"
+    )
     if not path.exists():
-        path.write_text(
-            "# Experiments Logbook\n\n"
-            "This file records pretraining and fine-tuning runs by experiment id. "
-            "Each entry links the timestamped artifacts, summarizes what happened, "
-            "and states the proposed next round.\n",
-            encoding="utf-8",
-        )
+        path.write_text(header, encoding="utf-8")
 
     compact_config = _to_json_compatible(config)
     config_lines = json.dumps(compact_config, indent=2, sort_keys=True).splitlines()
@@ -175,7 +175,8 @@ def _append_experiments_logbook_entry(
         for name, value in key_paths.items()
         if value is not None
     ]
-    entry = [
+    preview_lines = _logbook_preview_lines(key_paths)
+    entry_lines = [
         "",
         f"## {experiment_id}",
         "",
@@ -198,8 +199,18 @@ def _append_experiments_logbook_entry(
         "```",
         "",
     ]
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write("\n".join(entry))
+    if preview_lines:
+        insert_at = entry_lines.index("### Config Snapshot")
+        entry_lines[insert_at:insert_at] = ["### Plot Previews", "", *preview_lines, ""]
+
+    entry = "\n".join(entry_lines).rstrip() + "\n"
+    current = path.read_text(encoding="utf-8") if path.exists() else header
+    section_pattern = re.compile(rf"(?ms)^## {re.escape(experiment_id)}\n.*?(?=^## |\Z)")
+    if section_pattern.search(current):
+        updated = section_pattern.sub(entry.lstrip(), current).rstrip() + "\n"
+    else:
+        updated = current.rstrip() + "\n\n" + entry.lstrip()
+    path.write_text(updated, encoding="utf-8")
     return str(path)
 
 
@@ -214,6 +225,22 @@ def _format_logbook_path_value(value: Path | str | list[Path | str] | tuple[Path
     if isinstance(value, (list, tuple)):
         return ", ".join(_markdown_artifact_link(item) for item in value)
     return _markdown_artifact_link(value)
+
+
+def _logbook_preview_lines(
+    key_paths: dict[str, Path | str | list[Path | str] | tuple[Path | str, ...] | None],
+) -> list[str]:
+    preview_candidates: list[Path] = []
+    for name in ("latest_loss_pdfs", "figure_pdfs"):
+        value = key_paths.get(name)
+        if value is None:
+            continue
+        values = value if isinstance(value, (list, tuple)) else [value]
+        for item in values:
+            item_path = Path(str(item))
+            if item_path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".svg"}:
+                preview_candidates.append(item_path)
+    return [f"![{path.name}]({str(path).replace(' ', '%20')})" for path in preview_candidates]
 
 
 def create_experiment_run(output_dir: str | Path, experiment_prefix: str) -> ExperimentRun:
