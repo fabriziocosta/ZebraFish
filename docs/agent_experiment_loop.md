@@ -18,12 +18,45 @@ This repository can run the 10C pretraining and 13C fine-tuning experiments thro
 .venv/bin/python scripts/agent_experiment_loop.py run --config configs/agent_experiment_loop.yaml --start-at 10C
 ```
 
-The harness is intentionally quiet. It prints startup status, one status line per poll, the next poll time, and shutdown status. It does not print countdowns.
+For the normal pretrain-to-finetune optimization loop, start a campaign from the repository root:
+
+```bash
+./run_campaign cnn
+```
+
+or for the transformer sequence:
+
+```bash
+./run_campaign transformer
+```
+
+The campaign wrapper performs an initialization phase when there is no active campaign state. It inspects the current experiment statuses, recent logs, existing campaign ledgers, and the tail of `EXPERIMENTS_LOGBOOK.md`; asks the OpenAI model for the next things to try; writes that plan into the logbook; validates any proposed YAML patch against the experiment allowlists; then launches the first stage.
+
+The harness is intentionally quiet. It prints startup status, one status line per poll, the next poll time, and shutdown status. When the model makes an initialization or result decision, it also prints the analysis/proposal block that is written into the logbook. It does not print countdowns.
+
+## Available Campaigns
+
+| Command name | Campaign id | Sequence | Description | Start command |
+| --- | --- | --- | --- | --- |
+| `cnn` | `cnn_pretrain_finetune` | `10C -> 13C` | Runs the commutative CNN pretraining stage, then fine-tunes the CNN classifier. The campaign scores trials on downstream 13C compound performance with action accuracy as a guardrail. | `./run_campaign cnn` |
+| `transformer` | `transformer_pretrain_finetune` | `12T -> 15T` | Runs the commutative transformer pretraining stage, then fine-tunes the transformer classifier. The campaign uses the same downstream compound objective and action guardrail as the CNN campaign. | `./run_campaign transformer` |
+
+Each command name maps to a YAML file through `run_campaign.py`. You can also pass a campaign YAML path directly:
+
+```bash
+./run_campaign configs/experiment_campaigns/cnn_campaign.yaml
+```
 
 ## Components
 
 - `scripts/agent_experiment_loop.py` is the CLI entrypoint.
 - `src/agent_experiment_loop.py` implements the controller, polling, OpenAI API call, state tracking, and whitelisted actions.
+- `run_campaign.py` is the simplified root-level campaign entrypoint.
+- `run_campaign` is a root-level shell wrapper that uses `.venv/bin/python` when available.
+- `scripts/agent_campaign_loop.py` is the detailed campaign CLI.
+- `src/agent_campaign_loop.py` implements campaign initialization, pretrain-to-finetune sequencing, trial ledgers, scoring, and leaderboard updates.
+- `configs/experiment_campaigns/cnn_campaign.yaml` defines the `10C -> 13C` optimization campaign.
+- `configs/experiment_campaigns/transformer_campaign.yaml` defines the `12T -> 15T` optimization campaign.
 - `configs/agent_experiment_loop.yaml` configures the model, poll interval, state paths, experiment runners, and analysis prompts.
 - `configs/experiments/10C_pretrain_next.yaml` and `configs/experiments/13C_finetune_next.yaml` are the next-run parameter files that the agent may patch.
 - `configs/experiments/12T_pretrain_next.yaml` and `configs/experiments/15T_finetune_next.yaml` are the transformer equivalents.
@@ -49,6 +82,47 @@ The model may request only these actions:
 
 Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed.
 
+## Campaign Control
+
+The campaign layer treats a `next` chain as one optimization trial. For example, the CNN campaign is a trial sequence of `10C` pretraining followed by `13C` fine-tuning. The transformer campaign is `12T` followed by `15T`.
+
+The `next` fields in `configs/agent_experiment_loop.yaml` remain the local handoff mechanism. The campaign config adds the higher-level meaning: objective metric, trial budget, campaign artifact folder, and the prompt used to propose the next trial.
+
+A campaign has an initialization phase before the first run starts. During init, the campaign controller gathers:
+
+- latest artifact/status snapshots for each stage;
+- recent harness and notebook log tails;
+- the current logbook tail;
+- existing trial and leaderboard CSV tails.
+
+The model may propose only a structured campaign decision:
+
+- `no_action`
+- `propose_trial`
+- `update_logbook`
+- `stop_campaign`
+
+For initialization, `propose_trial` may include a `trial_patch` keyed by experiment id, such as `10C` or `13C`. The controller writes the plan into the logbook before launching. If the model returns no patch, the campaign launches the copied baseline configs unchanged.
+
+After pretraining completes, the campaign controller wires the generated per-run pretraining config into the fine-tune config. Fine-tuning therefore uses the exact checkpoint from the current trial, not whichever checkpoint happens to be latest globally.
+
+The campaign objective is evaluated only after the final fine-tune stage completes. Pretraining losses are diagnostic evidence; they are not the primary score.
+
+At campaign decision points, stdout includes a bounded markdown block:
+
+```text
+campaign result analysis: <trial_id>
+------------------------------------
+<analysis and next-step proposal>
+
+proposed trial patch:
+{
+  ...
+}
+```
+
+The same analysis is upserted into `EXPERIMENTS_LOGBOOK.md` with artifact links. When PDF plots are linked from a completed campaign trial, the controller also tries to render first-page PNG previews into the trial folder and embeds those PNGs inline in the logbook. If local PDF rendering is unavailable, the PDF links are still written.
+
 ## Run Tracking
 
 When the harness launches a runner, it writes:
@@ -69,6 +143,16 @@ The runner receives the status JSON path through `ZF_AGENT_RUN_STATUS_PATH` and 
 This avoids guessing the current experiment from the newest artifact folder.
 
 If the controller falls back to inspecting the newest run folder, status includes `run_dir_source: latest_fallback`. Treat this as less reliable than `state` or `runner_status`.
+
+Campaign runs write:
+
+- `artifacts/campaigns/<campaign_id>/campaign_state.json`
+- `artifacts/campaigns/<campaign_id>/trials.csv`
+- `artifacts/campaigns/<campaign_id>/trials.jsonl`
+- `artifacts/campaigns/<campaign_id>/leaderboard.csv`
+- `artifacts/campaigns/<campaign_id>/trials/<trial_id>/trial_manifest.json`
+- `artifacts/campaigns/<campaign_id>/trials/<trial_id>/trial_summary.json`
+- per-stage state and logs under the trial folder.
 
 ## Artifacts
 
@@ -118,6 +202,30 @@ Run one dry status pass without launching jobs, writing files, or calling OpenAI
 
 ```bash
 .venv/bin/python scripts/agent_experiment_loop.py run --config configs/agent_experiment_loop.yaml --dry-run --once --start-at 10C
+```
+
+Start the CNN campaign from the repository root:
+
+```bash
+./run_campaign cnn
+```
+
+Start the transformer campaign:
+
+```bash
+./run_campaign transformer
+```
+
+Run one dry campaign pass:
+
+```bash
+./run_campaign cnn --dry-run --once
+```
+
+Inspect a campaign without calling OpenAI:
+
+```bash
+.venv/bin/python scripts/agent_campaign_loop.py status --campaign configs/experiment_campaigns/cnn_campaign.yaml
 ```
 
 Check current harness status without calling OpenAI:

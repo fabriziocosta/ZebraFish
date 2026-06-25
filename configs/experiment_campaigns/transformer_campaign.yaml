@@ -1,0 +1,36 @@
+campaign:
+  id: transformer_pretrain_finetune
+  loop_config: configs/agent_experiment_loop.yaml
+  poll_seconds: 18000
+  trial_budget: 20
+  stages: ["12T", "15T"]
+objective:
+  target: compound
+  primary_metric: macro_f1
+  fallback_metrics: [balanced_accuracy, accuracy, roc_auc_ovr_macro]
+  maximize: true
+  minimums:
+    action.accuracy: 0.30
+artifacts:
+  root: artifacts/campaigns/transformer_pretrain_finetune
+logbook:
+  path: EXPERIMENTS_LOGBOOK.md
+prompts:
+  analysis_policy: |
+    Analyze only completed finetune trials or deterministic failures/staleness. A trial is the full 12T-to-15T chain.
+    Score trial success by downstream 15T compound performance, with action accuracy treated as a guardrail.
+  update_logbook: |
+    Write concise markdown for EXPERIMENTS_LOGBOOK.md with direct links to trial configs, run folders, CSV metrics, and PDFs.
+    Explain what happened, what likely limited the result, and what the next trial changes.
+  patch_parameters: |
+    Return small trial_patch mappings keyed by experiment id. Only patch allowlisted YAML paths from configs/agent_experiment_loop.yaml.
+    Prefer one or two attributable changes per trial.
+  decision_schema: |
+    Return a single JSON object with this shape:
+    {
+      "decision": "no_action|propose_trial|update_logbook|stop_campaign",
+      "reason": "short reason",
+      "logbook_markdown": "optional markdown",
+      "trial_patch": {"12T": {"optional": "mapping"}, "15T": {"optional": "mapping"}}
+    }
+    Do not include markdown fences or text outside the JSON object.
