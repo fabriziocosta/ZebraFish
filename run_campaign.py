@@ -27,10 +27,25 @@ def available_campaigns_text() -> str:
     return "\n".join(lines)
 
 
+def command_help_text() -> str:
+    return "\n".join(
+        [
+            "commands:",
+            "  ./run_campaign <campaign> [options]    start or resume a campaign loop",
+            "  ./run_campaign status <campaign>       print campaign status without launching",
+            "  ./run_campaign terminate [campaign]    terminate the active training child",
+            "  ./run_campaign list                    list available campaigns",
+            "",
+            available_campaigns_text(),
+        ]
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        usage="run_campaign.py <campaign>|status <campaign>|terminate [campaign]|list [options]",
         description="Start a ZebraFish experiment campaign from the repo root.",
-        epilog=available_campaigns_text(),
+        epilog=command_help_text(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("campaign", help="Campaign name: cnn, transformer, or a path to a campaign YAML.")

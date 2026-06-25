@@ -8,6 +8,13 @@ import run_campaign
 
 
 class RunCampaignWrapperTests(unittest.TestCase):
+    def test_help_lists_status_command(self) -> None:
+        parser = run_campaign.build_arg_parser()
+        help_text = parser.format_help()
+        self.assertIn("./run_campaign status <campaign>", help_text)
+        self.assertIn("./run_campaign terminate [campaign]", help_text)
+        self.assertIn("./run_campaign list", help_text)
+
     def test_terminate_defaults_to_single_live_campaign(self) -> None:
         live = [
             (

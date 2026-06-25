@@ -212,3 +212,56 @@ Run the proposed full chain `cnn_pretrain_finetune_20260625_115021_08a733` with 
 }
 ```
 <!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260625_115021_08a733:end -->
+
+<!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260625_152652_a8e2d2:start -->
+## Campaign Start: cnn_pretrain_finetune_20260625_152652_a8e2d2
+
+- Campaign: `cnn_pretrain_finetune`
+- Trial folder: [artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2)
+- Stages: `10C -> 13C`
+- Objective: `compound.macro_f1`
+
+### Previous Results And Next Plan
+
+## Previous results reviewed
+- Completed 13C evidence: [run folder](artifacts/nb13C_commutative_cnn_full_finetune), [config](artifacts/nb13C_commutative_cnn_full_finetune/config.json), [history.csv](artifacts/nb13C_commutative_cnn_full_finetune/history.csv), [summary_metrics.csv](artifacts/nb13C_commutative_cnn_full_finetune/summary_metrics.csv), [fine_tune latest PDF](artifacts/nb13C_commutative_cnn_full_finetune/loss_plots/fine_tune/latest.loss-curves.pdf). This run had action signal (macro-F1 ~0.405 in prior notes) but final-phase `compound_weight=0.0`, so compound metrics are not decision-grade for the campaign objective.
+- Completed 10C evidence: [run folder](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629), [config](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/10C_pretrain_commutative_cnn_20260623_093629_config.json), [history.csv](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/10C_pretrain_commutative_cnn_20260623_093629_history.csv), [summary_metrics.csv](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/10C_pretrain_commutative_cnn_20260623_093629_summary_metrics.csv), [latest PDF](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260623_093629/loss_plots/pretraining/latest.loss-curves.pdf). This is the last complete stable pretrain checkpoint source.
+- Weak evidence (latest-folder fallback only): [13C incomplete 20260624](artifacts/nb13C_commutative_cnn_full_finetune/runs/13C_finetune_commutative_cnn_20260624_162408/loss_plots/fine_tune/latest.loss-curves.pdf) and [10C interrupted 20260624](artifacts/pretrained_commutative_cnn/runs/10C_pretrain_commutative_cnn_20260624_164930/loss_plots/pretraining/latest.loss-curves.pdf) had no persisted metrics/checkpoints, so treated as deterministic interruption/staleness, not model-selection evidence.
+
+## Next experiment to run
+- Trial: `cnn_pretrain_finetune_20260625_152652_a8e2d2`
+- Plan: run full `10C -> 13C` chain, keep 10C unchanged, apply a compound-focused 13C loss rebalance for the first scored campaign trial.
+
+## Why this should help
+- Objective is downstream **13C compound macro-F1** (required). The last complete 13C run did not optimize compound in its decisive phase.
+- Rebalancing toward compound provides direct training pressure on the target head while retaining enough action supervision to protect the `action.accuracy >= 0.3` guardrail.
+- Minimal first patch improves attribution if metric movement occurs.
+
+## Patch to apply
+- 13C `loss_weight_config`:
+  - `compound_weight: 0.8`
+  - `action_weight: 0.65`
+  - `concentration_weight: 0.05`
+  - `water_vs_other_weight: 0.03`
+
+## Monitoring plan
+- Primary score: `compound.macro_f1` (required).
+- Tie-breakers: `compound.roc_auc_ovr_macro`, `compound.balanced_accuracy`, `compound.accuracy`.
+- Guardrail: verify `action.accuracy >= 0.30`.
+- Reliability checks before scoring: confirm persisted 13C [config](artifacts/nb13C_commutative_cnn_full_finetune), history CSV, summary CSV, and loss PDFs exist (not PDF-only incomplete runs). If artifacts are missing again, mark deterministic failure/staleness and exclude from selection.
+
+### Initial Trial Patch
+
+```json
+{
+  "13C": {
+    "loss_weight_config": {
+      "action_weight": 0.65,
+      "compound_weight": 0.8,
+      "concentration_weight": 0.05,
+      "water_vs_other_weight": 0.03
+    }
+  }
+}
+```
+<!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260625_152652_a8e2d2:end -->

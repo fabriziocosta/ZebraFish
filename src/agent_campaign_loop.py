@@ -37,6 +37,11 @@ CREDIT_EXHAUSTION_CODES = {
     "quota_exceeded",
 }
 
+RESTARTABLE_TERMINAL_STATUSES = {
+    "terminated",
+    "termination_race_stopped",
+}
+
 
 @dataclass(frozen=True)
 class CampaignDecision:
@@ -1617,6 +1622,13 @@ def run_campaign(
         poll_seconds = int(campaign_config["campaign"].get("poll_seconds", campaign_config["agent"].get("poll_seconds", 3600)))
         state_path = _campaign_state_path(campaign_config)
         state = _read_json(state_path)
+        if state and not new_trial and not dry_run and state.get("status") in RESTARTABLE_TERMINAL_STATUSES:
+            print(
+                f"previous campaign state is {state.get('status')}; starting a new campaign trial",
+                file=stream,
+                flush=True,
+            )
+            new_trial = True
         if new_trial and state and not dry_run:
             active_status = _active_stage_status_if_available(campaign_config, loop_config, state)
             if active_status is not None and active_status[0].get("process_running"):
