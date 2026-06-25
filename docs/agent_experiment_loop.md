@@ -30,7 +30,7 @@ or for the transformer sequence:
 ./run_campaign transformer
 ```
 
-The campaign wrapper performs an initialization phase when there is no active campaign state. It inspects the current experiment statuses, recent logs, existing campaign ledgers, and the tail of `EXPERIMENTS_LOGBOOK.md`; asks the OpenAI model for the next things to try; writes that plan into the logbook; validates any proposed YAML patch against the experiment allowlists; then launches the first stage.
+The campaign wrapper performs an initialization phase when there is no active campaign state. It inspects the current experiment statuses, recent logs, existing campaign ledgers, and the tail of `EXPERIMENTS_LOGBOOK.md`; asks the OpenAI model for the next things to try; writes that plan into the logbook; validates any proposed YAML patch against the experiment allowlists and campaign patch-size limit; then launches the first stage.
 
 The harness is intentionally quiet. It prints startup status, one status line per poll, the next poll time, and shutdown status. When the model makes an initialization or result decision, it also prints the analysis/proposal block that is written into the logbook. It does not print countdowns.
 
@@ -86,7 +86,7 @@ The model may request only these actions:
 
 `launch_next` is only honored after deterministic completion of the active run and only for the configured `next` experiment.
 
-Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed.
+Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed. Campaign configs also set `max_patch_leaf_count`, so the model cannot bundle a broad multi-change sweep into one trial.
 
 ## Campaign Control
 
@@ -108,9 +108,9 @@ The model may propose only a structured campaign decision:
 - `update_logbook`
 - `stop_campaign`
 
-For initialization, `propose_trial` may include a `trial_patch` keyed by experiment id, such as `10C` or `13C`. The controller writes the plan into the logbook before launching. If the model returns no patch, the campaign launches the copied baseline configs unchanged.
+For initialization, `propose_trial` may include a `trial_patch` keyed by experiment id, such as `10C` or `13C`. The controller writes the plan into the logbook before launching. If the model returns no patch, the campaign launches the copied baseline configs unchanged. If the init model call fails for a transient reason, the campaign persists `phase: initializing` and retries the initialization decision on the next poll instead of pretending an empty trial has results to analyze.
 
-After pretraining completes, the campaign controller wires the generated per-run pretraining config into the fine-tune config. Fine-tuning therefore uses the exact checkpoint from the current trial, not whichever checkpoint happens to be latest globally.
+After pretraining completes, the campaign controller wires the generated per-run pretraining config into the fine-tune config. It prefers the resolved config artifact reported by the completed stage status and only falls back to scanning the run folder. Fine-tuning therefore uses the exact checkpoint from the current trial, not whichever checkpoint happens to be latest globally.
 
 The campaign objective is evaluated only after the final fine-tune stage completes. Pretraining losses are diagnostic evidence; they are not the primary score.
 
@@ -127,17 +127,17 @@ proposed trial patch:
 }
 ```
 
-The same analysis is upserted into `EXPERIMENTS_LOGBOOK.md` with artifact links. When PDF plots are linked from a completed campaign trial, the controller also tries to render first-page PNG previews into the trial folder and embeds those PNGs inline in the logbook. If local PDF rendering is unavailable, the PDF links are still written.
+The same analysis is upserted into `EXPERIMENTS_LOGBOOK.md` with artifact links. When PDF plots are linked from a completed campaign trial, the controller also tries to render first-page PNG previews into the trial folder and embeds those PNGs inline in the logbook. If local PDF rendering is unavailable, the PDF links are still written with a preview-unavailable note.
 
 Non-dry campaign runs acquire `artifacts/campaigns/<campaign_id>/campaign.lock`. A second live campaign process for the same campaign is rejected; stale locks are cleared only when the recorded PID no longer exists.
 
 Trial launch is staged through `status: launching` before the child process starts. This means the campaign state and manifest exist before training is handed to the runner. If launch fails, the campaign state is marked failed with the launch error.
 
-Leaderboards use guardrail-aware ranking. The raw objective score is recorded for every completed trial, but `leaderboard.csv` includes only trials that pass configured guardrails such as `action.accuracy`.
+Leaderboards use guardrail-aware ranking. The raw objective score is recorded for every completed trial, but `leaderboard.csv` includes only trials that pass configured guardrails such as `action.accuracy`. Eligible trials are sorted by the selected objective metric plus configured fallback metrics as tie-breakers, for example macro-F1 first and ROC-AUC as a secondary signal when available.
 
 Completed campaigns and completed analyses do not automatically restart. Use `--new-trial` when you explicitly want to begin another trial from an existing campaign state.
 
-OpenAI decision failures are resumable by default: the campaign writes `status: agent_decision_failed` and retries analysis on the next poll. If the API error indicates exhausted credits, quota, or billing exhaustion, the campaign writes `status: openai_credits_exhausted`, prints an explicit message, and terminates instead of retrying.
+OpenAI decision failures are resumable by default: the campaign writes `status: agent_decision_failed` and retries the appropriate decision phase on the next poll. Campaign decisions are requested with a JSON schema and then validated locally before any filesystem mutation or launch. If the API error indicates exhausted credits, quota, or billing exhaustion, the campaign writes `status: openai_credits_exhausted`, prints an explicit message, and terminates instead of retrying.
 
 ## Run Tracking
 
@@ -168,6 +168,7 @@ Campaign runs write:
 - `artifacts/campaigns/<campaign_id>/trials.jsonl`
 - `artifacts/campaigns/<campaign_id>/leaderboard.csv`
 - `artifacts/campaigns/<campaign_id>/trials/<trial_id>/trial_manifest.json`
+- `artifacts/campaigns/<campaign_id>/trials/<trial_id>/init_snapshot.json` during initialization
 - `artifacts/campaigns/<campaign_id>/trials/<trial_id>/trial_summary.json`
 - per-stage state and logs under the trial folder.
 

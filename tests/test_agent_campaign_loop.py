@@ -13,6 +13,7 @@ from src.agent_campaign_loop import (
     _acquire_campaign_lock,
     _release_campaign_lock,
     _render_pdf_preview_png,
+    _write_trial_outputs,
     apply_campaign_decision,
     collect_init_snapshot,
     initialize_campaign_trial,
@@ -44,6 +45,24 @@ class _FakeResponses:
 class _FakeClient:
     def __init__(self, output_text: str) -> None:
         self.responses = _FakeResponses(output_text)
+
+
+class _SequenceResponses:
+    def __init__(self, outputs: list[str | Exception]) -> None:
+        self.outputs = list(outputs)
+        self.kwargs_history = []
+
+    def create(self, **kwargs):
+        self.kwargs_history.append(kwargs)
+        output = self.outputs.pop(0)
+        if isinstance(output, Exception):
+            raise output
+        return _FakeResponse(output)
+
+
+class _SequenceClient:
+    def __init__(self, outputs: list[str | Exception]) -> None:
+        self.responses = _SequenceResponses(outputs)
 
 
 class AgentCampaignLoopTests(unittest.TestCase):
@@ -125,6 +144,7 @@ prompts:
             campaign_path = self._write_campaign_config(root, loop_path)
             config = load_campaign_config(campaign_path)
             self.assertEqual(config["campaign"]["poll_seconds"], 18000)
+            self.assertEqual(config["campaign"]["max_patch_leaf_count"], 2)
             self.assertTrue(config["artifacts"]["state_path"].endswith("campaign_state.json"))
             self.assertEqual(config["objective"]["target"], "compound")
 
@@ -149,6 +169,8 @@ prompts:
             )
             self.assertEqual(scored["score"], 0.22)
             self.assertEqual(scored["ranking_score"], 0.22)
+            self.assertEqual(scored["ranking_values"], [0.22, 0.7])
+            self.assertEqual(scored["ranking_metric_order"], ["compound.macro_f1", "compound.roc_auc_ovr_macro"])
             self.assertEqual(scored["selected_metric"], "compound.macro_f1")
             self.assertTrue(scored["guardrail_passed"])
 
@@ -223,6 +245,7 @@ prompts:
             self.assertIn("campaign initialization analysis: trial_a", stream.getvalue())
             self.assertIn("Try a short first campaign trial", stream.getvalue())
             self.assertIn("Initialization snapshot JSON", client.responses.kwargs["input"])
+            self.assertEqual(client.responses.kwargs["text"]["format"]["type"], "json_schema")
 
     def test_initialize_campaign_rejects_non_allowlisted_patch_before_launch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -243,6 +266,30 @@ prompts:
             )
             with mock.patch("src.agent_experiment_loop.launch_experiment") as launch, self.assertRaisesRegex(
                 ValueError, "non-allowlisted"
+            ):
+                initialize_campaign_trial(campaign_config, loop_config, client=client)
+            launch.assert_not_called()
+
+    def test_initialize_campaign_rejects_too_many_patch_leaves_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            campaign_config["campaign"]["max_patch_leaf_count"] = 1
+            loop_config = load_loop_config(loop_path)
+            campaign_config["agent"] = dict(loop_config["agent"])
+            client = _FakeClient(
+                json.dumps(
+                    {
+                        "decision": "propose_trial",
+                        "reason": "too broad",
+                        "trial_patch": {"10C": {"optimization_config": {"epochs": 3, "learning_rate": 0.001}}},
+                    }
+                )
+            )
+            with mock.patch("src.agent_experiment_loop.launch_experiment") as launch, self.assertRaisesRegex(
+                ValueError, "max_patch_leaf_count"
             ):
                 initialize_campaign_trial(campaign_config, loop_config, client=client)
             launch.assert_not_called()
@@ -429,7 +476,35 @@ prompts:
             self.assertEqual(code, 0)
             state = json.loads(Path(campaign_config["artifacts"]["state_path"]).read_text(encoding="utf-8"))
             self.assertEqual(state["status"], "agent_decision_failed")
+            self.assertEqual(state["phase"], "initializing")
             self.assertIn("temporary API outage", state["agent_decision_error"])
+
+    def test_run_campaign_retries_failed_initialization_with_init_prompt(self) -> None:
+        output = json.dumps(
+            {
+                "decision": "propose_trial",
+                "reason": "retry init",
+                "logbook_markdown": "Retry initialization and launch.",
+                "trial_patch": {"10C": {"optimization_config": {"epochs": 3}}},
+            }
+        )
+        client = _SequenceClient([RuntimeError("temporary API outage"), output])
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            stream = io.StringIO()
+            with mock.patch("src.agent_experiment_loop.launch_experiment") as launch:
+                launch.return_value = {"active_experiment": "10C", "pid": 123}
+                code = run_campaign(campaign_config, once=True, client=client, stream=stream)
+            self.assertEqual(code, 0)
+            state = json.loads(Path(campaign_config["artifacts"]["state_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(state["status"], "running")
+            self.assertEqual(state["current_stage"], "10C")
+            self.assertEqual(len(client.responses.kwargs_history), 2)
+            self.assertIn("Initialization snapshot JSON", client.responses.kwargs_history[1]["input"])
+            launch.assert_called_once()
 
     def test_run_campaign_terminates_explicitly_when_openai_credits_are_exhausted(self) -> None:
         class CreditResponses:
@@ -493,6 +568,53 @@ prompts:
             self.assertIsInstance(result.get("state"), dict)
             self.assertNotEqual(result["state"]["current_trial_id"], "completed_trial")
             self.assertEqual(result["state"]["current_stage"], "10C")
+
+    def test_start_trial_rejects_existing_explicit_trial_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            loop_config = load_loop_config(loop_path)
+            (Path(campaign_config["artifacts"]["root"]) / "trials" / "same_trial").mkdir(parents=True)
+            with mock.patch("src.agent_experiment_loop.launch_experiment") as launch, self.assertRaisesRegex(
+                FileExistsError, "already exists"
+            ):
+                start_trial(campaign_config, loop_config, start_trial="same_trial", dry_run=False)
+            launch.assert_not_called()
+
+    def test_write_trial_outputs_uses_auc_tie_breaker_in_leaderboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            for trial_id, auc in [("trial_low_auc", 0.60), ("trial_high_auc", 0.80)]:
+                state = {
+                    "current_trial_id": trial_id,
+                    "current_trial_dir": str(root / trial_id),
+                    "status": "trial_completed",
+                }
+                summary = {
+                    "trial_id": trial_id,
+                    "trial_dir": str(root / trial_id),
+                    "status": "trial_completed",
+                    "score": 0.50,
+                    "ranking_score": 0.50,
+                    "ranking_values": [0.50, auc],
+                    "ranking_metric_order": ["compound.macro_f1", "compound.roc_auc_ovr_macro"],
+                    "objective_eligible": True,
+                    "selected_metric": "compound.macro_f1",
+                    "guardrail_passed": True,
+                    "guardrail_failures": {},
+                    "metrics_path": "",
+                    "stage_runs": {},
+                    "trial_configs": {},
+                    "metrics": {},
+                }
+                _write_trial_outputs(campaign_config, state, summary)
+            leaderboard = (Path(campaign_config["artifacts"]["leaderboard_csv"])).read_text(encoding="utf-8")
+            self.assertLess(leaderboard.index("trial_high_auc"), leaderboard.index("trial_low_auc"))
 
     def test_pdf_preview_png_renderer_writes_png_when_fitz_is_available(self) -> None:
         try:

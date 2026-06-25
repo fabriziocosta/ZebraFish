@@ -201,6 +201,7 @@ def collect_status(
     if run_dir and run_dir.exists():
         history_candidates = sorted(run_dir.rglob("*history*.csv"), key=lambda path: path.stat().st_mtime)
         pdf_candidates = sorted(run_dir.rglob("*.pdf"), key=lambda path: path.stat().st_mtime)
+        config_candidates = sorted(run_dir.glob("*_config.yaml"), key=lambda path: path.stat().st_mtime)
         checkpoint_candidates = _paths_with_suffix(run_dir, ("_model_state.pt", "_encoder_state.pt"))
         confusion_candidates = sorted((run_dir / "confusion_matrices").glob("*.csv")) if (run_dir / "confusion_matrices").exists() else []
         umap_pdf_candidates = sorted(run_dir.rglob("*umap*.pdf"), key=lambda path: path.stat().st_mtime)
@@ -214,12 +215,13 @@ def collect_status(
             "latest_history_csvs": [str(path) for path in history_candidates[-5:]],
             "latest_history_tail": _summarize_csv_tail(history_candidates[-1]) if history_candidates else None,
             "latest_pdfs": [str(path) for path in pdf_candidates[-8:]],
+            "latest_config_yamls": [str(path) for path in config_candidates[-5:]],
             "latest_metrics": [str(path) for path in metrics_candidates[-5:]],
             "checkpoints": [str(path) for path in checkpoint_candidates[-5:]],
             "confusion_matrices": [str(path) for path in confusion_candidates[-8:]],
             "umap_pdfs": [str(path) for path in umap_pdf_candidates[-5:]],
             "artifact_max_mtime": _max_mtime(
-                history_candidates + pdf_candidates + metrics_candidates + checkpoint_candidates + confusion_candidates
+                history_candidates + pdf_candidates + config_candidates + metrics_candidates + checkpoint_candidates + confusion_candidates
             ),
             "has_history": bool(history_candidates),
             "has_metrics": bool(metrics_candidates),

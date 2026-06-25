@@ -3,6 +3,7 @@ campaign:
   loop_config: configs/agent_experiment_loop.yaml
   poll_seconds: 18000
   trial_budget: 20
+  max_patch_leaf_count: 2
   stages: ["12T", "15T"]
 objective:
   target: compound

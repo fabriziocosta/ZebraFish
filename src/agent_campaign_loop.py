@@ -13,6 +13,7 @@ import signal
 import sys
 import time
 from typing import Any, Callable, TextIO
+import uuid
 
 from src import agent_experiment_loop as experiment_loop
 from src.experiment_runner_shared import merge_dicts, read_yaml_mapping, write_yaml_mapping
@@ -28,6 +29,13 @@ ALLOWED_CAMPAIGN_DECISIONS = {
     "propose_trial",
     "update_logbook",
     "stop_campaign",
+}
+
+CREDIT_EXHAUSTION_CODES = {
+    "billing_hard_limit_reached",
+    "billing_not_active",
+    "insufficient_quota",
+    "quota_exceeded",
 }
 
 
@@ -78,6 +86,7 @@ def load_campaign_config(path: str | Path) -> dict[str, Any]:
     campaign.setdefault("loop_config", "configs/agent_experiment_loop.yaml")
     campaign.setdefault("poll_seconds", 18000)
     campaign.setdefault("trial_budget", 20)
+    campaign.setdefault("max_patch_leaf_count", 2)
     campaign.setdefault("stages", [])
     if not campaign["stages"]:
         raise ValueError(f"{target} must define campaign.stages")
@@ -182,7 +191,7 @@ def _stage_log_dir(trial_dir: Path, stage: str) -> Path:
 def _trial_id(campaign_id: str, start_trial: str | None = None) -> str:
     if start_trial:
         return start_trial
-    return f"{campaign_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    return f"{campaign_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
 
 
 def _trial_dir(config: dict[str, Any], trial_id: str) -> Path:
@@ -323,16 +332,31 @@ def _patch_leaf_paths(patch: dict[str, Any], *, prefix: str = "") -> list[str]:
     return paths
 
 
-def _validate_trial_patch(loop_config: dict[str, Any], trial_patch: dict[str, Any]) -> None:
+def _max_patch_leaf_count(campaign_config: dict[str, Any]) -> int | None:
+    raw = campaign_config.get("campaign", {}).get("max_patch_leaf_count")
+    if raw in (None, "", 0, "0"):
+        return None
+    return int(raw)
+
+
+def _validate_trial_patch(
+    loop_config: dict[str, Any],
+    trial_patch: dict[str, Any],
+    *,
+    max_leaf_count: int | None = None,
+) -> None:
+    all_leaf_paths: list[str] = []
     for experiment, patch in trial_patch.items():
         if experiment not in loop_config["experiments"]:
             raise ValueError(f"trial_patch references unknown experiment {experiment!r}")
         if not isinstance(patch, dict):
             raise ValueError(f"trial_patch for {experiment} must be a mapping")
+        leaf_paths = _patch_leaf_paths(patch)
+        all_leaf_paths.extend(f"{experiment}.{path}" for path in leaf_paths)
         allowed = [str(path) for path in loop_config["experiments"][experiment].get("allowed_patch_paths", [])]
         rejected = [
             path
-            for path in _patch_leaf_paths(patch)
+            for path in leaf_paths
             if not any(path == allowed_path or path.startswith(f"{allowed_path}.") for allowed_path in allowed)
         ]
         if rejected:
@@ -340,6 +364,11 @@ def _validate_trial_patch(loop_config: dict[str, Any], trial_patch: dict[str, An
                 f"trial_patch for {experiment} contains non-allowlisted path(s): "
                 + ", ".join(sorted(rejected))
             )
+    if max_leaf_count is not None and len(all_leaf_paths) > max_leaf_count:
+        raise ValueError(
+            f"trial_patch changes {len(all_leaf_paths)} leaf value(s), exceeding max_patch_leaf_count={max_leaf_count}: "
+            + ", ".join(sorted(all_leaf_paths))
+        )
 
 
 def start_trial(
@@ -349,14 +378,21 @@ def start_trial(
     start_trial: str | None = None,
     trial_patch: dict[str, Any] | None = None,
     dry_run: bool = False,
+    allow_existing_trial_dir: bool = False,
 ) -> dict[str, Any]:
     _validate_chain(campaign_config, loop_config)
-    _validate_trial_patch(loop_config, trial_patch or {})
+    _validate_trial_patch(
+        loop_config,
+        trial_patch or {},
+        max_leaf_count=_max_patch_leaf_count(campaign_config),
+    )
     if not dry_run:
         _assert_trial_budget_available(campaign_config)
     campaign_id = str(campaign_config["campaign"]["id"])
     trial_id = _trial_id(campaign_id, start_trial)
     trial_dir = _trial_dir(campaign_config, trial_id)
+    if not dry_run and trial_dir.exists() and not allow_existing_trial_dir:
+        raise FileExistsError(f"Campaign trial folder already exists: {trial_dir}")
     stages = list(campaign_config["campaign"]["stages"])
     if dry_run:
         trial_configs = {
@@ -373,6 +409,7 @@ def start_trial(
     state = {
         "campaign_id": campaign_id,
         "status": "dry_run" if dry_run else "launching",
+        "phase": "running",
         "current_trial_id": trial_id,
         "current_trial_dir": str(trial_dir),
         "current_stage_index": 0,
@@ -434,13 +471,27 @@ def _find_pretraining_config(run_dir: Path) -> Path | None:
     return candidates[-1] if candidates else None
 
 
+def _find_completed_stage_config(status: dict[str, Any]) -> Path | None:
+    candidates = status.get("artifacts", {}).get("latest_config_yamls") or []
+    for candidate in reversed(candidates):
+        path = Path(candidate)
+        if path.exists():
+            return path
+    run_dir = status.get("artifacts", {}).get("run_dir")
+    return _find_pretraining_config(Path(run_dir)) if run_dir else None
+
+
 def wire_pretrain_checkpoint_into_finetune_config(
     finetune_config_path: str | Path,
     pretrain_run_dir: str | Path,
+    *,
+    pretrain_config_path: str | Path | None = None,
 ) -> Path:
-    pretrain_config = _find_pretraining_config(Path(pretrain_run_dir))
+    pretrain_config = Path(pretrain_config_path) if pretrain_config_path else _find_pretraining_config(Path(pretrain_run_dir))
     if pretrain_config is None:
         raise FileNotFoundError(f"No *_config.yaml found in pretrain run folder {pretrain_run_dir}")
+    if not pretrain_config.exists():
+        raise FileNotFoundError(f"Pretraining config artifact does not exist: {pretrain_config}")
     finetune_path = Path(finetune_config_path)
     raw = read_yaml_mapping(finetune_path)
     raw["pretraining_config_path"] = str(pretrain_config)
@@ -496,7 +547,12 @@ def _advance_stage_or_complete_trial(
 
     next_stage = stages[next_index]
     if stage_runs.get(stage):
-        wire_pretrain_checkpoint_into_finetune_config(state["trial_configs"][next_stage], stage_runs[stage])
+        pretrain_config = wire_pretrain_checkpoint_into_finetune_config(
+            state["trial_configs"][next_stage],
+            stage_runs[stage],
+            pretrain_config_path=_find_completed_stage_config(status),
+        )
+        state.setdefault("stage_config_artifacts", {})[stage] = str(pretrain_config)
     trial_dir = Path(state["current_trial_dir"])
     next_loop_config = _loop_config_for_stage(loop_config, trial_dir, next_stage, state["trial_configs"])
     state.update(
@@ -564,12 +620,16 @@ def score_metrics(metrics_path: str | Path, objective: dict[str, Any]) -> dict[s
     candidates = [primary_metric] + [str(metric) for metric in objective.get("fallback_metrics", [])]
     selected_metric = None
     selected_value = None
+    selected_index = 0
     for metric in candidates:
         key = f"{target}.{metric}"
         if key in metrics:
             selected_metric = key
             selected_value = metrics[key]
+            selected_index = candidates.index(metric)
             break
+    ranking_metric_order = [f"{target}.{metric}" for metric in candidates[selected_index:]]
+    ranking_values = [metrics.get(key) for key in ranking_metric_order]
     minimums = {str(key): float(value) for key, value in objective.get("minimums", {}).items()}
     guardrail_failures = {
         key: {"minimum": minimum, "actual": metrics.get(key)}
@@ -579,6 +639,8 @@ def score_metrics(metrics_path: str | Path, objective: dict[str, Any]) -> dict[s
     return {
         "score": selected_value,
         "ranking_score": selected_value if selected_value is not None and not guardrail_failures else None,
+        "ranking_values": ranking_values if selected_value is not None and not guardrail_failures else [],
+        "ranking_metric_order": ranking_metric_order if selected_value is not None and not guardrail_failures else [],
         "selected_metric": selected_metric,
         "guardrail_passed": not guardrail_failures,
         "guardrail_failures": guardrail_failures,
@@ -595,6 +657,8 @@ def summarize_trial(campaign_config: dict[str, Any], state: dict[str, Any]) -> d
     scored = score_metrics(metrics_path, campaign_config["objective"]) if metrics_path else {
         "score": None,
         "ranking_score": None,
+        "ranking_values": [],
+        "ranking_metric_order": [],
         "selected_metric": None,
         "guardrail_passed": False,
         "guardrail_failures": {"metrics": {"minimum": "present", "actual": None}},
@@ -606,6 +670,8 @@ def summarize_trial(campaign_config: dict[str, Any], state: dict[str, Any]) -> d
         "status": state.get("status"),
         "score": scored["score"],
         "ranking_score": scored["ranking_score"],
+        "ranking_values": scored["ranking_values"],
+        "ranking_metric_order": scored["ranking_metric_order"],
         "objective_eligible": bool(scored["guardrail_passed"] and scored["ranking_score"] is not None),
         "selected_metric": scored["selected_metric"],
         "guardrail_passed": scored["guardrail_passed"],
@@ -629,6 +695,7 @@ def _write_trial_outputs(campaign_config: dict[str, Any], state: dict[str, Any],
     trial_records = _trial_records(campaign_config, state, summary)
     _write_csv(Path(campaign_config["artifacts"]["trials_csv"]), trial_records)
     _write_jsonl(Path(campaign_config["artifacts"]["trials_jsonl"]), trial_records)
+    maximize = bool(campaign_config["objective"].get("maximize", True))
     leaderboard = sorted(
         [
             record
@@ -636,8 +703,8 @@ def _write_trial_outputs(campaign_config: dict[str, Any], state: dict[str, Any],
             if record.get("objective_eligible") in {True, "True", "true"}
             and record.get("ranking_score") not in ("", None)
         ],
-        key=lambda record: float(record["ranking_score"]),
-        reverse=bool(campaign_config["objective"].get("maximize", True)),
+        key=lambda record: _leaderboard_sort_key(record, maximize=maximize),
+        reverse=maximize,
     )
     _write_csv(Path(campaign_config["artifacts"]["leaderboard_csv"]), leaderboard)
     _upsert_campaign_logbook(campaign_config, summary, model_markdown=None)
@@ -655,6 +722,8 @@ def _trial_records(campaign_config: dict[str, Any], state: dict[str, Any], summa
         "status": state.get("status"),
         "score": "" if summary.get("score") is None else summary.get("score"),
         "ranking_score": "" if summary.get("ranking_score") is None else summary.get("ranking_score"),
+        "ranking_values": json.dumps(summary.get("ranking_values") or []),
+        "ranking_metric_order": json.dumps(summary.get("ranking_metric_order") or []),
         "objective_eligible": bool(summary.get("objective_eligible")),
         "selected_metric": summary.get("selected_metric") or "",
         "guardrail_passed": summary.get("guardrail_passed"),
@@ -667,6 +736,33 @@ def _trial_records(campaign_config: dict[str, Any], state: dict[str, Any], summa
     return list(by_trial.values())
 
 
+def _leaderboard_sort_key(record: dict[str, Any], *, maximize: bool) -> tuple[float, ...]:
+    raw = record.get("ranking_values")
+    values: list[Any]
+    if isinstance(raw, str) and raw.strip():
+        try:
+            values = json.loads(raw)
+        except json.JSONDecodeError:
+            values = []
+    elif isinstance(raw, list):
+        values = raw
+    else:
+        values = []
+    missing = float("-inf") if maximize else float("inf")
+    key: list[float] = []
+    for value in values:
+        try:
+            key.append(float(value))
+        except (TypeError, ValueError):
+            key.append(missing)
+    if not key:
+        try:
+            key.append(float(record["ranking_score"]))
+        except (KeyError, TypeError, ValueError):
+            key.append(missing)
+    return tuple(key)
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
@@ -675,6 +771,8 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "status",
         "score",
         "ranking_score",
+        "ranking_values",
+        "ranking_metric_order",
         "objective_eligible",
         "selected_metric",
         "guardrail_passed",
@@ -780,6 +878,8 @@ def _upsert_campaign_logbook(
             if preview is not None:
                 preview_link = _rel(preview)
                 lines.append(f"    ![{Path(pdf).stem}]({preview_link})")
+            else:
+                lines.append("    - Preview: unavailable; inspect the linked PDF directly.")
     for stage, config_path in summary.get("trial_configs", {}).items():
         lines.append(f"- {stage} config: [{_rel(config_path)}]({_rel(config_path)})")
     if model_markdown:
@@ -838,6 +938,57 @@ def parse_campaign_decision(text: str) -> CampaignDecision:
         trial_patch=trial_patch,
         logbook_markdown=logbook_markdown,
     )
+
+
+def _campaign_decision_text_format(stages: list[str]) -> dict[str, Any]:
+    return {
+        "format": {
+            "type": "json_schema",
+            "name": "campaign_decision",
+            "description": "A single campaign orchestration decision.",
+            "strict": False,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["decision", "reason", "logbook_markdown", "trial_patch"],
+                "properties": {
+                    "decision": {
+                        "type": "string",
+                        "enum": sorted(ALLOWED_CAMPAIGN_DECISIONS),
+                    },
+                    "reason": {"type": "string"},
+                    "logbook_markdown": {"type": "string"},
+                    "trial_patch": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            str(stage): {"type": "object"}
+                            for stage in stages
+                        },
+                    },
+                },
+            },
+        }
+    }
+
+
+def _response_output_text(response: Any) -> str:
+    output_text = getattr(response, "output_text", None)
+    if isinstance(output_text, str):
+        return output_text
+    output = getattr(response, "output", None)
+    if isinstance(output, list):
+        text_parts: list[str] = []
+        for item in output:
+            content = getattr(item, "content", None)
+            if isinstance(content, list):
+                for content_item in content:
+                    text = getattr(content_item, "text", None)
+                    if isinstance(text, str):
+                        text_parts.append(text)
+        if text_parts:
+            return "\n".join(text_parts)
+    raise ValueError("OpenAI response did not contain output_text")
 
 
 def _build_campaign_prompt(config: dict[str, Any], state: dict[str, Any], summary: dict[str, Any]) -> str:
@@ -899,13 +1050,31 @@ def _mark_agent_decision_failed(
 
 
 def _is_openai_credits_exhausted(exc: Exception) -> bool:
+    structured_values: list[str] = []
+    for attr in ("code", "type"):
+        value = getattr(exc, attr, None)
+        if value:
+            structured_values.append(str(value).lower())
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict):
+            for key in ("code", "type", "message"):
+                value = error.get(key)
+                if value:
+                    structured_values.append(str(value).lower())
+    if any(value in CREDIT_EXHAUSTION_CODES for value in structured_values):
+        return True
+
     message = f"{type(exc).__name__}: {exc}".lower()
     credit_markers = [
         "insufficient_quota",
         "exceeded your current quota",
-        "credit",
-        "credits",
-        "billing",
+        "billing hard limit",
+        "billing_not_active",
+        "quota_exceeded",
+        "credits exhausted",
+        "credit balance",
     ]
     return any(marker in message for marker in credit_markers)
 
@@ -948,9 +1117,10 @@ def request_campaign_decision(
         model=agent.get("model", "gpt-5.3-codex"),
         reasoning={"effort": agent.get("reasoning_effort", "medium")},
         max_output_tokens=int(agent.get("max_output_tokens", 2000)),
+        text=_campaign_decision_text_format(list(config["campaign"]["stages"])),
         input=_build_campaign_prompt(config, state, summary),
     )
-    return parse_campaign_decision(response.output_text)
+    return parse_campaign_decision(_response_output_text(response))
 
 
 def request_init_decision(
@@ -969,9 +1139,10 @@ def request_init_decision(
         model=agent.get("model", "gpt-5.3-codex"),
         reasoning={"effort": agent.get("reasoning_effort", "medium")},
         max_output_tokens=int(agent.get("max_output_tokens", 2000)),
+        text=_campaign_decision_text_format(list(config["campaign"]["stages"])),
         input=_build_init_prompt(config, snapshot, trial_id),
     )
-    return parse_campaign_decision(response.output_text)
+    return parse_campaign_decision(_response_output_text(response))
 
 
 def initialize_campaign_trial(
@@ -985,19 +1156,23 @@ def initialize_campaign_trial(
     campaign_id = str(campaign_config["campaign"]["id"])
     trial_id = _trial_id(campaign_id, start_trial_id)
     snapshot = collect_init_snapshot(campaign_config, loop_config)
+    trial_dir = _trial_dir(campaign_config, trial_id)
+    snapshot_path = trial_dir / "init_snapshot.json"
+    _write_json(snapshot_path, snapshot)
     try:
         decision = request_init_decision(campaign_config, snapshot, trial_id, client=client)
     except Exception as exc:
-        trial_dir = _trial_dir(campaign_config, trial_id)
         state = {
             "campaign_id": campaign_id,
             "status": "agent_decision_failed",
+            "phase": "initializing",
             "current_trial_id": trial_id,
             "current_trial_dir": str(trial_dir),
             "current_stage_index": 0,
             "current_stage": campaign_config["campaign"]["stages"][0],
             "stage_state_path": str(_stage_state_path(trial_dir, campaign_config["campaign"]["stages"][0])),
             "trial_configs": {},
+            "init_snapshot_path": str(snapshot_path),
             "agent_decision_error": f"{type(exc).__name__}: {exc}",
             "updated_at": _now_iso(),
         }
@@ -1013,10 +1188,31 @@ def initialize_campaign_trial(
                 flush=True,
             )
         return state
+    return _apply_init_decision(
+        campaign_config,
+        loop_config,
+        trial_id=trial_id,
+        decision=decision,
+        stream=stream,
+        allow_existing_trial_dir=True,
+    )
+
+
+def _apply_init_decision(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    *,
+    trial_id: str,
+    decision: CampaignDecision,
+    stream: TextIO,
+    allow_existing_trial_dir: bool,
+) -> dict[str, Any]:
+    campaign_id = str(campaign_config["campaign"]["id"])
     if decision.decision == "stop_campaign":
         state = {
             "campaign_id": campaign_id,
             "status": "campaign_completed",
+            "phase": "completed",
             "stop_reason": decision.reason,
             "current_trial_id": trial_id,
             "updated_at": _now_iso(),
@@ -1031,7 +1227,11 @@ def initialize_campaign_trial(
         )
         return state
     trial_patch = decision.trial_patch if decision.decision == "propose_trial" else {}
-    _validate_trial_patch(loop_config, trial_patch or {})
+    _validate_trial_patch(
+        loop_config,
+        trial_patch or {},
+        max_leaf_count=_max_patch_leaf_count(campaign_config),
+    )
     _upsert_init_logbook(campaign_config, trial_id=trial_id, decision=decision, trial_patch=trial_patch or {})
     _print_analysis_block(
         stream,
@@ -1045,6 +1245,37 @@ def initialize_campaign_trial(
         start_trial=trial_id,
         trial_patch=trial_patch or {},
         dry_run=False,
+        allow_existing_trial_dir=allow_existing_trial_dir,
+    )
+
+
+def retry_initialization_decision(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    client: Any | None,
+    stream: TextIO,
+) -> dict[str, Any]:
+    trial_id = str(state["current_trial_id"])
+    snapshot_value = state.get("init_snapshot_path")
+    snapshot_path = Path(str(snapshot_value)) if snapshot_value else None
+    snapshot = _read_json(snapshot_path) if snapshot_path and snapshot_path.exists() else collect_init_snapshot(campaign_config, loop_config)
+    try:
+        decision = request_init_decision(campaign_config, snapshot, trial_id, client=client)
+    except Exception as exc:
+        if _is_openai_credits_exhausted(exc):
+            _mark_openai_credits_exhausted(campaign_config, state, exc, stream=stream)
+        else:
+            _mark_agent_decision_failed(campaign_config, state, exc, stream=stream)
+        return state
+    return _apply_init_decision(
+        campaign_config,
+        loop_config,
+        trial_id=trial_id,
+        decision=decision,
+        stream=stream,
+        allow_existing_trial_dir=True,
     )
 
 
@@ -1237,8 +1468,18 @@ def run_campaign(
                     action = "no_action"
                     reason = f"campaign state is {state.get('status')}"
                 elif state.get("status") == "agent_decision_failed":
-                    summary = summarize_trial(campaign_config, state)
-                    if not dry_run:
+                    if not dry_run and state.get("phase") == "initializing":
+                        state = retry_initialization_decision(
+                            campaign_config,
+                            loop_config,
+                            state,
+                            client=client,
+                            stream=stream,
+                        )
+                        action = "retry_init_decision"
+                        reason = str(state.get("agent_decision_error") or "initialization decision retried")
+                    elif not dry_run:
+                        summary = summarize_trial(campaign_config, state)
                         state, action, reason = _request_and_apply_campaign_decision(
                             campaign_config,
                             loop_config,
