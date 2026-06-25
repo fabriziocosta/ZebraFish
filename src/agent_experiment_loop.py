@@ -631,7 +631,10 @@ def run_loop(
                 )
             else:
                 decision = request_agent_decision(config, status, client=client)
-                apply_agent_decision(config, decision, status, dry_run=False, state_path=state_path)
+                result = apply_agent_decision(config, decision, status, dry_run=False, state_path=state_path)
+                if isinstance(result.get("state"), dict):
+                    state = result["state"]
+                    child_pid = state.get("pid") if isinstance(state.get("pid"), int) else child_pid
             next_poll = None if once else datetime.now() + timedelta(seconds=poll_seconds)
             _print_status_line(stream, status=status, decision=decision, next_poll=next_poll)
             if once:

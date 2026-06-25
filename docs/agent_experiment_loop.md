@@ -47,6 +47,12 @@ Each command name maps to a YAML file through `run_campaign.py`. You can also pa
 ./run_campaign configs/experiment_campaigns/cnn_campaign.yaml
 ```
 
+List campaigns from the root wrapper:
+
+```bash
+./run_campaign list
+```
+
 ## Components
 
 - `scripts/agent_experiment_loop.py` is the CLI entrypoint.
@@ -123,6 +129,16 @@ proposed trial patch:
 
 The same analysis is upserted into `EXPERIMENTS_LOGBOOK.md` with artifact links. When PDF plots are linked from a completed campaign trial, the controller also tries to render first-page PNG previews into the trial folder and embeds those PNGs inline in the logbook. If local PDF rendering is unavailable, the PDF links are still written.
 
+Non-dry campaign runs acquire `artifacts/campaigns/<campaign_id>/campaign.lock`. A second live campaign process for the same campaign is rejected; stale locks are cleared only when the recorded PID no longer exists.
+
+Trial launch is staged through `status: launching` before the child process starts. This means the campaign state and manifest exist before training is handed to the runner. If launch fails, the campaign state is marked failed with the launch error.
+
+Leaderboards use guardrail-aware ranking. The raw objective score is recorded for every completed trial, but `leaderboard.csv` includes only trials that pass configured guardrails such as `action.accuracy`.
+
+Completed campaigns and completed analyses do not automatically restart. Use `--new-trial` when you explicitly want to begin another trial from an existing campaign state.
+
+OpenAI decision failures are resumable by default: the campaign writes `status: agent_decision_failed` and retries analysis on the next poll. If the API error indicates exhausted credits, quota, or billing exhaustion, the campaign writes `status: openai_credits_exhausted`, prints an explicit message, and terminates instead of retrying.
+
 ## Run Tracking
 
 When the harness launches a runner, it writes:
@@ -146,6 +162,7 @@ If the controller falls back to inspecting the newest run folder, status include
 
 Campaign runs write:
 
+- `artifacts/campaigns/<campaign_id>/campaign.lock` while a non-dry campaign process is active
 - `artifacts/campaigns/<campaign_id>/campaign_state.json`
 - `artifacts/campaigns/<campaign_id>/trials.csv`
 - `artifacts/campaigns/<campaign_id>/trials.jsonl`
@@ -220,6 +237,24 @@ Run one dry campaign pass:
 
 ```bash
 ./run_campaign cnn --dry-run --once
+```
+
+Force a new trial from an existing campaign state:
+
+```bash
+./run_campaign cnn --new-trial
+```
+
+List configured campaign command names:
+
+```bash
+./run_campaign list
+```
+
+Inspect a campaign through the root wrapper:
+
+```bash
+./run_campaign status cnn
 ```
 
 Inspect a campaign without calling OpenAI:

@@ -10,6 +10,8 @@ from unittest import mock
 
 from src.agent_campaign_loop import (
     CampaignDecision,
+    _acquire_campaign_lock,
+    _release_campaign_lock,
     _render_pdf_preview_png,
     apply_campaign_decision,
     collect_init_snapshot,
@@ -146,8 +148,30 @@ prompts:
                 },
             )
             self.assertEqual(scored["score"], 0.22)
+            self.assertEqual(scored["ranking_score"], 0.22)
             self.assertEqual(scored["selected_metric"], "compound.macro_f1")
             self.assertTrue(scored["guardrail_passed"])
+
+    def test_score_metrics_excludes_guardrail_failure_from_ranking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            metrics_path = Path(tmpdir) / "summary_metrics.csv"
+            metrics_path.write_text(
+                "target,metric,value\n"
+                "action,accuracy,0.10\n"
+                "compound,macro_f1,0.90\n",
+                encoding="utf-8",
+            )
+            scored = score_metrics(
+                metrics_path,
+                {
+                    "target": "compound",
+                    "primary_metric": "macro_f1",
+                    "minimums": {"action.accuracy": 0.30},
+                },
+            )
+            self.assertEqual(scored["score"], 0.90)
+            self.assertIsNone(scored["ranking_score"])
+            self.assertFalse(scored["guardrail_passed"])
 
     def test_wire_pretrain_checkpoint_into_finetune_config_uses_run_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -228,6 +252,8 @@ prompts:
             parse_campaign_decision("not json")
         with self.assertRaisesRegex(ValueError, "Unsupported"):
             parse_campaign_decision(json.dumps({"decision": "run_shell", "reason": "bad"}))
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            parse_campaign_decision(json.dumps({"decision": "no_action", "reason": ""}))
 
     def test_dry_run_once_does_not_call_openai(self) -> None:
         class RaisingClient:
@@ -286,6 +312,21 @@ prompts:
                 start_trial(campaign_config, loop_config, dry_run=False)
             launch.assert_not_called()
 
+    def test_start_trial_counts_existing_trial_directories_against_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            campaign_config["campaign"]["trial_budget"] = 1
+            (Path(campaign_config["artifacts"]["root"]) / "trials" / "existing_trial").mkdir(parents=True)
+            loop_config = load_loop_config(loop_path)
+            with mock.patch("src.agent_experiment_loop.launch_experiment") as launch, self.assertRaisesRegex(
+                RuntimeError, "budget exhausted"
+            ):
+                start_trial(campaign_config, loop_config, dry_run=False)
+            launch.assert_not_called()
+
     def test_apply_campaign_decision_prints_analysis_to_stream(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -314,6 +355,144 @@ prompts:
             self.assertTrue(result["applied"])
             self.assertIn("campaign result analysis: trial_result", stream.getvalue())
             self.assertIn("next try a lower learning rate", stream.getvalue())
+
+    def test_apply_campaign_no_action_still_logs_and_prints_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            loop_config = load_loop_config(loop_path)
+            state = {
+                "current_trial_id": "trial_no_action",
+                "current_trial_dir": str(root / "trial_no_action"),
+                "stage_runs": {},
+                "trial_configs": {},
+            }
+            stream = io.StringIO()
+            result = apply_campaign_decision(
+                campaign_config,
+                loop_config,
+                state,
+                CampaignDecision(decision="no_action", reason="Keep current settings."),
+                stream=stream,
+            )
+            self.assertTrue(result["applied"])
+            self.assertIn("Keep current settings.", stream.getvalue())
+            self.assertIn("Keep current settings.", (root / "logbook.md").read_text(encoding="utf-8"))
+            self.assertEqual(json.loads((Path(campaign_config["artifacts"]["state_path"])).read_text())["status"], "analysis_completed")
+
+    def test_run_campaign_does_not_restart_completed_campaign_without_new_trial(self) -> None:
+        class RaisingClient:
+            @property
+            def responses(self):
+                raise AssertionError("OpenAI should not be called for completed campaign status")
+
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            state_path = Path(campaign_config["artifacts"]["state_path"])
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "campaign_id": "test_campaign",
+                        "status": "campaign_completed",
+                        "current_trial_id": "done",
+                        "current_trial_dir": str(root / "done"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stream = io.StringIO()
+            code = run_campaign(campaign_config, once=False, client=RaisingClient(), stream=stream)
+            self.assertEqual(code, 0)
+            self.assertIn("campaign state is campaign_completed", stream.getvalue())
+
+    def test_run_campaign_records_generic_openai_failure_as_retryable_state(self) -> None:
+        class FailingResponses:
+            def create(self, **kwargs):
+                raise RuntimeError("temporary API outage")
+
+        class FailingClient:
+            responses = FailingResponses()
+
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            stream = io.StringIO()
+            code = run_campaign(campaign_config, once=True, client=FailingClient(), stream=stream)
+            self.assertEqual(code, 0)
+            state = json.loads(Path(campaign_config["artifacts"]["state_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(state["status"], "agent_decision_failed")
+            self.assertIn("temporary API outage", state["agent_decision_error"])
+
+    def test_run_campaign_terminates_explicitly_when_openai_credits_are_exhausted(self) -> None:
+        class CreditResponses:
+            def create(self, **kwargs):
+                raise RuntimeError("insufficient_quota: credits exhausted")
+
+        class CreditClient:
+            responses = CreditResponses()
+
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            stream = io.StringIO()
+            code = run_campaign(campaign_config, once=True, client=CreditClient(), stream=stream)
+            self.assertEqual(code, 1)
+            state = json.loads(Path(campaign_config["artifacts"]["state_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(state["status"], "openai_credits_exhausted")
+            self.assertIn("credits appear to be exhausted", stream.getvalue())
+
+    def test_campaign_lock_rejects_second_live_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            campaign_path = self._write_campaign_config(root, self._write_loop_config(root))
+            campaign_config = load_campaign_config(campaign_path)
+            lock = _acquire_campaign_lock(campaign_config)
+            try:
+                with self.assertRaisesRegex(RuntimeError, "Campaign lock already exists"):
+                    _acquire_campaign_lock(campaign_config)
+            finally:
+                _release_campaign_lock(lock)
+
+    def test_apply_campaign_propose_trial_returns_new_state_for_caller(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            loop_config = load_loop_config(loop_path)
+            state = {
+                "current_trial_id": "completed_trial",
+                "current_trial_dir": str(root / "completed_trial"),
+                "stage_runs": {},
+                "trial_configs": {},
+            }
+            with mock.patch("src.agent_experiment_loop.launch_experiment") as launch:
+                launch.return_value = {"active_experiment": "10C", "pid": 123}
+                result = apply_campaign_decision(
+                    campaign_config,
+                    loop_config,
+                    state,
+                    CampaignDecision(
+                        decision="propose_trial",
+                        reason="next trial",
+                        trial_patch={"10C": {"optimization_config": {"epochs": 4}}},
+                    ),
+                    stream=io.StringIO(),
+                )
+            self.assertTrue(result["applied"])
+            self.assertIsInstance(result.get("state"), dict)
+            self.assertNotEqual(result["state"]["current_trial_id"], "completed_trial")
+            self.assertEqual(result["state"]["current_stage"], "10C")
 
     def test_pdf_preview_png_renderer_writes_png_when_fitz_is_available(self) -> None:
         try:

@@ -38,6 +38,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--once", action="store_true", help="Run one poll cycle and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Inspect without launching jobs, calling OpenAI, or writing files.")
     parser.add_argument("--start-trial", default=None, help="Optional explicit trial id for a new campaign trial.")
+    parser.add_argument("--new-trial", action="store_true", help="Start a new trial even when campaign state already exists.")
     parser.add_argument(
         "--terminate-child-on-exit",
         action="store_true",
@@ -62,6 +63,15 @@ def main(argv: list[str] | None = None) -> int:
     if not argv:
         parser.print_help(sys.stderr)
         return 2
+    if argv[0] == "list":
+        print(available_campaigns_text())
+        return 0
+    if argv[0] == "status":
+        if len(argv) < 2:
+            print("usage: ./run_campaign status <campaign>", file=sys.stderr)
+            print(available_campaigns_text(), file=sys.stderr)
+            return 2
+        return campaign_main(["status", "--campaign", resolve_campaign(argv[1])])
     args = parser.parse_args(argv)
     forwarded = ["run", "--campaign", resolve_campaign(args.campaign)]
     if args.poll_seconds is not None:
@@ -72,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
         forwarded.append("--dry-run")
     if args.start_trial:
         forwarded.extend(["--start-trial", args.start_trial])
+    if args.new_trial:
+        forwarded.append("--new-trial")
     if args.terminate_child_on_exit:
         forwarded.append("--terminate-child-on-exit")
     return campaign_main(forwarded)

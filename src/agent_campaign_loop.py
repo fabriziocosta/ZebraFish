@@ -55,7 +55,9 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    tmp_path.replace(path)
 
 
 def _load_mapping(path: str | Path) -> dict[str, Any]:
@@ -117,6 +119,47 @@ def _campaign_root(config: dict[str, Any]) -> Path:
     return Path(config["artifacts"]["root"])
 
 
+def _campaign_lock_path(config: dict[str, Any]) -> Path:
+    return _campaign_root(config) / "campaign.lock"
+
+
+def _acquire_campaign_lock(config: dict[str, Any]) -> Path:
+    path = _campaign_lock_path(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pid = os.getpid()
+    for attempt in range(2):
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+        except FileExistsError:
+            existing_pid = _read_lock_pid(path)
+            if attempt == 0 and existing_pid is not None and not experiment_loop._is_process_running(existing_pid):
+                path.unlink(missing_ok=True)
+                continue
+            owner = f" pid={existing_pid}" if existing_pid is not None else ""
+            raise RuntimeError(f"Campaign lock already exists at {path}.{owner}")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps({"pid": pid, "created_at": _now_iso()}, indent=2))
+        return path
+    raise RuntimeError(f"Could not acquire campaign lock at {path}")
+
+
+def _read_lock_pid(path: Path) -> int | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    try:
+        return int(payload.get("pid"))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _release_campaign_lock(path: Path) -> None:
+    existing_pid = _read_lock_pid(path)
+    if existing_pid == os.getpid():
+        path.unlink(missing_ok=True)
+
+
 def _tail_text(path: Path, *, max_lines: int = 80) -> str:
     if not path.exists() or not path.is_file():
         return ""
@@ -161,10 +204,17 @@ def collect_init_snapshot(campaign_config: dict[str, Any], loop_config: dict[str
     for stage in campaign_config["campaign"]["stages"]:
         status = experiment_loop.collect_status(loop_config, state_override={"active_experiment": stage})
         controller_status, controller_reason = experiment_loop.classify_controller_status(loop_config, status)
+        latest_artifacts = dict(status.get("artifacts", {}))
+        if latest_artifacts.get("run_dir_source") == "latest_fallback":
+            latest_artifacts["evidence_reliability"] = "low"
+            latest_artifacts["evidence_warning"] = (
+                "No precise state file or runner status identified this run; "
+                "artifacts came from the newest folder fallback."
+            )
         stage_statuses[stage] = {
             "controller_status": controller_status,
             "controller_reason": controller_reason,
-            "latest_artifacts": status.get("artifacts", {}),
+            "latest_artifacts": latest_artifacts,
             "run_status": status.get("run_status", {}),
             "log_tail": status.get("log_tail", ""),
         }
@@ -208,11 +258,24 @@ def _copy_stage_configs(
 
 
 def _trial_count(campaign_config: dict[str, Any]) -> int:
+    trial_ids: set[str] = set()
     trials_csv = Path(campaign_config["artifacts"]["trials_csv"])
-    if not trials_csv.exists():
-        return 0
-    with trials_csv.open(newline="", encoding="utf-8") as handle:
-        return sum(1 for _ in csv.DictReader(handle))
+    if trials_csv.exists():
+        with trials_csv.open(newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                trial_id = str(row.get("trial_id") or "").strip()
+                if trial_id:
+                    trial_ids.add(trial_id)
+
+    trials_root = _campaign_root(campaign_config) / "trials"
+    if trials_root.exists():
+        trial_ids.update(path.name for path in trials_root.iterdir() if path.is_dir())
+
+    state = _read_json(_campaign_state_path(campaign_config))
+    current_trial_id = str(state.get("current_trial_id") or "").strip()
+    if current_trial_id:
+        trial_ids.add(current_trial_id)
+    return len(trial_ids)
 
 
 def _assert_trial_budget_available(campaign_config: dict[str, Any]) -> None:
@@ -307,15 +370,9 @@ def start_trial(
         )
     else:
         trial_configs = _copy_stage_configs(campaign_config, loop_config, trial_dir, trial_patch=trial_patch)
-        launched = experiment_loop.launch_experiment(
-            _loop_config_for_stage(loop_config, trial_dir, stages[0], trial_configs),
-            stages[0],
-            dry_run=False,
-        )
-
     state = {
         "campaign_id": campaign_id,
-        "status": "running",
+        "status": "dry_run" if dry_run else "launching",
         "current_trial_id": trial_id,
         "current_trial_dir": str(trial_dir),
         "current_stage_index": 0,
@@ -326,8 +383,33 @@ def start_trial(
         "started_at": _now_iso(),
         "updated_at": _now_iso(),
         "trials": [],
-        "active_launch_state": launched,
     }
+    if dry_run:
+        state["active_launch_state"] = launched
+        state["status"] = "running"
+        return state
+
+    _write_json(_campaign_state_path(campaign_config), state)
+    _write_json(trial_dir / "trial_manifest.json", _trial_manifest(campaign_config, state))
+    try:
+        launched = experiment_loop.launch_experiment(
+            _loop_config_for_stage(loop_config, trial_dir, stages[0], trial_configs),
+            stages[0],
+            dry_run=False,
+        )
+    except Exception as exc:
+        state.update(
+            {
+                "status": "failed",
+                "failure_reason": f"launch failed: {type(exc).__name__}: {exc}",
+                "updated_at": _now_iso(),
+            }
+        )
+        _persist_campaign_state(campaign_config, state)
+        raise
+    state["active_launch_state"] = launched
+    state["status"] = "running"
+    state["updated_at"] = _now_iso()
     if not dry_run:
         _write_json(_campaign_state_path(campaign_config), state)
         _write_json(trial_dir / "trial_manifest.json", _trial_manifest(campaign_config, state))
@@ -403,6 +485,8 @@ def _advance_stage_or_complete_trial(
         state["status"] = "trial_completed"
         state["completed_at"] = _now_iso()
         state["score"] = summary.get("score")
+        state["ranking_score"] = summary.get("ranking_score")
+        state["objective_eligible"] = summary.get("objective_eligible")
         state["objective_metric_path"] = summary.get("metrics_path")
         state["updated_at"] = _now_iso()
         if not dry_run:
@@ -415,17 +499,33 @@ def _advance_stage_or_complete_trial(
         wire_pretrain_checkpoint_into_finetune_config(state["trial_configs"][next_stage], stage_runs[stage])
     trial_dir = Path(state["current_trial_dir"])
     next_loop_config = _loop_config_for_stage(loop_config, trial_dir, next_stage, state["trial_configs"])
-    launched = experiment_loop.launch_experiment(next_loop_config, next_stage, dry_run=dry_run)
     state.update(
         {
-            "status": "running",
+            "status": "dry_run" if dry_run else "launching",
             "current_stage_index": next_index,
             "current_stage": next_stage,
             "stage_state_path": str(_stage_state_path(trial_dir, next_stage)),
-            "active_launch_state": launched,
             "updated_at": _now_iso(),
         }
     )
+    if not dry_run:
+        _persist_campaign_state(campaign_config, state)
+    try:
+        launched = experiment_loop.launch_experiment(next_loop_config, next_stage, dry_run=dry_run)
+    except Exception as exc:
+        state.update(
+            {
+                "status": "failed",
+                "failure_reason": f"launch failed: {type(exc).__name__}: {exc}",
+                "updated_at": _now_iso(),
+            }
+        )
+        if not dry_run:
+            _persist_campaign_state(campaign_config, state)
+        raise
+    state["active_launch_state"] = launched
+    state["status"] = "running"
+    state["updated_at"] = _now_iso()
     if not dry_run:
         _persist_campaign_state(campaign_config, state)
     return state, f"launched_{next_stage}"
@@ -478,6 +578,7 @@ def score_metrics(metrics_path: str | Path, objective: dict[str, Any]) -> dict[s
     }
     return {
         "score": selected_value,
+        "ranking_score": selected_value if selected_value is not None and not guardrail_failures else None,
         "selected_metric": selected_metric,
         "guardrail_passed": not guardrail_failures,
         "guardrail_failures": guardrail_failures,
@@ -493,6 +594,7 @@ def summarize_trial(campaign_config: dict[str, Any], state: dict[str, Any]) -> d
     metrics_path = _find_latest_summary_metrics(final_run_dir) if final_run_dir and final_run_dir.exists() else None
     scored = score_metrics(metrics_path, campaign_config["objective"]) if metrics_path else {
         "score": None,
+        "ranking_score": None,
         "selected_metric": None,
         "guardrail_passed": False,
         "guardrail_failures": {"metrics": {"minimum": "present", "actual": None}},
@@ -503,6 +605,8 @@ def summarize_trial(campaign_config: dict[str, Any], state: dict[str, Any]) -> d
         "trial_dir": state.get("current_trial_dir"),
         "status": state.get("status"),
         "score": scored["score"],
+        "ranking_score": scored["ranking_score"],
+        "objective_eligible": bool(scored["guardrail_passed"] and scored["ranking_score"] is not None),
         "selected_metric": scored["selected_metric"],
         "guardrail_passed": scored["guardrail_passed"],
         "guardrail_failures": scored["guardrail_failures"],
@@ -526,8 +630,13 @@ def _write_trial_outputs(campaign_config: dict[str, Any], state: dict[str, Any],
     _write_csv(Path(campaign_config["artifacts"]["trials_csv"]), trial_records)
     _write_jsonl(Path(campaign_config["artifacts"]["trials_jsonl"]), trial_records)
     leaderboard = sorted(
-        [record for record in trial_records if record.get("score") not in ("", None)],
-        key=lambda record: float(record["score"]),
+        [
+            record
+            for record in trial_records
+            if record.get("objective_eligible") in {True, "True", "true"}
+            and record.get("ranking_score") not in ("", None)
+        ],
+        key=lambda record: float(record["ranking_score"]),
         reverse=bool(campaign_config["objective"].get("maximize", True)),
     )
     _write_csv(Path(campaign_config["artifacts"]["leaderboard_csv"]), leaderboard)
@@ -545,6 +654,8 @@ def _trial_records(campaign_config: dict[str, Any], state: dict[str, Any], summa
         "trial_id": summary["trial_id"],
         "status": state.get("status"),
         "score": "" if summary.get("score") is None else summary.get("score"),
+        "ranking_score": "" if summary.get("ranking_score") is None else summary.get("ranking_score"),
+        "objective_eligible": bool(summary.get("objective_eligible")),
         "selected_metric": summary.get("selected_metric") or "",
         "guardrail_passed": summary.get("guardrail_passed"),
         "trial_dir": summary.get("trial_dir"),
@@ -563,6 +674,8 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "trial_id",
         "status",
         "score",
+        "ranking_score",
+        "objective_eligible",
         "selected_metric",
         "guardrail_passed",
         "trial_dir",
@@ -715,11 +828,15 @@ def parse_campaign_decision(text: str) -> CampaignDecision:
     trial_patch = payload.get("trial_patch")
     if trial_patch is not None and not isinstance(trial_patch, dict):
         raise ValueError("trial_patch must be a mapping when provided")
+    reason = str(payload.get("reason", "")).strip()
+    logbook_markdown = payload.get("logbook_markdown")
+    if not reason and not (isinstance(logbook_markdown, str) and logbook_markdown.strip()):
+        raise ValueError("Campaign decision must include non-empty reason or logbook_markdown")
     return CampaignDecision(
         decision=decision,
-        reason=str(payload.get("reason", "")).strip(),
+        reason=reason,
         trial_patch=trial_patch,
-        logbook_markdown=payload.get("logbook_markdown"),
+        logbook_markdown=logbook_markdown,
     )
 
 
@@ -759,6 +876,59 @@ def _build_init_prompt(config: dict[str, Any], snapshot: dict[str, Any], trial_i
             "Initialization snapshot JSON:",
             json.dumps(snapshot, indent=2, sort_keys=True),
         ]
+    )
+
+
+def _mark_agent_decision_failed(
+    campaign_config: dict[str, Any],
+    state: dict[str, Any],
+    exc: Exception,
+    *,
+    stream: TextIO,
+) -> None:
+    state["status"] = "agent_decision_failed"
+    state["agent_decision_error"] = f"{type(exc).__name__}: {exc}"
+    state["updated_at"] = _now_iso()
+    _persist_campaign_state(campaign_config, state)
+    print(
+        f"campaign agent decision failed trial={state.get('current_trial_id')} "
+        f"error={state['agent_decision_error']}",
+        file=stream,
+        flush=True,
+    )
+
+
+def _is_openai_credits_exhausted(exc: Exception) -> bool:
+    message = f"{type(exc).__name__}: {exc}".lower()
+    credit_markers = [
+        "insufficient_quota",
+        "exceeded your current quota",
+        "credit",
+        "credits",
+        "billing",
+    ]
+    return any(marker in message for marker in credit_markers)
+
+
+def _mark_openai_credits_exhausted(
+    campaign_config: dict[str, Any],
+    state: dict[str, Any],
+    exc: Exception,
+    *,
+    stream: TextIO,
+) -> None:
+    state["status"] = "openai_credits_exhausted"
+    state["openai_error"] = f"{type(exc).__name__}: {exc}"
+    state["updated_at"] = _now_iso()
+    if state.get("current_trial_dir"):
+        _persist_campaign_state(campaign_config, state)
+    else:
+        _write_json(_campaign_state_path(campaign_config), state)
+    print(
+        "OpenAI API credits appear to be exhausted; terminating campaign loop. "
+        f"error={state['openai_error']}",
+        file=stream,
+        flush=True,
     )
 
 
@@ -815,7 +985,34 @@ def initialize_campaign_trial(
     campaign_id = str(campaign_config["campaign"]["id"])
     trial_id = _trial_id(campaign_id, start_trial_id)
     snapshot = collect_init_snapshot(campaign_config, loop_config)
-    decision = request_init_decision(campaign_config, snapshot, trial_id, client=client)
+    try:
+        decision = request_init_decision(campaign_config, snapshot, trial_id, client=client)
+    except Exception as exc:
+        trial_dir = _trial_dir(campaign_config, trial_id)
+        state = {
+            "campaign_id": campaign_id,
+            "status": "agent_decision_failed",
+            "current_trial_id": trial_id,
+            "current_trial_dir": str(trial_dir),
+            "current_stage_index": 0,
+            "current_stage": campaign_config["campaign"]["stages"][0],
+            "stage_state_path": str(_stage_state_path(trial_dir, campaign_config["campaign"]["stages"][0])),
+            "trial_configs": {},
+            "agent_decision_error": f"{type(exc).__name__}: {exc}",
+            "updated_at": _now_iso(),
+        }
+        if _is_openai_credits_exhausted(exc):
+            _write_json(trial_dir / "trial_manifest.json", _trial_manifest(campaign_config, state))
+            _mark_openai_credits_exhausted(campaign_config, state, exc, stream=stream)
+        else:
+            _write_json(_campaign_state_path(campaign_config), state)
+            _write_json(trial_dir / "trial_manifest.json", _trial_manifest(campaign_config, state))
+            print(
+                f"campaign initialization decision failed trial={trial_id} error={state['agent_decision_error']}",
+                file=stream,
+                flush=True,
+            )
+        return state
     if decision.decision == "stop_campaign":
         state = {
             "campaign_id": campaign_id,
@@ -860,9 +1057,22 @@ def apply_campaign_decision(
     dry_run: bool = False,
     stream: TextIO = sys.stdout,
 ) -> dict[str, Any]:
-    if dry_run or decision.decision == "no_action":
-        return {"applied": False, "reason": "dry_run" if dry_run else "no_action"}
+    if dry_run:
+        return {"applied": False, "reason": "dry_run"}
     summary = summarize_trial(campaign_config, state)
+    if decision.decision == "no_action":
+        markdown = decision.logbook_markdown or decision.reason or "No further action recommended for this campaign decision."
+        _upsert_campaign_logbook(campaign_config, summary, model_markdown=markdown)
+        _print_analysis_block(
+            stream,
+            title=f"campaign result analysis: {summary.get('trial_id')}",
+            markdown=markdown,
+        )
+        state["status"] = "analysis_completed"
+        state["analysis_completed_at"] = _now_iso()
+        state["updated_at"] = _now_iso()
+        _persist_campaign_state(campaign_config, state)
+        return {"applied": True, "updated": campaign_config["logbook"]["path"], "reason": "no_action_logged"}
     if decision.decision == "update_logbook":
         markdown = decision.logbook_markdown or decision.reason
         _upsert_campaign_logbook(campaign_config, summary, model_markdown=markdown)
@@ -871,6 +1081,10 @@ def apply_campaign_decision(
             title=f"campaign result analysis: {summary.get('trial_id')}",
             markdown=markdown,
         )
+        state["status"] = "analysis_completed"
+        state["analysis_completed_at"] = _now_iso()
+        state["updated_at"] = _now_iso()
+        _persist_campaign_state(campaign_config, state)
         return {"applied": True, "updated": campaign_config["logbook"]["path"]}
     if decision.decision == "stop_campaign":
         markdown = decision.logbook_markdown or decision.reason
@@ -906,6 +1120,38 @@ def apply_campaign_decision(
     return {"applied": False, "reason": f"no local action for {decision.decision}"}
 
 
+def _request_and_apply_campaign_decision(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    state: dict[str, Any],
+    summary: dict[str, Any],
+    *,
+    client: Any | None,
+    stream: TextIO,
+) -> tuple[dict[str, Any], str, str]:
+    try:
+        decision = request_campaign_decision(campaign_config, state, summary, client=client)
+        result = apply_campaign_decision(
+            campaign_config,
+            loop_config,
+            state,
+            decision,
+            dry_run=False,
+            stream=stream,
+        )
+    except Exception as exc:
+        if _is_openai_credits_exhausted(exc):
+            _mark_openai_credits_exhausted(campaign_config, state, exc, stream=stream)
+            return state, "openai_credits_exhausted", f"{type(exc).__name__}: {exc}"
+        else:
+            _mark_agent_decision_failed(campaign_config, state, exc, stream=stream)
+            return state, "agent_decision_failed", f"{type(exc).__name__}: {exc}"
+
+    if isinstance(result.get("state"), dict):
+        state = result["state"]
+    return state, decision.decision, decision.reason or "campaign decision applied"
+
+
 def _print_status_line(
     stream: TextIO,
     *,
@@ -932,6 +1178,7 @@ def run_campaign(
     once: bool = False,
     dry_run: bool = False,
     start_trial_id: str | None = None,
+    new_trial: bool = False,
     terminate_child_on_exit: bool = False,
     client: Any | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
@@ -943,118 +1190,156 @@ def run_campaign(
     _validate_chain(campaign_config, loop_config)
     if not dry_run:
         experiment_loop.validate_api_key({"agent": campaign_config["agent"]})
-
-    poll_seconds = int(campaign_config["campaign"].get("poll_seconds", campaign_config["agent"].get("poll_seconds", 18000)))
-    state_path = _campaign_state_path(campaign_config)
-    state = _read_json(state_path)
-    if not state or state.get("status") in {"trial_completed", "campaign_completed", "failed"}:
-        if dry_run:
-            state = start_trial(
-                campaign_config,
-                loop_config,
-                start_trial=start_trial_id,
-                dry_run=True,
-            )
-        else:
-            state = initialize_campaign_trial(
-                campaign_config,
-                loop_config,
-                start_trial_id=start_trial_id,
-                client=client,
-                stream=stream,
-            )
-
-    next_poll = datetime.now() if once else datetime.now() + timedelta(seconds=poll_seconds)
-    print(
-        f"campaign loop started campaign={campaign_config['campaign']['id']} poll_seconds={poll_seconds} state={state_path}",
-        file=stream,
-        flush=True,
-    )
-    print(f"next poll: {next_poll.isoformat(timespec='seconds')}", file=stream, flush=True)
+    lock_path = _acquire_campaign_lock(campaign_config) if not dry_run else None
 
     try:
-        while True:
-            if not once:
-                sleep_fn(float(poll_seconds))
-
-            if state.get("status") == "campaign_completed":
-                action = "no_action"
-                reason = "campaign already completed"
+        poll_seconds = int(campaign_config["campaign"].get("poll_seconds", campaign_config["agent"].get("poll_seconds", 18000)))
+        state_path = _campaign_state_path(campaign_config)
+        state = _read_json(state_path)
+        if new_trial or not state:
+            if dry_run:
+                state = start_trial(
+                    campaign_config,
+                    loop_config,
+                    start_trial=start_trial_id,
+                    dry_run=True,
+                )
             else:
-                status, controller_status, controller_reason = _collect_stage_status(campaign_config, loop_config, state)
-                if not dry_run:
-                    stage_loop_config = _loop_config_for_stage(
-                        loop_config,
-                        Path(state["current_trial_dir"]),
-                        str(state["current_stage"]),
-                        state["trial_configs"],
-                    )
-                    experiment_loop.update_controller_state(
-                        stage_loop_config,
-                        status,
-                        controller_status,
-                        controller_reason,
-                        state_path=Path(state["stage_state_path"]),
-                    )
+                state = initialize_campaign_trial(
+                    campaign_config,
+                    loop_config,
+                    start_trial_id=start_trial_id,
+                    client=client,
+                    stream=stream,
+                )
+            if state.get("status") == "openai_credits_exhausted":
+                return 1
 
-                if controller_status in {"running_progress", "running_wait"}:
-                    action = "wait"
-                    reason = controller_reason
-                elif controller_status == "completed":
-                    state, action = _advance_stage_or_complete_trial(
-                        campaign_config,
-                        loop_config,
-                        state,
-                        status,
-                        dry_run=dry_run,
-                    )
-                    reason = controller_reason
-                    if state.get("status") == "trial_completed" and not dry_run:
-                        summary = summarize_trial(campaign_config, state)
-                        decision = request_campaign_decision(campaign_config, state, summary, client=client)
-                        apply_campaign_decision(campaign_config, loop_config, state, decision, dry_run=False, stream=stream)
-                        action = decision.decision
-                        reason = decision.reason or reason
-                elif controller_status in {"failed", "running_stale"}:
-                    state["status"] = controller_status
-                    state["failure_reason"] = controller_reason
-                    state["updated_at"] = _now_iso()
-                    if not dry_run:
-                        _persist_campaign_state(campaign_config, state)
-                        summary = summarize_trial(campaign_config, state)
-                        decision = request_campaign_decision(campaign_config, state, summary, client=client)
-                        apply_campaign_decision(campaign_config, loop_config, state, decision, dry_run=False, stream=stream)
-                        action = decision.decision
-                        reason = decision.reason or controller_reason
-                    else:
-                        action = controller_status
-                        reason = controller_reason
-                else:
-                    action = "no_action"
-                    reason = controller_reason
-
-            next_poll = None if once else datetime.now() + timedelta(seconds=poll_seconds)
-            _print_status_line(
-                stream,
-                campaign_config=campaign_config,
-                state=state,
-                action=action,
-                reason=reason,
-                next_poll=next_poll,
-            )
-            if once:
-                return 0
-    except KeyboardInterrupt:
-        child_pid = state.get("active_launch_state", {}).get("pid")
-        if terminate_child_on_exit and isinstance(child_pid, int) and experiment_loop._is_process_running(child_pid):
-            os.killpg(child_pid, signal.SIGTERM)
+        next_poll = datetime.now() if once else datetime.now() + timedelta(seconds=poll_seconds)
         print(
-            f"campaign loop stopped campaign={campaign_config['campaign']['id']} "
-            f"trial={state.get('current_trial_id')} stage={state.get('current_stage')} state={state_path}",
+            f"campaign loop started campaign={campaign_config['campaign']['id']} poll_seconds={poll_seconds} state={state_path}",
             file=stream,
             flush=True,
         )
-        return 130
+        print(f"next poll: {next_poll.isoformat(timespec='seconds')}", file=stream, flush=True)
+
+        try:
+            first_poll = True
+            while True:
+                if not once and not first_poll:
+                    sleep_fn(float(poll_seconds))
+                first_poll = False
+
+                if state.get("status") == "openai_credits_exhausted":
+                    action = "openai_credits_exhausted"
+                    reason = "OpenAI API credits exhausted; terminating campaign loop."
+                elif state.get("status") in {"campaign_completed", "analysis_completed"}:
+                    action = "no_action"
+                    reason = f"campaign state is {state.get('status')}"
+                elif state.get("status") == "agent_decision_failed":
+                    summary = summarize_trial(campaign_config, state)
+                    if not dry_run:
+                        state, action, reason = _request_and_apply_campaign_decision(
+                            campaign_config,
+                            loop_config,
+                            state,
+                            summary,
+                            client=client,
+                            stream=stream,
+                        )
+                    else:
+                        action = "agent_decision_failed"
+                        reason = state.get("agent_decision_error", "previous agent decision failed")
+                else:
+                    status, controller_status, controller_reason = _collect_stage_status(campaign_config, loop_config, state)
+                    if not dry_run:
+                        stage_loop_config = _loop_config_for_stage(
+                            loop_config,
+                            Path(state["current_trial_dir"]),
+                            str(state["current_stage"]),
+                            state["trial_configs"],
+                        )
+                        experiment_loop.update_controller_state(
+                            stage_loop_config,
+                            status,
+                            controller_status,
+                            controller_reason,
+                            state_path=Path(state["stage_state_path"]),
+                        )
+
+                    if controller_status in {"running_progress", "running_wait"}:
+                        action = "wait"
+                        reason = controller_reason
+                    elif controller_status == "completed":
+                        state, action = _advance_stage_or_complete_trial(
+                            campaign_config,
+                            loop_config,
+                            state,
+                            status,
+                            dry_run=dry_run,
+                        )
+                        reason = controller_reason
+                        if state.get("status") == "trial_completed" and not dry_run:
+                            summary = summarize_trial(campaign_config, state)
+                            state, action, reason = _request_and_apply_campaign_decision(
+                                campaign_config,
+                                loop_config,
+                                state,
+                                summary,
+                                client=client,
+                                stream=stream,
+                            )
+                    elif controller_status in {"failed", "running_stale"}:
+                        state["status"] = controller_status
+                        state["failure_reason"] = controller_reason
+                        state["updated_at"] = _now_iso()
+                        if not dry_run:
+                            _persist_campaign_state(campaign_config, state)
+                            summary = summarize_trial(campaign_config, state)
+                            state, action, reason = _request_and_apply_campaign_decision(
+                                campaign_config,
+                                loop_config,
+                                state,
+                                summary,
+                                client=client,
+                                stream=stream,
+                            )
+                        else:
+                            action = controller_status
+                            reason = controller_reason
+                    else:
+                        action = "no_action"
+                        reason = controller_reason
+
+                next_poll = None if once else datetime.now() + timedelta(seconds=poll_seconds)
+                _print_status_line(
+                    stream,
+                    campaign_config=campaign_config,
+                    state=state,
+                    action=action,
+                    reason=reason,
+                    next_poll=next_poll,
+                )
+                if state.get("status") == "openai_credits_exhausted":
+                    return 1
+                if state.get("status") in {"campaign_completed", "analysis_completed"}:
+                    return 0
+                if once:
+                    return 0
+        except KeyboardInterrupt:
+            child_pid = state.get("active_launch_state", {}).get("pid")
+            if terminate_child_on_exit and isinstance(child_pid, int) and experiment_loop._is_process_running(child_pid):
+                os.killpg(child_pid, signal.SIGTERM)
+            print(
+                f"campaign loop stopped campaign={campaign_config['campaign']['id']} "
+                f"trial={state.get('current_trial_id')} stage={state.get('current_stage')} state={state_path}",
+                file=stream,
+                flush=True,
+            )
+            return 130
+    finally:
+        if lock_path is not None:
+            _release_campaign_lock(lock_path)
 
 
 def status_command(campaign_config: dict[str, Any], *, stream: TextIO = sys.stdout) -> int:
@@ -1083,6 +1368,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--dry-run", action="store_true", help="Inspect without launching jobs, calling OpenAI, or writing files.")
     run_parser.add_argument("--once", action="store_true", help="Run one poll cycle and exit.")
     run_parser.add_argument("--start-trial", default=None, help="Trial id to use when creating a fresh campaign trial.")
+    run_parser.add_argument("--new-trial", action="store_true", help="Start a new trial even when campaign state already exists.")
     run_parser.add_argument(
         "--terminate-child-on-exit",
         action="store_true",
@@ -1108,6 +1394,7 @@ def main(argv: list[str] | None = None) -> int:
             once=args.once,
             dry_run=args.dry_run,
             start_trial_id=args.start_trial,
+            new_trial=args.new_trial,
             terminate_child_on_exit=args.terminate_child_on_exit,
         )
     parser.error(f"Unsupported command {args.command!r}")
