@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import sys
 import time
@@ -26,6 +27,7 @@ except ModuleNotFoundError:
 ALLOWED_CAMPAIGN_DECISIONS = {
     "no_action",
     "propose_trial",
+    "terminate_trial",
     "update_logbook",
     "stop_campaign",
 }
@@ -38,6 +40,7 @@ CREDIT_EXHAUSTION_CODES = {
 }
 
 RESTARTABLE_TERMINAL_STATUSES = {
+    "semantic_early_stopped",
     "terminated",
     "termination_race_stopped",
 }
@@ -818,6 +821,33 @@ def summarize_trial(campaign_config: dict[str, Any], state: dict[str, Any]) -> d
     }
 
 
+def summarize_live_trial(
+    campaign_config: dict[str, Any],
+    state: dict[str, Any],
+    status: dict[str, Any],
+    controller_status: str,
+    controller_reason: str,
+) -> dict[str, Any]:
+    live_state = json.loads(json.dumps(state))
+    stage = str(live_state.get("current_stage") or "")
+    run_dir = status.get("artifacts", {}).get("run_dir")
+    if stage and run_dir:
+        live_state.setdefault("stage_runs", {})[stage] = run_dir
+    summary = summarize_trial(campaign_config, live_state)
+    summary.update(
+        {
+            "controller_status": controller_status,
+            "controller_reason": controller_reason,
+            "process_running": bool(status.get("process_running")),
+            "active_stage": stage,
+            "live_artifacts": status.get("artifacts", {}),
+            "run_status": status.get("run_status", {}),
+            "log_tail": status.get("log_tail", ""),
+        }
+    )
+    return summary
+
+
 def _persist_campaign_state(campaign_config: dict[str, Any], state: dict[str, Any]) -> None:
     _write_json(_campaign_state_path(campaign_config), state)
     trial_dir = Path(state["current_trial_dir"])
@@ -951,6 +981,106 @@ def _latest_pdfs(run_dir: str | Path, *, limit: int = 4) -> list[str]:
     return [_rel(path) for path in sorted(root.rglob("*.pdf"), key=lambda item: item.stat().st_mtime)[-limit:]]
 
 
+def _markdown_link(label: str, path: str | Path | None) -> str:
+    if not path:
+        return "missing"
+    target = _rel(path)
+    return f"[{label}]({target})"
+
+
+def _format_metric_value(value: Any) -> str:
+    if value is None or value == "":
+        return "missing"
+    try:
+        return f"{float(value):.4f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _metric_table(summary: dict[str, Any]) -> list[str]:
+    metrics = dict(summary.get("metrics") or {})
+    rows: list[tuple[str, Any]] = []
+    selected_metric = summary.get("selected_metric")
+    if selected_metric:
+        rows.append((str(selected_metric), summary.get("score")))
+    for metric in summary.get("ranking_metric_order") or []:
+        if metric != selected_metric:
+            rows.append((str(metric), metrics.get(metric)))
+    for metric in sorted(metrics):
+        if metric.startswith("action.") or metric.startswith("compound."):
+            if metric not in {name for name, _ in rows}:
+                rows.append((metric, metrics.get(metric)))
+    if not rows:
+        rows.append(("metrics", "missing"))
+    table = ["| Metric | Value |", "|---|---:|"]
+    table.extend(f"| `{name}` | {_format_metric_value(value)} |" for name, value in rows)
+    return table
+
+
+def _files_table(summary: dict[str, Any]) -> list[str]:
+    rows: list[tuple[str, str]] = []
+    if summary.get("trial_dir"):
+        rows.append(("Trial folder", _markdown_link("open", summary["trial_dir"])))
+    if summary.get("metrics_path"):
+        rows.append(("Summary metrics", _markdown_link("open", summary["metrics_path"])))
+    for stage, run_dir in summary.get("stage_runs", {}).items():
+        rows.append((f"{stage} run folder", _markdown_link("open", run_dir)))
+        for index, pdf in enumerate(_latest_pdfs(run_dir, limit=2), start=1):
+            rows.append((f"{stage} loss PDF {index}", _markdown_link("open", pdf)))
+    for stage, config_path in summary.get("trial_configs", {}).items():
+        rows.append((f"{stage} config", _markdown_link("open", config_path)))
+    if not rows:
+        rows.append(("Files", "missing"))
+    table = ["| File | Link |", "|---|---|"]
+    table.extend(f"| {label} | {link} |" for label, link in rows)
+    return table
+
+
+def _strip_markdown_to_paragraphs(markdown: str | None) -> list[str]:
+    if not markdown:
+        return []
+    text = re.sub(r"```.*?```", " ", markdown, flags=re.DOTALL)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+            continue
+        if line.startswith("|") or set(line) <= {"-", ":", "|", " "}:
+            continue
+        line = re.sub(r"^#{1,6}\s*", "", line)
+        line = re.sub(r"^[-*]\s+", "", line)
+        line = re.sub(r"^\d+\.\s+", "", line)
+        line = line.strip()
+        if line:
+            current.append(line)
+    if current:
+        paragraphs.append(" ".join(current))
+    return [re.sub(r"\s+", " ", paragraph).strip() for paragraph in paragraphs if paragraph.strip()]
+
+
+def _conclusion_and_next(summary: dict[str, Any], model_markdown: str | None) -> tuple[str, str]:
+    paragraphs = _strip_markdown_to_paragraphs(model_markdown)
+    if len(paragraphs) >= 2:
+        return paragraphs[0], paragraphs[1]
+    if len(paragraphs) == 1:
+        return paragraphs[0], "No specific next change was proposed; inspect the metrics and files before scheduling the next trial."
+    if summary.get("metrics_path"):
+        conclusion = (
+            f"The trial finished with {_format_metric_value(summary.get('score'))} on "
+            f"`{summary.get('selected_metric') or 'the objective metric'}`; use the metric table and files below for inspection."
+        )
+    else:
+        conclusion = "The trial did not produce final summary metrics, so it should not be treated as a scored model result."
+    next_step = "Review the linked artifacts, then choose the smallest parameter change that addresses the observed failure mode."
+    return conclusion, next_step
+
+
 def _render_pdf_preview_png(pdf_path: str | Path, preview_dir: str | Path) -> Path | None:
     source = Path(pdf_path)
     if not source.exists():
@@ -1003,29 +1133,35 @@ def _upsert_campaign_logbook(
     model_markdown: str | None,
 ) -> None:
     trial_id = str(summary.get("trial_id"))
+    conclusion, next_step = _conclusion_and_next(summary, model_markdown)
     lines = [
         f"## Campaign Trial: {trial_id}",
         "",
-        f"- Campaign: `{campaign_config['campaign']['id']}`",
-        f"- Trial folder: [{_rel(summary['trial_dir'])}]({_rel(summary['trial_dir'])})",
-        f"- Score: `{summary.get('score')}` via `{summary.get('selected_metric')}`",
-        f"- Metrics: [{_rel(summary['metrics_path'])}]({_rel(summary['metrics_path'])})" if summary.get("metrics_path") else "- Metrics: missing",
+        "| Field | Value |",
+        "|---|---|",
+        f"| Campaign | `{campaign_config['campaign']['id']}` |",
+        f"| Status | `{summary.get('status')}` |",
+        f"| Objective score | {_format_metric_value(summary.get('score'))} |",
+        f"| Selected metric | `{summary.get('selected_metric') or 'missing'}` |",
+        f"| Objective eligible | `{bool(summary.get('objective_eligible'))}` |",
+        f"| Guardrail passed | `{bool(summary.get('guardrail_passed'))}` |",
+        "",
+        "### Metrics",
+        "",
+        *_metric_table(summary),
+        "",
+        "### Files To Inspect",
+        "",
+        *_files_table(summary),
+        "",
+        "### Conclusion",
+        "",
+        conclusion,
+        "",
+        "### Next",
+        "",
+        next_step,
     ]
-    preview_dir = Path(str(summary["trial_dir"])) / "plot_previews" if summary.get("trial_dir") else None
-    for stage, run_dir in summary.get("stage_runs", {}).items():
-        lines.append(f"- {stage} run: [{_rel(run_dir)}]({_rel(run_dir)})")
-        for pdf in _latest_pdfs(run_dir, limit=2):
-            lines.append(f"  - PDF: [{pdf}]({pdf})")
-            preview = _render_pdf_preview_png(pdf, preview_dir) if preview_dir is not None else None
-            if preview is not None:
-                preview_link = _rel(preview)
-                lines.append(f"    ![{Path(pdf).stem}]({preview_link})")
-            else:
-                lines.append("    - Preview: unavailable; inspect the linked PDF directly.")
-    for stage, config_path in summary.get("trial_configs", {}).items():
-        lines.append(f"- {stage} config: [{_rel(config_path)}]({_rel(config_path)})")
-    if model_markdown:
-        lines.extend(["", model_markdown.strip()])
     marker = f"campaign:{campaign_config['campaign']['id']}:{trial_id}"
     experiment_loop._upsert_marked_block(Path(campaign_config["logbook"]["path"]), marker, "\n".join(lines))
 
@@ -1107,6 +1243,7 @@ def _campaign_decision_text_format(stages: list[str]) -> dict[str, Any]:
                         "description": (
                             "A JSON-encoded object keyed by experiment id, for example "
                             "{\"10C\":{\"optimization_config\":{\"epochs\":3}}}. Use {} when no patch is proposed. "
+                            "For terminate_trial, this patch is applied to the replacement trial after the live process is stopped. "
                             f"Allowed experiment ids: {', '.join(str(stage) for stage in stages)}."
                         ),
                     },
@@ -1141,6 +1278,10 @@ def _build_campaign_prompt(config: dict[str, Any], state: dict[str, Any], summar
         [
             "You are coordinating ZebraFish experiment campaigns.",
             "A campaign trial is the full pretrain-to-finetune chain. Judge success by downstream finetune metrics.",
+            (
+                "If the active run is still live, return terminate_trial only when the live loss history, metrics, or logs "
+                "make it clear the run is wasting compute or cannot produce useful evidence. Use no_action to keep training."
+            ),
             f"Objective:\n{json.dumps(config.get('objective', {}), indent=2, sort_keys=True)}",
             f"Campaign policy:\n{prompts.get('analysis_policy', '')}",
             f"Logbook rule:\n{prompts.get('update_logbook', '')}",
@@ -1459,6 +1600,62 @@ def retry_initialization_decision(
         return state
 
 
+def _terminate_trial_and_start_replacement(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    decision: CampaignDecision,
+    stream: TextIO,
+) -> dict[str, Any]:
+    pid, status, pid_source = _active_campaign_pid(campaign_config, loop_config, state)
+    if pid is None:
+        return {"applied": False, "reason": "terminate_trial requires a live training process"}
+
+    stage = str(state.get("current_stage") or "")
+    run_dir = (status or {}).get("artifacts", {}).get("run_dir") if status is not None else None
+    if stage and run_dir:
+        state.setdefault("stage_runs", {})[stage] = run_dir
+
+    reason = decision.reason or "semantic early stop requested by campaign agent"
+    signal_name = "SIGTERM"
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        signal_name = None
+
+    _mark_campaign_process_state(
+        campaign_config,
+        state,
+        status="semantic_early_stopped",
+        pid=pid,
+        reason=reason,
+        signal_name=signal_name,
+    )
+    state["semantic_early_stop_reason"] = reason
+    state["semantic_early_stop_pid_source"] = pid_source
+    state["semantic_early_stop_at"] = _now_iso()
+    _persist_campaign_state(campaign_config, state)
+
+    summary = summarize_trial(campaign_config, state)
+    _write_trial_outputs(campaign_config, state, summary)
+    markdown = decision.logbook_markdown or reason
+    _upsert_campaign_logbook(campaign_config, summary, model_markdown=markdown)
+    _print_analysis_block(
+        stream,
+        title=f"campaign semantic early stop: {summary.get('trial_id')}",
+        markdown=markdown,
+        trial_patch=decision.trial_patch or {},
+    )
+    next_state = start_trial(
+        campaign_config,
+        loop_config,
+        trial_patch=decision.trial_patch or {},
+        dry_run=False,
+    )
+    return {"applied": True, "state": next_state, "terminated_pid": pid, "signal": signal_name}
+
+
 def apply_campaign_decision(
     campaign_config: dict[str, Any],
     loop_config: dict[str, Any],
@@ -1510,6 +1707,21 @@ def apply_campaign_decision(
         state["updated_at"] = _now_iso()
         _persist_campaign_state(campaign_config, state)
         return {"applied": True, "status": "campaign_completed"}
+    if decision.decision == "terminate_trial":
+        _assert_trial_budget_available(campaign_config)
+        _validate_trial_patch(
+            loop_config,
+            decision.trial_patch or {},
+            max_leaf_count=_max_patch_leaf_count(campaign_config),
+        )
+        result = _terminate_trial_and_start_replacement(
+            campaign_config,
+            loop_config,
+            state,
+            decision=decision,
+            stream=stream,
+        )
+        return result
     if decision.decision == "propose_trial":
         _assert_trial_budget_available(campaign_config)
         _validate_trial_patch(
@@ -1576,6 +1788,51 @@ def _request_and_apply_campaign_decision(
     if isinstance(result.get("state"), dict):
         state = result["state"]
     return state, decision.decision, decision.reason or "campaign decision applied"
+
+
+def _request_live_campaign_decision(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    state: dict[str, Any],
+    status: dict[str, Any],
+    controller_status: str,
+    controller_reason: str,
+    *,
+    client: Any | None,
+    stream: TextIO,
+) -> tuple[dict[str, Any], str, str]:
+    summary = summarize_live_trial(campaign_config, state, status, controller_status, controller_reason)
+    try:
+        decision = request_campaign_decision(campaign_config, state, summary, client=client)
+    except Exception as exc:
+        if _is_openai_credits_exhausted(exc):
+            _mark_openai_credits_exhausted(campaign_config, state, exc, stream=stream)
+            return state, "openai_credits_exhausted", f"{type(exc).__name__}: {exc}"
+        _mark_agent_decision_failed(campaign_config, state, exc, stream=stream)
+        return state, "agent_decision_failed", f"{type(exc).__name__}: {exc}"
+
+    if decision.decision != "terminate_trial":
+        return state, "wait", decision.reason or controller_reason
+
+    try:
+        result = apply_campaign_decision(
+            campaign_config,
+            loop_config,
+            state,
+            decision,
+            dry_run=False,
+            stream=stream,
+        )
+    except Exception as exc:
+        if _is_openai_credits_exhausted(exc):
+            _mark_openai_credits_exhausted(campaign_config, state, exc, stream=stream)
+            return state, "openai_credits_exhausted", f"{type(exc).__name__}: {exc}"
+        _mark_agent_decision_failed(campaign_config, state, exc, stream=stream)
+        return state, "agent_decision_failed", f"{type(exc).__name__}: {exc}"
+
+    if isinstance(result.get("state"), dict):
+        state = result["state"]
+    return state, "terminate_trial", decision.reason or "semantic early stop applied"
 
 
 def _print_status_line(
@@ -1728,8 +1985,20 @@ def run_campaign(
                         )
 
                     if controller_status in {"running_progress", "running_wait"}:
-                        action = "wait"
-                        reason = controller_reason
+                        if not dry_run:
+                            state, action, reason = _request_live_campaign_decision(
+                                campaign_config,
+                                loop_config,
+                                state,
+                                status,
+                                controller_status,
+                                controller_reason,
+                                client=client,
+                                stream=stream,
+                            )
+                        else:
+                            action = "wait"
+                            reason = controller_reason
                     elif controller_status == "completed":
                         state, action = _advance_stage_or_complete_trial(
                             campaign_config,
@@ -1755,8 +2024,21 @@ def run_campaign(
                         state["updated_at"] = _now_iso()
                         if not dry_run:
                             _persist_campaign_state(campaign_config, state)
-                        action = "wait_stale"
-                        reason = f"{controller_reason}; active process is still running, so new trial launch is blocked"
+                            state, action, reason = _request_live_campaign_decision(
+                                campaign_config,
+                                loop_config,
+                                state,
+                                status,
+                                controller_status,
+                                controller_reason,
+                                client=client,
+                                stream=stream,
+                            )
+                            if action == "wait":
+                                action = "wait_stale"
+                        else:
+                            action = "wait_stale"
+                            reason = f"{controller_reason}; active process is still running, so new trial launch is blocked"
                     elif controller_status == "failed":
                         state["status"] = controller_status
                         state["failure_reason"] = controller_reason
@@ -1932,6 +2214,133 @@ def _mark_campaign_termination_race_stopped(
     )
 
 
+def _signal_pid(
+    pid: int,
+    *,
+    signal_name: str,
+    process_group: bool,
+) -> None:
+    signum = getattr(signal, signal_name)
+    if process_group:
+        os.killpg(pid, signum)
+    else:
+        os.kill(pid, signum)
+
+
+def _terminate_pid_for_restart(
+    pid: int | None,
+    *,
+    reason: str,
+    process_group: bool,
+    force_after: float | None,
+    sleep_fn: Callable[[float], None],
+    stream: TextIO,
+    label: str,
+) -> str | None:
+    if pid is None or pid <= 0 or pid == os.getpid():
+        return None
+    if not experiment_loop._is_process_running(pid):
+        return None
+    try:
+        _signal_pid(pid, signal_name="SIGTERM", process_group=process_group)
+    except ProcessLookupError:
+        return None
+    signal_name = "SIGTERM"
+    if force_after is not None:
+        sleep_fn(float(force_after))
+        if experiment_loop._is_process_running(pid):
+            _signal_pid(pid, signal_name="SIGKILL", process_group=process_group)
+            signal_name = "SIGKILL"
+    print(
+        f"force-restart terminated {label} pid={pid} signal={signal_name} reason={reason}",
+        file=stream,
+        flush=True,
+    )
+    return signal_name
+
+
+def force_restart_campaign(
+    campaign_config: dict[str, Any],
+    *,
+    reason: str = "force-restart requested by run_campaign CLI",
+    force_after: float | None = 5.0,
+    start_trial_id: str | None = None,
+    once: bool = False,
+    stream: TextIO = sys.stdout,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    client: Any | None = None,
+) -> int:
+    loop_config = _load_loop_config(campaign_config)
+    campaign_config.setdefault("agent", dict(loop_config.get("agent", {})))
+    campaign_config["agent"] = {**dict(loop_config.get("agent", {})), **dict(campaign_config.get("agent", {}))}
+    experiment_loop.validate_api_key({"agent": campaign_config["agent"]})
+    terminate_lock = _acquire_terminate_lock(campaign_config)
+    try:
+        state_path = _campaign_state_path(campaign_config)
+        state = _read_json(state_path)
+        pid, _status, pid_source = _active_campaign_pid(campaign_config, loop_config, state) if state else (None, None, "none")
+        campaign_lock = _campaign_lock_path(campaign_config)
+        controller_pid = _read_lock_pid(campaign_lock)
+
+        controller_signal = _terminate_pid_for_restart(
+            controller_pid,
+            reason=reason,
+            process_group=False,
+            force_after=force_after,
+            sleep_fn=sleep_fn,
+            stream=stream,
+            label="campaign controller",
+        )
+        child_signal = _terminate_pid_for_restart(
+            pid,
+            reason=reason,
+            process_group=True,
+            force_after=force_after,
+            sleep_fn=sleep_fn,
+            stream=stream,
+            label=f"active stage ({pid_source})",
+        )
+
+        campaign_lock.unlink(missing_ok=True)
+        if state:
+            timestamp = _now_iso()
+            state.update(
+                {
+                    "status": "force_restarted",
+                    "phase": "force_restarted",
+                    "force_restart_reason": reason,
+                    "force_restarted_at": timestamp,
+                    "force_restart_controller_pid": controller_pid,
+                    "force_restart_controller_signal": controller_signal,
+                    "force_restart_child_pid": pid,
+                    "force_restart_child_signal": child_signal,
+                    "updated_at": timestamp,
+                }
+            )
+            if state.get("current_trial_dir"):
+                _persist_campaign_state(campaign_config, state)
+            else:
+                _write_json(state_path, state)
+        print(
+            f"force-restart cleanup complete campaign={campaign_config['campaign']['id']} "
+            f"old_trial={state.get('current_trial_id') if state else None}",
+            file=stream,
+            flush=True,
+        )
+    finally:
+        _release_campaign_lock(terminate_lock)
+
+    return run_campaign(
+        campaign_config,
+        once=once,
+        start_trial_id=start_trial_id,
+        new_trial=True,
+        client=client,
+        sleep_fn=sleep_fn,
+        stream=stream,
+    )
+
+
 def terminate_campaign(
     campaign_config: dict[str, Any],
     *,
@@ -2033,6 +2442,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return nonzero if no running process is found.",
     )
+
+    force_restart_parser = subparsers.add_parser(
+        "force-restart",
+        help="Terminate any active/stale campaign processes, clear locks, and start a fresh trial.",
+    )
+    force_restart_parser.add_argument("--campaign", default="configs/experiment_campaigns/cnn_campaign.yaml", help="Campaign YAML config.")
+    force_restart_parser.add_argument("--reason", default="force-restart requested by campaign CLI", help="Reason recorded in campaign state.")
+    force_restart_parser.add_argument(
+        "--force-after",
+        type=float,
+        default=5.0,
+        help="Seconds to wait after SIGTERM before SIGKILL escalation. Use 0 to escalate immediately.",
+    )
+    force_restart_parser.add_argument("--start-trial", default=None, help="Optional explicit trial id for the fresh campaign trial.")
+    force_restart_parser.add_argument("--once", action="store_true", help="Run one poll cycle after restart and exit.")
     return parser
 
 
@@ -2044,6 +2468,8 @@ def main(argv: list[str] | None = None) -> int:
         config["campaign"]["poll_seconds"] = int(args.poll_seconds)
     if args.command == "terminate" and args.force_after is not None and args.force_after <= 0:
         parser.error("--force-after must be greater than 0")
+    if args.command == "force-restart" and args.force_after is not None and args.force_after < 0:
+        parser.error("--force-after must be greater than or equal to 0")
     if args.command == "status":
         return status_command(config)
     if args.command == "terminate":
@@ -2052,6 +2478,14 @@ def main(argv: list[str] | None = None) -> int:
             reason=args.reason,
             force_after=args.force_after,
             require_running=args.require_running,
+        )
+    if args.command == "force-restart":
+        return force_restart_campaign(
+            config,
+            reason=args.reason,
+            force_after=args.force_after,
+            start_trial_id=args.start_trial,
+            once=args.once,
         )
     if args.command == "run":
         return run_campaign(

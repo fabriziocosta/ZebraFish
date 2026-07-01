@@ -22,11 +22,12 @@ logbook:
   path: EXPERIMENTS_LOGBOOK.md
 prompts:
   analysis_policy: |
-    Analyze only completed finetune trials or deterministic failures/staleness. A trial is the full 10C-to-13C chain.
+    Analyze completed finetune trials, deterministic failures/staleness, and live runs at polling time when the live evidence is strong enough to justify semantic early stopping. A trial is the full 10C-to-13C chain.
     Score trial success by downstream 13C compound performance, with action accuracy treated as a guardrail.
+    Return terminate_trial only when the current live run is clearly wasting compute or cannot produce useful evidence; otherwise return no_action and keep training.
   update_logbook: |
-    Write concise markdown for EXPERIMENTS_LOGBOOK.md with direct links to trial configs, run folders, CSV metrics, and PDFs.
-    Explain what happened, what likely limited the result, and what the next trial changes.
+    Write exactly two plain-English paragraphs in logbook_markdown: first the conclusion on how the run went, second what to try next and why.
+    Do not include long file names or file paths in prose. The controller will put artifact links in the Files To Inspect table.
   patch_parameters: |
     Return small trial_patch mappings keyed by experiment id. Only patch allowlisted YAML paths from configs/agent_experiment_loop.yaml.
     Prefer one or two attributable changes per trial. Paired loss weights count as one conceptual change.
@@ -34,9 +35,9 @@ prompts:
   decision_schema: |
     Return a single JSON object with this shape:
     {
-      "decision": "no_action|propose_trial|update_logbook|stop_campaign",
+      "decision": "no_action|propose_trial|terminate_trial|update_logbook|stop_campaign",
       "reason": "short reason",
-      "logbook_markdown": "optional markdown",
-      "trial_patch": "JSON string, for example {\"10C\":{\"optimization_config\":{\"epochs\":3}}}"
+      "logbook_markdown": "two plain-English paragraphs: conclusion, then next step",
+      "trial_patch": "JSON string, for example {\"10C\":{\"optimization_config\":{\"epochs\":3}}}. For terminate_trial this is the replacement trial patch."
     }
     Do not include markdown fences or text outside the JSON object.

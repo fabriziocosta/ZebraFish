@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import torch
 from torch import nn
 
 from src.ml import (
@@ -190,6 +191,50 @@ class EstimatorSmokeTests(unittest.TestCase):
             estimator.fit(self.X, self.y)
 
         self.assertIn("select_best epoch=001 best_epoch=001", stdout.getvalue())
+
+    def test_commutative_cnn_fit_writes_live_best_checkpoint(self) -> None:
+        estimator = CommutativeCNNClassifier(
+            model_config=CommutativeCNNConfig(
+                spatial_conv_channels=(4,),
+                temporal_st_channels=(4,),
+                temporal_ts_channels=(4,),
+                spatial_agg_channels=(4,),
+                patch_size_z=1,
+                patch_size_xy=8,
+                embedding_dim=4,
+                verbose=False,
+            ),
+            optimization_config=OptimizationConfig(
+                batch_size=4,
+                epochs=1,
+                validation_split=0.0,
+                verbose=False,
+                early_stopping_start_epoch=1,
+                early_stopping_patience=None,
+                scheduler_patience=None,
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint_path = Path(tmpdir) / "13C_finetune_commutative_cnn_test_model_state.pt"
+            estimator.live_checkpoint_path = checkpoint_path
+            estimator.fit(
+                self.X,
+                self.y,
+                validation_data=(self.X, self.y),
+                compound_y=self.compound,
+                concentration_y=self.concentration,
+                validation_compound_y=self.compound,
+                validation_concentration_y=self.concentration,
+            )
+
+            payload = torch.load(checkpoint_path, map_location="cpu")
+
+        self.assertEqual(payload["best_epoch"], estimator.best_epoch_)
+        self.assertEqual(payload["monitor_key"], "val_loss")
+        self.assertIn("model_state_dict", payload)
+        self.assertTrue(payload["model_state_dict"])
+        self.assertEqual(estimator.live_checkpoint_path_, str(checkpoint_path))
 
     def test_commutative_cnn_pretrain_save_load_and_frozen_head_fit(self) -> None:
         model_config = CommutativeCNNConfig(

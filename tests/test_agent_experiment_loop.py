@@ -11,6 +11,7 @@ from unittest import mock
 
 from src.agent_experiment_loop import (
     AgentDecision,
+    _is_process_running,
     apply_agent_decision,
     collect_status,
     load_loop_config,
@@ -89,6 +90,10 @@ prompts:
             config = load_loop_config(config_path)
             self.assertEqual(config["agent"]["poll_seconds"], 3600)
             self.assertEqual(config["agent"]["reasoning_effort"], "medium")
+
+    def test_zombie_process_is_not_treated_as_running(self) -> None:
+        with mock.patch("os.kill"), mock.patch("pathlib.Path.read_text", return_value="123 (python) Z 1 2 3"):
+            self.assertFalse(_is_process_running(123))
 
     def test_missing_api_key_errors_before_state_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {}, clear=True):

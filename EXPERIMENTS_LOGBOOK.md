@@ -265,3 +265,141 @@ Run the proposed full chain `cnn_pretrain_finetune_20260625_115021_08a733` with 
 }
 ```
 <!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260625_152652_a8e2d2:end -->
+
+## 10C_pretrain_commutative_cnn_20260625_152717
+
+- kind: `pretraining`
+- artifact_dir: [10C_pretrain_commutative_cnn_20260625_152717](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717)
+- `config`: [10C_pretrain_commutative_cnn_20260625_152717_config.json](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/10C_pretrain_commutative_cnn_20260625_152717_config.json)
+- `history`: [10C_pretrain_commutative_cnn_20260625_152717_history.csv](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/10C_pretrain_commutative_cnn_20260625_152717_history.csv)
+- `summary_metrics`: [10C_pretrain_commutative_cnn_20260625_152717_summary_metrics.csv](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/10C_pretrain_commutative_cnn_20260625_152717_summary_metrics.csv)
+- `checkpoint`: [10C_pretrain_commutative_cnn_20260625_152717_encoder_state.pt](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/10C_pretrain_commutative_cnn_20260625_152717_encoder_state.pt)
+- `loss_pdfs`: [loss_plots](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/loss_plots)
+- `latest_loss_pdfs`: [10C_pretrain_commutative_cnn_20260625_152717_latest.loss-curves.pdf](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/loss_plots/10C_pretrain_commutative_cnn_20260625_152717_latest.loss-curves.pdf), [latest.loss-curves.pdf](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/loss_plots/pretraining/latest.loss-curves.pdf)
+- `latest_encoder_pointer`: [10C_pretrain_commutative_cnn_20260625_152717_encoder_state.pt](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_152652_a8e2d2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_152717/10C_pretrain_commutative_cnn_20260625_152717_encoder_state.pt)
+
+### Analysis
+
+Agent-run pretraining: inspect live history CSVs and PDFs for validation self-probe trajectory, train/validation gap, and whether the run plateaued before early stopping.
+
+### Next Round Proposal
+
+If validation self-probe plateaus cleanly, use this checkpoint for 13C; otherwise patch the next pretraining YAML based on the observed failure mode.
+
+### Config Snapshot
+
+```json
+{
+  "loss_weight_config": {
+    "action_weight": 1.0,
+    "compound_weight": 0.2,
+    "concentration_weight": 0.2,
+    "cross_ramp_epochs": 0,
+    "cross_warmup_epochs": 0,
+    "lambda_align": 0.0,
+    "lambda_cross": 0.0,
+    "latent_alignment_weight": 0.0,
+    "probe_alpha_correlation": 0.05,
+    "probe_alpha_derivative": 0.25,
+    "probe_alpha_frequency": 0.1,
+    "probe_alpha_local": 1.0,
+    "probe_alpha_region_time": 1.0,
+    "probe_mask_probability": 1.0,
+    "prototype_alignment_weight": 0.0,
+    "prototype_ramp_epochs": 36,
+    "prototype_temperature": 0.25,
+    "prototype_warmup_epochs": 16,
+    "teacher_student_warmup_epochs": 0,
+    "water_vs_other_weight": 0.0
+  },
+  "model_config": {
+    "dropout": 0.25,
+    "embedding_dim": 64,
+    "normalization": "group",
+    "num_prototypes": 64,
+  ...
+```
+
+<!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260629_100031_3ff738:start -->
+## Campaign Start: cnn_pretrain_finetune_20260629_100031_3ff738
+
+- Campaign: `cnn_pretrain_finetune`
+- Trial folder: [artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738)
+- Stages: `10C -> 13C`
+- Objective: `compound.macro_f1`
+
+### Previous Results And Next Plan
+
+**Previous results reviewed:** The strongest completed evidence is the earlier full 13C fine-tune run (with config/history/summary), which showed usable action performance but had `compound_weight=0.0` in the decisive phase, so its compound macro-F1 is not decision-grade for this campaign objective; the strongest completed 10C evidence is the stable pretrain run with persisted history/summary/checkpoint, and there is also a later completed 10C campaign run with persisted artifacts but no paired completed 13C result yet. The interrupted 10C and incomplete 13C runs from the later date were reviewed only as weak/latest-folder fallback evidence for staleness/failure patterns because they lacked full persisted metrics/checkpoints.
+
+**Next experiment to run:** Launch the proposed full chain `cnn_pretrain_finetune_20260629_100031_3ff738` with 10C unchanged and a compound-focused 13C loss rebalance. **Why this should help:** The objective is downstream compound `macro_f1` (required), so increasing direct compound supervision is the most attributable first move while retaining enough action supervision for the guardrail. **Patch to apply:** set 13C loss weights to `compound_weight=0.80`, `action_weight=0.65`, `concentration_weight=0.05`, `water_vs_other_weight=0.03`. **Monitoring plan:** score by compound macro-F1 first, then tie-break with compound roc-auc/balanced-accuracy/accuracy, and enforce `action.accuracy >= 0.30`; also require persisted config/history/summary/checkpoint artifacts before accepting results for selection.
+
+### Initial Trial Patch
+
+```json
+{
+  "13C": {
+    "loss_weight_config": {
+      "action_weight": 0.65,
+      "compound_weight": 0.8,
+      "concentration_weight": 0.05,
+      "water_vs_other_weight": 0.03
+    }
+  }
+}
+```
+<!-- campaign:cnn_pretrain_finetune:init:cnn_pretrain_finetune_20260629_100031_3ff738:end -->
+
+## 10C_pretrain_commutative_cnn_20260629_100055
+
+- kind: `pretraining`
+- artifact_dir: [10C_pretrain_commutative_cnn_20260629_100055](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055)
+- `config`: [10C_pretrain_commutative_cnn_20260629_100055_config.json](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/10C_pretrain_commutative_cnn_20260629_100055_config.json)
+- `history`: [10C_pretrain_commutative_cnn_20260629_100055_history.csv](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/10C_pretrain_commutative_cnn_20260629_100055_history.csv)
+- `summary_metrics`: [10C_pretrain_commutative_cnn_20260629_100055_summary_metrics.csv](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/10C_pretrain_commutative_cnn_20260629_100055_summary_metrics.csv)
+- `checkpoint`: [10C_pretrain_commutative_cnn_20260629_100055_encoder_state.pt](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/10C_pretrain_commutative_cnn_20260629_100055_encoder_state.pt)
+- `loss_pdfs`: [loss_plots](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/loss_plots)
+- `latest_loss_pdfs`: [10C_pretrain_commutative_cnn_20260629_100055_latest.loss-curves.pdf](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/loss_plots/10C_pretrain_commutative_cnn_20260629_100055_latest.loss-curves.pdf), [latest.loss-curves.pdf](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/loss_plots/pretraining/latest.loss-curves.pdf)
+- `latest_encoder_pointer`: [10C_pretrain_commutative_cnn_20260629_100055_encoder_state.pt](artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/10C_pretrain_commutative_cnn_20260629_100055_encoder_state.pt)
+
+### Analysis
+
+Agent-run pretraining: inspect live history CSVs and PDFs for validation self-probe trajectory, train/validation gap, and whether the run plateaued before early stopping.
+
+### Next Round Proposal
+
+If validation self-probe plateaus cleanly, use this checkpoint for 13C; otherwise patch the next pretraining YAML based on the observed failure mode.
+
+### Config Snapshot
+
+```json
+{
+  "loss_weight_config": {
+    "action_weight": 1.0,
+    "compound_weight": 0.2,
+    "concentration_weight": 0.2,
+    "cross_ramp_epochs": 0,
+    "cross_warmup_epochs": 0,
+    "lambda_align": 0.0,
+    "lambda_cross": 0.0,
+    "latent_alignment_weight": 0.0,
+    "probe_alpha_correlation": 0.05,
+    "probe_alpha_derivative": 0.25,
+    "probe_alpha_frequency": 0.1,
+    "probe_alpha_local": 1.0,
+    "probe_alpha_region_time": 1.0,
+    "probe_mask_probability": 1.0,
+    "prototype_alignment_weight": 0.0,
+    "prototype_ramp_epochs": 36,
+    "prototype_temperature": 0.25,
+    "prototype_warmup_epochs": 16,
+    "teacher_student_warmup_epochs": 0,
+    "water_vs_other_weight": 0.0
+  },
+  "model_config": {
+    "dropout": 0.25,
+    "embedding_dim": 64,
+    "normalization": "group",
+    "num_prototypes": 64,
+  ...
+```

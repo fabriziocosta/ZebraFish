@@ -34,6 +34,7 @@ def command_help_text() -> str:
             "  ./run_campaign <campaign> [options]    start or resume a campaign loop",
             "  ./run_campaign status <campaign>       print campaign status without launching",
             "  ./run_campaign terminate [campaign]    terminate the active training child",
+            "  ./run_campaign force-restart <campaign> clean up and start a fresh campaign trial",
             "  ./run_campaign list                    list available campaigns",
             "",
             available_campaigns_text(),
@@ -43,7 +44,7 @@ def command_help_text() -> str:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        usage="run_campaign.py <campaign>|status <campaign>|terminate [campaign]|list [options]",
+        usage="run_campaign.py <campaign>|status <campaign>|terminate [campaign]|force-restart <campaign>|list [options]",
         description="Start a ZebraFish experiment campaign from the repo root.",
         epilog=command_help_text(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -141,6 +142,36 @@ def terminate_command(argv: list[str]) -> int:
     return campaign_main(forwarded)
 
 
+def force_restart_command(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Terminate any active/stale processes for a campaign and start a fresh trial.",
+        epilog=available_campaigns_text(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("campaign", help="Campaign name, campaign id, or YAML path.")
+    parser.add_argument("--reason", default="force-restart requested by run_campaign CLI", help="Reason recorded in campaign state.")
+    parser.add_argument("--force-after", type=float, default=5.0, help="Seconds after SIGTERM before SIGKILL escalation. Use 0 to escalate immediately.")
+    parser.add_argument("--start-trial", default=None, help="Optional explicit trial id for the fresh campaign trial.")
+    parser.add_argument("--once", action="store_true", help="Run one poll cycle after restart and exit.")
+    args = parser.parse_args(argv)
+    if args.force_after is not None and args.force_after < 0:
+        parser.error("--force-after must be greater than or equal to 0")
+    forwarded = [
+        "force-restart",
+        "--campaign",
+        resolve_campaign(args.campaign),
+        "--reason",
+        args.reason,
+        "--force-after",
+        str(args.force_after),
+    ]
+    if args.start_trial:
+        forwarded.extend(["--start-trial", args.start_trial])
+    if args.once:
+        forwarded.append("--once")
+    return campaign_main(forwarded)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_arg_parser()
@@ -158,6 +189,8 @@ def main(argv: list[str] | None = None) -> int:
         return campaign_main(["status", "--campaign", resolve_campaign(argv[1])])
     if argv[0] == "terminate":
         return terminate_command(argv[1:])
+    if argv[0] == "force-restart":
+        return force_restart_command(argv[1:])
     args = parser.parse_args(argv)
     forwarded = ["run", "--campaign", resolve_campaign(args.campaign)]
     if args.poll_seconds is not None:

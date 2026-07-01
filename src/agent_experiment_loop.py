@@ -110,7 +110,22 @@ def _is_process_running(pid: int | None) -> bool:
         return False
     except PermissionError:
         return True
+    state = _linux_process_state(pid)
+    if state == "Z":
+        return False
     return True
+
+
+def _linux_process_state(pid: int) -> str | None:
+    stat_path = Path("/proc") / str(pid) / "stat"
+    try:
+        stat_text = stat_path.read_text(encoding="utf-8")
+    except (FileNotFoundError, ProcessLookupError, PermissionError, OSError):
+        return None
+    try:
+        return stat_text.rsplit(") ", 1)[1].split()[0]
+    except IndexError:
+        return None
 
 
 def _tail_text(path: Path, *, max_lines: int = 80) -> str:

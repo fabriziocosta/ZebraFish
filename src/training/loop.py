@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 import time
 
 import numpy as np
@@ -290,6 +291,32 @@ def _maybe_save_training_history_pdfs(
     save_training_history_pdf(history_df, latest_path, title=title, excluded_loss_names=excluded_loss_names)
 
 
+def _maybe_save_live_best_checkpoint(
+    estimator,
+    state_dict: dict[str, torch.Tensor],
+    *,
+    epoch: int,
+    metric: float,
+    monitor_key: str,
+) -> None:
+    checkpoint_path = getattr(estimator, "live_checkpoint_path", None)
+    if not checkpoint_path:
+        return
+
+    output_path = Path(str(checkpoint_path)).expanduser()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "model_state_dict": {key: value.detach().cpu() for key, value in state_dict.items()},
+        "best_epoch": int(epoch),
+        "best_metric": float(metric),
+        "monitor_key": str(monitor_key),
+    }
+    temp_path = output_path.with_name(f".{output_path.name}.tmp")
+    torch.save(payload, temp_path)
+    temp_path.replace(output_path)
+    estimator.live_checkpoint_path_ = str(output_path)
+
+
 def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     hot_start_state = None
     if getattr(estimator, "hot_start", False) and hasattr(estimator, "model_"):
@@ -449,6 +476,13 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
                 best_epoch = epoch
                 epochs_without_improvement = 0
                 best_state = deepcopy(estimator.model_.state_dict())
+                _maybe_save_live_best_checkpoint(
+                    estimator,
+                    best_state,
+                    epoch=best_epoch,
+                    metric=best_metric,
+                    monitor_key=monitor_key,
+                )
             else:
                 epochs_without_improvement += 1
 

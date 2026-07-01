@@ -13,6 +13,7 @@ class RunCampaignWrapperTests(unittest.TestCase):
         help_text = parser.format_help()
         self.assertIn("./run_campaign status <campaign>", help_text)
         self.assertIn("./run_campaign terminate [campaign]", help_text)
+        self.assertIn("./run_campaign force-restart <campaign>", help_text)
         self.assertIn("./run_campaign list", help_text)
 
     def test_terminate_defaults_to_single_live_campaign(self) -> None:
@@ -76,6 +77,27 @@ class RunCampaignWrapperTests(unittest.TestCase):
             code = run_campaign.terminate_command(["--require-running"])
         self.assertEqual(code, 1)
         campaign_main.assert_not_called()
+
+    def test_force_restart_forwards_campaign_and_options(self) -> None:
+        with mock.patch("run_campaign.campaign_main", return_value=0) as campaign_main:
+            code = run_campaign.force_restart_command(
+                ["cnn", "--reason", "clean slate", "--force-after", "0", "--start-trial", "fresh", "--once"]
+            )
+        self.assertEqual(code, 0)
+        campaign_main.assert_called_once_with(
+            [
+                "force-restart",
+                "--campaign",
+                "configs/experiment_campaigns/cnn_campaign.yaml",
+                "--reason",
+                "clean slate",
+                "--force-after",
+                "0.0",
+                "--start-trial",
+                "fresh",
+                "--once",
+            ]
+        )
 
 
 if __name__ == "__main__":

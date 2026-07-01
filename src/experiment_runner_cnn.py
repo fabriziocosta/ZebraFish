@@ -350,6 +350,7 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
         freeze_backbone=bool(raw_config["freeze_backbone"]),
         hot_start=bool(raw_config["hot_start"]),
     )
+    model.live_checkpoint_path = run_dir / f"{experiment_run.experiment_id}_model_state.pt"
 
     binary_pretraining_data = None
     binary_pretraining_history = None
