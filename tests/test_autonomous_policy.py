@@ -57,6 +57,28 @@ class AutonomousPolicyTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(any("non-allowlisted" in reason for reason in result.reasons))
 
+    def test_rejects_value_outside_campaign_range(self) -> None:
+        loop, campaign = self._configs()
+        campaign["parameter_ranges"] = {"10C": {"optimization_config": {"epochs": {"min": 20, "max": 200}}}}
+        result = validate_candidate(
+            {
+                "id": "candidate_1",
+                "purpose": "too long",
+                "question_id": "q_1",
+                "hypothesis_ids": ["hyp_1"],
+                "configuration_patch": {"10C": {"optimization_config": {"epochs": 1000}}},
+                "estimated_gpu_hours": 3,
+                "expected_outcomes": ["higher score"],
+                "falsification_criteria": ["lower score"],
+                "risks": ["runtime"],
+            },
+            loop_config=loop,
+            campaign_config=campaign,
+            state=self._state(),
+        )
+        self.assertFalse(result.valid)
+        self.assertIn("parameter above maximum: 10C.optimization_config.epochs", result.reasons)
+
 
 if __name__ == "__main__":
     unittest.main()

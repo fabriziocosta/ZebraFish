@@ -9,6 +9,52 @@ campaign:
   max_decision_retries: 3
   scientific_state_path: state/scientific_state.yaml
   stages: ["12T", "15T"]
+parameter_ranges:
+  12T:
+    model_config:
+      dropout: {min: 0.0, max: 0.8}
+      attention_dropout: {min: 0.0, max: 0.8}
+    optimization_config:
+      epochs: {min: 20, max: 200}
+      batch_size: {min: 1, max: 64}
+      learning_rate: {min: 1.0e-6, max: 1.0e-3}
+      weight_decay: {min: 0.0, max: 0.02}
+      early_stopping_patience: {min: 3, max: 40}
+      early_stopping_min_delta: {min: 0.0, max: 0.1}
+      scheduler_patience: {min: 1, max: 12}
+      scheduler_factor: {min: 0.1, max: 0.9}
+    loss_weight_config:
+      action_weight: {min: 0.0, max: 3.0}
+      water_vs_other_weight: {min: 0.0, max: 1.0}
+      compound_weight: {min: 0.0, max: 3.0}
+      concentration_weight: {min: 0.0, max: 3.0}
+      lambda_cross: {min: 0.0, max: 3.0}
+      lambda_align: {min: 0.0, max: 3.0}
+      prototype_alignment_weight: {min: 0.0, max: 3.0}
+      latent_alignment_weight: {min: 0.0, max: 3.0}
+  15T:
+    holdout_fraction: {min: 0.1, max: 0.4}
+    validation_fraction_within_train: {min: 0.1, max: 0.4}
+    train_num_random_rotations: {min: 0, max: 32}
+    rotation_range_degrees: {min: 0.0, max: 45.0}
+    optimization_config:
+      epochs: {min: 20, max: 200}
+      batch_size: {min: 1, max: 64}
+      learning_rate: {min: 1.0e-7, max: 1.0e-3}
+      weight_decay: {min: 0.0, max: 0.02}
+      early_stopping_patience: {min: 3, max: 40}
+      early_stopping_min_delta: {min: 0.0, max: 0.1}
+      scheduler_patience: {min: 1, max: 12}
+      scheduler_factor: {min: 0.1, max: 0.9}
+    loss_weight_config:
+      action_weight: {min: 0.0, max: 3.0}
+      water_vs_other_weight: {min: 0.0, max: 1.0}
+      compound_weight: {min: 0.0, max: 3.0}
+      concentration_weight: {min: 0.0, max: 3.0}
+      lambda_cross: {min: 0.0, max: 3.0}
+      lambda_align: {min: 0.0, max: 3.0}
+      prototype_alignment_weight: {min: 0.0, max: 3.0}
+      latent_alignment_weight: {min: 0.0, max: 3.0}
 agent:
   max_output_tokens: 6000
 objective:

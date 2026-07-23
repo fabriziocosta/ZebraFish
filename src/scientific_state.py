@@ -290,6 +290,7 @@ def record_entity(
         raise ScientificStateError(f"unknown entity collection: {collection}")
     timestamp = now or utc_now()
     value = deepcopy(record)
+    value.setdefault("id", entity_id)
     value.setdefault("created_at", timestamp)
     value.setdefault("provenance", {"created_by": actor, "created_at": timestamp})
     return apply_operations(
@@ -325,13 +326,19 @@ def compact_context(state: dict[str, Any], *, limit: int = 8) -> dict[str, Any]:
     """Return the bounded scientific context sent to an LLM."""
 
     entities = state.get("entities", {})
+    def recent(collection: str) -> list[dict[str, Any]]:
+        return [
+            {"id": entity_id, **record}
+            for entity_id, record in list(entities.get(collection, {}).items())[-limit:]
+        ]
+
     return {
         "project": state.get("project", {}),
         "controller_state": state.get("controller_state", {}),
-        "hypotheses": list(entities.get("hypotheses", {}).values())[-limit:],
-        "beliefs": list(entities.get("beliefs", {}).values())[-limit:],
-        "questions": list(entities.get("questions", {}).values())[-limit:],
-        "observations": list(entities.get("observations", {}).values())[-limit:],
-        "candidate_experiments": list(entities.get("candidate_experiments", {}).values())[-limit:],
-        "trials": list(entities.get("trials", {}).values())[-limit:],
+        "hypotheses": recent("hypotheses"),
+        "beliefs": recent("beliefs"),
+        "questions": recent("questions"),
+        "observations": recent("observations"),
+        "candidate_experiments": recent("candidate_experiments"),
+        "trials": recent("trials"),
     }

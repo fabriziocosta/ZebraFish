@@ -3751,10 +3751,74 @@ entities:
       provenance:
         created_by: observation_engine
         created_at: '2026-07-23T13:18:03+00:00'
-  hypotheses: {}
+  hypotheses:
+    hyp_cnn_pretrain_finetune_objective:
+      title: A bounded optimisation change can improve the campaign objective.
+      statement: At least one allowlisted optimisation or loss-weight change will
+        improve compound macro-F1 without violating the action guardrail.
+      status: active
+      belief:
+        probability: 0.5
+        confidence: initial
+      question_id: q_cnn_pretrain_finetune_objective
+      provenance:
+        created_by: autonomous_controller
+        reason: campaign objective seed
+      created_at: '2026-07-23T13:28:42+00:00'
   beliefs: {}
-  questions: {}
-  candidate_experiments: {}
+  questions:
+    q_cnn_pretrain_finetune_objective:
+      question: Which permitted training change most improves downstream compound
+        discrimination while preserving action performance?
+      status: open
+      importance: 1.0
+      decision_relevance: 1.0
+      provenance:
+        created_by: autonomous_controller
+        reason: campaign objective seed
+      created_at: '2026-07-23T13:28:42+00:00'
+  candidate_experiments:
+    cand_20260723_13c_rotation_regularization_v1:
+      id: cand_20260723_13c_rotation_regularization_v1
+      title: Moderately increase 13C rotation augmentation to reduce observed generalization
+        gaps
+      purpose: Test whether stronger but bounded finetune augmentation improves compound
+        objective performance while preserving action guardrail.
+      question_id: q_cnn_pretrain_finetune_objective
+      hypothesis_ids:
+      - hyp_cnn_pretrain_finetune_objective
+      base_experiment: cnn_pretrain_finetune_20260704_141700_197670
+      configuration_patch:
+        13C:
+          train_num_random_rotations: 8
+          rotation_range_degrees: 20
+      fixed_variables:
+        10C: identical to base experiment
+        13C: all settings identical to base experiment except train_num_random_rotations
+          and rotation_range_degrees
+      expected_outcomes:
+      - compound.macro_f1 improves versus cnn_pretrain_finetune_20260704_141700_197670
+      - action.accuracy remains >= 0.3
+      - 13C end-of-run train/validation loss gaps are reduced for val_loss and alignment
+        losses relative to observed base gaps
+      falsification_criteria:
+      - compound.macro_f1 does not exceed 0.25280931819393354
+      - action.accuracy < 0.3
+      - generalization-gap indicators remain unchanged or worsen versus base for val_loss
+        or alignment losses
+      estimated_gpu_hours: 14
+      estimated_wall_hours: 20
+      risks:
+      - augmentation may be too strong and reduce fit quality
+      - improvement may appear in robustness metrics without increasing macro_f1
+      allowed_stages:
+      - 13C
+      baseline: false
+      status: proposed
+      provenance:
+        created_by: llm
+        decision: propose_trial
+      created_at: '2026-07-23T13:34:37+00:00'
 relations:
 - type: reuses_checkpoint
   source: cnn_pretrain_finetune_20260625_115021_08a733:13C
@@ -3785,13 +3849,63 @@ relations:
   target: cnn_pretrain_finetune_20260705_232039_eadccf:10C
   created_at: '2026-07-23T13:18:03+00:00'
 controller_state:
-  status: idle
-  active_trial_id: null
-  active_stage: null
+  status: running
+  active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+  active_stage: 10C
   last_migration:
     campaign_id: cnn_pretrain_finetune
     imported_trials: 0
     imported_stages: 0
+  decision_rejections: 0
+  last_rejected_candidate:
+    candidate:
+      id: cand_20260723_augmentation_gap_test
+      title: Increase 13C rotation augmentation to counter observed generalisation
+        gaps
+      purpose: Test whether stronger finetune-time rotation augmentation improves
+        compound macro-F1 without violating action accuracy guardrail.
+      question_id: q_cnn_pretrain_finetune_objective
+      hypothesis_ids:
+      - A bounded optimisation change can improve the campaign objective.
+      base_experiment: cnn_pretrain_finetune_20260704_141700_197670
+      configuration_patch:
+        13C:
+          train_num_random_rotations: 8
+          rotation_range_degrees: 25
+      fixed_variables:
+        10C: identical to base experiment
+        13C: all non-augmentation settings identical to base experiment
+      expected_outcomes:
+      - compound.macro_f1 increases versus base trial cnn_pretrain_finetune_20260704_141700_197670
+      - action.accuracy remains >= 0.3 guardrail
+      - reduced train-vs-validation loss gap at 13C end relative to base
+      falsification_criteria:
+      - compound.macro_f1 does not exceed 0.25280931819393354
+      - action.accuracy < 0.3
+      - generalisation-gap observations remain unchanged or worsen for val_loss/alignment
+        losses
+      estimated_gpu_hours: 14
+      estimated_wall_hours: 20
+      risks:
+      - Excessive augmentation may underfit and reduce both action and compound accuracy
+      - Longer effective convergence time in 13C
+      allowed_stages:
+      - 13C
+      baseline: false
+      status: proposed
+    reasons:
+    - 'unknown hypothesis: A bounded optimisation change can improve the campaign
+      objective.'
+    - 'non-allowlisted parameter: 10C.13C.train_num_random_rotations'
+    - 'non-allowlisted parameter: 10C.13C.rotation_range_degrees'
+    created_at: '2026-07-23T14:29:02'
+  safe_stop_reason: 'repeated invalid state operations: append target must be a list:
+    candidate_experiments'
+  last_poll_at: '2026-07-23T14:34:37'
+  last_controller_status: failed
+  last_rejection_reason: null
+  last_decision: propose_trial
+  last_decision_at: '2026-07-23T14:34:37'
 audit_log:
 - id: op_bd4dc5214365
   created_at: '2026-07-23T13:15:00+00:00'
@@ -8547,3 +8661,309 @@ audit_log:
         campaign_id: cnn_pretrain_finetune
         imported_trials: 0
         imported_stages: 0
+- id: op_3b0d07e0fda7
+  created_at: '2026-07-23T13:28:42+00:00'
+  actor: autonomous_controller
+  operation:
+    operation: create
+    path: entities.questions.q_cnn_pretrain_finetune_objective
+    value:
+      question: Which permitted training change most improves downstream compound
+        discrimination while preserving action performance?
+      status: open
+      importance: 1.0
+      decision_relevance: 1.0
+      provenance:
+        created_by: autonomous_controller
+        reason: campaign objective seed
+      created_at: '2026-07-23T13:28:42+00:00'
+- id: op_1fce5e1aac02
+  created_at: '2026-07-23T13:28:42+00:00'
+  actor: autonomous_controller
+  operation:
+    operation: create
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective
+    value:
+      title: A bounded optimisation change can improve the campaign objective.
+      statement: At least one allowlisted optimisation or loss-weight change will
+        improve compound macro-F1 without violating the action guardrail.
+      status: active
+      belief:
+        probability: 0.5
+        confidence: initial
+      question_id: q_cnn_pretrain_finetune_objective
+      provenance:
+        created_by: autonomous_controller
+        reason: campaign objective seed
+      created_at: '2026-07-23T13:28:42+00:00'
+- id: op_ca45e137e76f
+  created_at: '2026-07-23T13:29:02+00:00'
+  actor: llm
+  operation:
+    operation: create
+    path: /candidate_experiments/-
+    value:
+      id: cand_20260723_augmentation_gap_test
+      title: Increase 13C rotation augmentation to counter observed generalisation
+        gaps
+      purpose: Test whether stronger finetune-time rotation augmentation improves
+        compound macro-F1 without violating action accuracy guardrail.
+      question_id: q_cnn_pretrain_finetune_objective
+      hypothesis_ids:
+      - A bounded optimisation change can improve the campaign objective.
+      base_experiment: cnn_pretrain_finetune_20260704_141700_197670
+      configuration_patch: '{"13C":{"train_num_random_rotations":8,"rotation_range_degrees":25}}'
+      fixed_variables: '{"10C":"identical to base experiment","13C":"all non-augmentation
+        settings identical to base experiment"}'
+      expected_outcomes:
+      - compound.macro_f1 increases versus base trial cnn_pretrain_finetune_20260704_141700_197670
+      - action.accuracy remains >= 0.3 guardrail
+      - reduced train-vs-validation loss gap at 13C end relative to base
+      falsification_criteria:
+      - compound.macro_f1 does not exceed 0.25280931819393354
+      - action.accuracy < 0.3
+      - generalisation-gap observations remain unchanged or worsen for val_loss/alignment
+        losses
+      estimated_gpu_hours: 14.0
+      estimated_wall_hours: 20.0
+      risks:
+      - Excessive augmentation may underfit and reduce both action and compound accuracy
+      - Longer effective convergence time in 13C
+      allowed_stages:
+      - 13C
+      baseline: false
+      created_at: '2026-07-23T13:29:00+00:00'
+      provenance:
+        created_by: autonomous_controller
+        reason: Observed 13C plateau plus generalisation gaps with best-scoring completed
+          trial; test bounded augmentation-only change.
+    expected_old: null
+- id: op_d216336c6649
+  created_at: '2026-07-23T13:29:02+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      decision_rejections: 1
+      last_rejected_candidate:
+        candidate:
+          id: cand_20260723_augmentation_gap_test
+          title: Increase 13C rotation augmentation to counter observed generalisation
+            gaps
+          purpose: Test whether stronger finetune-time rotation augmentation improves
+            compound macro-F1 without violating action accuracy guardrail.
+          question_id: q_cnn_pretrain_finetune_objective
+          hypothesis_ids:
+          - A bounded optimisation change can improve the campaign objective.
+          base_experiment: cnn_pretrain_finetune_20260704_141700_197670
+          configuration_patch:
+            13C:
+              train_num_random_rotations: 8
+              rotation_range_degrees: 25
+          fixed_variables:
+            10C: identical to base experiment
+            13C: all non-augmentation settings identical to base experiment
+          expected_outcomes:
+          - compound.macro_f1 increases versus base trial cnn_pretrain_finetune_20260704_141700_197670
+          - action.accuracy remains >= 0.3 guardrail
+          - reduced train-vs-validation loss gap at 13C end relative to base
+          falsification_criteria:
+          - compound.macro_f1 does not exceed 0.25280931819393354
+          - action.accuracy < 0.3
+          - generalisation-gap observations remain unchanged or worsen for val_loss/alignment
+            losses
+          estimated_gpu_hours: 14
+          estimated_wall_hours: 20
+          risks:
+          - Excessive augmentation may underfit and reduce both action and compound
+            accuracy
+          - Longer effective convergence time in 13C
+          allowed_stages:
+          - 13C
+          baseline: false
+          status: proposed
+        reasons:
+        - 'unknown hypothesis: A bounded optimisation change can improve the campaign
+          objective.'
+        - 'non-allowlisted parameter: 10C.13C.train_num_random_rotations'
+        - 'non-allowlisted parameter: 10C.13C.rotation_range_degrees'
+        created_at: '2026-07-23T14:29:02'
+      status: running
+      safe_stop_reason: null
+- id: op_81ac1db6220e
+  created_at: '2026-07-23T13:29:02+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260705_232039_eadccf
+      active_stage: 10C
+      last_poll_at: '2026-07-23T14:29:02'
+      last_controller_status: failed
+- id: op_dc851804d771
+  created_at: '2026-07-23T13:30:09+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      decision_rejections: 2
+      last_rejection_reason: 'OperationConflictError: entity already exists at /candidate_experiments/-'
+      status: running
+      safe_stop_reason: null
+- id: op_52831d8a4d69
+  created_at: '2026-07-23T13:30:09+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260705_232039_eadccf
+      active_stage: 10C
+      last_poll_at: '2026-07-23T14:30:09'
+      last_controller_status: failed
+- id: op_a9ce3094f1dd
+  created_at: '2026-07-23T13:31:59+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      decision_rejections: 3
+      last_rejection_reason: 'ScientificStateError: append target must be a list:
+        entities.candidate_experiments'
+      status: autonomous_safe_stop
+      safe_stop_reason: 'repeated invalid state operations: append target must be
+        a list: entities.candidate_experiments'
+- id: op_356f12497d73
+  created_at: '2026-07-23T13:31:59+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260705_232039_eadccf
+      active_stage: 10C
+      last_poll_at: '2026-07-23T14:31:59'
+      last_controller_status: failed
+- id: op_da7197927b5d
+  created_at: '2026-07-23T13:33:13+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      decision_rejections: 4
+      last_rejection_reason: 'ScientificStateError: append target must be a list:
+        candidate_experiments'
+      status: autonomous_safe_stop
+      safe_stop_reason: 'repeated invalid state operations: append target must be
+        a list: candidate_experiments'
+- id: op_97b296025025
+  created_at: '2026-07-23T13:33:56+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      last_decision: no_action
+      last_decision_at: '2026-07-23T14:33:56'
+      decision_rejections: 0
+- id: op_713bfa7b9524
+  created_at: '2026-07-23T13:34:37+00:00'
+  actor: llm
+  operation:
+    operation: create
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1
+    value:
+      id: cand_20260723_13c_rotation_regularization_v1
+      title: Moderately increase 13C rotation augmentation to reduce observed generalization
+        gaps
+      purpose: Test whether stronger but bounded finetune augmentation improves compound
+        objective performance while preserving action guardrail.
+      question_id: q_cnn_pretrain_finetune_objective
+      hypothesis_ids:
+      - hyp_cnn_pretrain_finetune_objective
+      base_experiment: cnn_pretrain_finetune_20260704_141700_197670
+      configuration_patch:
+        13C:
+          train_num_random_rotations: 8
+          rotation_range_degrees: 20
+      fixed_variables:
+        10C: identical to base experiment
+        13C: all settings identical to base experiment except train_num_random_rotations
+          and rotation_range_degrees
+      expected_outcomes:
+      - compound.macro_f1 improves versus cnn_pretrain_finetune_20260704_141700_197670
+      - action.accuracy remains >= 0.3
+      - 13C end-of-run train/validation loss gaps are reduced for val_loss and alignment
+        losses relative to observed base gaps
+      falsification_criteria:
+      - compound.macro_f1 does not exceed 0.25280931819393354
+      - action.accuracy < 0.3
+      - generalization-gap indicators remain unchanged or worsen versus base for val_loss
+        or alignment losses
+      estimated_gpu_hours: 14
+      estimated_wall_hours: 20
+      risks:
+      - augmentation may be too strong and reduce fit quality
+      - improvement may appear in robustness metrics without increasing macro_f1
+      allowed_stages:
+      - 13C
+      baseline: false
+      status: proposed
+      provenance:
+        created_by: llm
+        decision: propose_trial
+      created_at: '2026-07-23T13:34:37+00:00'
+- id: op_d8ecd8be311d
+  created_at: '2026-07-23T13:34:37+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      last_decision: propose_trial
+      last_decision_at: '2026-07-23T14:34:37'
+      decision_rejections: 0
+      last_rejection_reason: null
+- id: op_fe014be6ea90
+  created_at: '2026-07-23T13:34:37+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T14:34:37'
+      last_controller_status: failed
+/candidate_experiments/-:
+  id: cand_20260723_augmentation_gap_test
+  title: Increase 13C rotation augmentation to counter observed generalisation gaps
+  purpose: Test whether stronger finetune-time rotation augmentation improves compound
+    macro-F1 without violating action accuracy guardrail.
+  question_id: q_cnn_pretrain_finetune_objective
+  hypothesis_ids:
+  - A bounded optimisation change can improve the campaign objective.
+  base_experiment: cnn_pretrain_finetune_20260704_141700_197670
+  configuration_patch: '{"13C":{"train_num_random_rotations":8,"rotation_range_degrees":25}}'
+  fixed_variables: '{"10C":"identical to base experiment","13C":"all non-augmentation
+    settings identical to base experiment"}'
+  expected_outcomes:
+  - compound.macro_f1 increases versus base trial cnn_pretrain_finetune_20260704_141700_197670
+  - action.accuracy remains >= 0.3 guardrail
+  - reduced train-vs-validation loss gap at 13C end relative to base
+  falsification_criteria:
+  - compound.macro_f1 does not exceed 0.25280931819393354
+  - action.accuracy < 0.3
+  - generalisation-gap observations remain unchanged or worsen for val_loss/alignment
+    losses
+  estimated_gpu_hours: 14.0
+  estimated_wall_hours: 20.0
+  risks:
+  - Excessive augmentation may underfit and reduce both action and compound accuracy
+  - Longer effective convergence time in 13C
+  allowed_stages:
+  - 13C
+  baseline: false
+  created_at: '2026-07-23T13:29:00+00:00'
+  provenance:
+    created_by: autonomous_controller
+    reason: Observed 13C plateau plus generalisation gaps with best-scoring completed
+      trial; test bounded augmentation-only change.

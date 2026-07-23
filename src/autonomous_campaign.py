@@ -24,6 +24,7 @@ from src.observation_engine import DetectorConfig, generate_observations
 from src.scientific_state import (
     apply_operations,
     compact_context,
+    ENTITY_COLLECTIONS,
     empty_state,
     load_state,
     record_entity,
@@ -184,6 +185,25 @@ def parse_decision(text: str) -> dict[str, Any]:
                 normalized[field] = json.loads(raw)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"operation {field} is not valid JSON: {exc}") from exc
+        original_path = normalized["path"]
+        normalized["path"] = _normalize_operation_path(original_path, normalized.get("value"))
+        if normalized.get("operation") == "append" and original_path.startswith("/"):
+            if normalized["path"].startswith("entities.") and normalized["path"].count(".") >= 2:
+                normalized["operation"] = "create"
+            elif original_path.startswith("/relations/"):
+                normalized["operation"] = "relation"
+        if normalized.get("operation") == "append":
+            collection_path = normalized.get("path", "")
+            if collection_path == "relations" or collection_path == "entities.relations":
+                normalized["operation"] = "relation"
+                normalized["path"] = "relations"
+            else:
+                for collection in ENTITY_COLLECTIONS:
+                    if collection_path in {collection, f"entities.{collection}"} and isinstance(normalized.get("value"), dict):
+                        entity_id = normalized["value"].get("id") or f"entity_{uuid.uuid4().hex[:10]}"
+                        normalized["operation"] = "create"
+                        normalized["path"] = f"entities.{collection}.{entity_id}"
+                        break
         normalized_operations.append(normalized)
     operations = normalized_operations
     candidate = payload.get("candidate")
@@ -207,6 +227,29 @@ def parse_decision(text: str) -> dict[str, Any]:
     }
 
 
+def _normalize_operation_path(path: str, value: Any) -> str:
+    """Accept JSON-Pointer entity paths emitted by the LLM."""
+
+    if not isinstance(path, str) or not path.startswith("/"):
+        return path
+    parts = [part.replace("~1", "/").replace("~0", "~") for part in path.split("/")[1:]]
+    if not parts:
+        return path
+    if parts[0] == "entities":
+        parts = parts[1:]
+    if parts[0] in ENTITY_COLLECTIONS:
+        collection = parts[0]
+        if len(parts) >= 2 and parts[1] == "-":
+            entity_id = value.get("id") if isinstance(value, dict) else None
+            if not entity_id:
+                entity_id = f"entity_{uuid.uuid4().hex[:10]}"
+            return f"entities.{collection}.{entity_id}"
+        return "entities." + ".".join(parts)
+    if parts[0] == "relations" and parts[-1:] == ["-"]:
+        return "relations"
+    return ".".join(parts)
+
+
 def _build_prompt(
     campaign_config: dict[str, Any],
     loop_config: dict[str, Any],
@@ -221,6 +264,7 @@ def _build_prompt(
         "No human will approve or repair your proposal. Return one bounded, evidence-based decision.",
         "Raw measurements are calculated by deterministic software. Use observations rather than inventing numeric findings.",
         "A candidate must be one controlled trial, address an existing question and hypothesis, use only allowlisted parameters, and include expected outcomes and falsification criteria.",
+        "Use exact hypothesis and question IDs from the scientific context, never their titles or statements.",
         "Encode operation value and expected_old as JSON strings. Encode candidate configuration_patch and fixed_variables as JSON strings.",
         "Every created hypothesis, belief, question, or candidate must include created_at and provenance; every update must use expected_old when changing existing state.",
         "If no safe evidence-based trial is available, return stop_campaign or no_action.",
@@ -360,7 +404,18 @@ def _apply_decision(
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
     from src.scientific_state import apply_operations
 
+    candidate_payload = decision.get("candidate")
+    candidate_id = candidate_payload.get("id") if isinstance(candidate_payload, dict) else None
     operations = decision.get("operations", [])
+    if candidate_id:
+        operations = [
+            operation
+            for operation in operations
+            if not (
+                operation.get("operation") == "create"
+                and str(operation.get("path", "")) == f"entities.candidate_experiments.{candidate_id}"
+            )
+        ]
     try:
         proposed_state = apply_operations(scientific_state, operations, actor="llm")
     except Exception as exc:

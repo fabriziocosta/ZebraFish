@@ -39,6 +39,10 @@ def _patch_for_stage(candidate: dict[str, Any], stage: str) -> dict[str, Any]:
         return {}
     if stage in patch and isinstance(patch[stage], dict):
         return patch[stage]
+    if any(key in patch for key in (candidate.get("allowed_stages") or [])):
+        return {}
+    if any(key in patch for key in ("10C", "13C", "12T", "15T")):
+        return {}
     # A single-stage candidate may provide the patch directly.
     return patch
 
@@ -102,16 +106,21 @@ def validate_candidate(
                 reasons.append(f"non-allowlisted parameter: {stage}.{leaf}")
             if leaf.startswith("model_config.") and leaf not in {"model_config.dropout", "model_config.normalization", "model_config.attention_dropout"}:
                 reasons.append(f"architecture/model parameter is not autonomous-safe: {stage}.{leaf}")
-            ranges = stage_cfg.get("parameter_ranges", {})
+            ranges = campaign_config.get("parameter_ranges", {}).get(stage)
+            if not isinstance(ranges, dict):
+                ranges = stage_cfg.get("parameter_ranges", {})
             range_spec = _lookup(ranges, leaf)
             value = _lookup(stage_patch, leaf)
             if isinstance(range_spec, dict) and value is not None:
                 minimum = range_spec.get("min")
                 maximum = range_spec.get("max")
-                if minimum is not None and value < minimum:
-                    reasons.append(f"parameter below minimum: {stage}.{leaf}")
-                if maximum is not None and value > maximum:
-                    reasons.append(f"parameter above maximum: {stage}.{leaf}")
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    reasons.append(f"parameter must be numeric for range validation: {stage}.{leaf}")
+                else:
+                    if minimum is not None and value < minimum:
+                        reasons.append(f"parameter below minimum: {stage}.{leaf}")
+                    if maximum is not None and value > maximum:
+                        reasons.append(f"parameter above maximum: {stage}.{leaf}")
     max_leaves = int(campaign_config.get("campaign", {}).get("max_patch_leaf_count", 2))
     if len(total_leaves) == 0 and not candidate.get("baseline"):
         reasons.append("candidate has no configuration patch")
