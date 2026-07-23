@@ -20,6 +20,7 @@ from src.models.estimators import CommutativeCNNClassifier
 from src.tensor_utils import build_tensor_embedding_2d, load_labeled_tensor_dataset, load_unlabeled_tensor_dataset, plot_tensor_embedding_2d
 from src.training.data import augment_training_tensors_with_rotations
 from src.training.workflow import (
+    ExperimentRun,
     MultitaskEvaluationResult,
     build_reports_excluding_control,
     create_experiment_run,
@@ -30,10 +31,37 @@ from src.training.workflow import (
     persist_pretraining_artifacts,
     prepare_multitask_experiment_data,
 )
+from src.training.checkpointing import TrainingSuspended, install_training_signal_handlers
 
 
 DEFAULT_10C_CONFIG_PATH = Path("configs/experiments/10C_pretrain_next.yaml")
 DEFAULT_13C_CONFIG_PATH = Path("configs/experiments/13C_finetune_next.yaml")
+
+
+def _experiment_run_from_existing_dir(run_dir: Path, experiment_id: str) -> ExperimentRun:
+    (run_dir / "loss_plots").mkdir(parents=True, exist_ok=True)
+    (run_dir / "figures").mkdir(parents=True, exist_ok=True)
+    return ExperimentRun(
+        experiment_id=experiment_id,
+        run_dir=str(run_dir),
+        loss_plot_dir=str(run_dir / "loss_plots"),
+        figure_dir=str(run_dir / "figures"),
+    )
+
+
+def _experiment_run_from_config_path(config_path: Path, experiment_prefix: str) -> ExperimentRun | None:
+    if not config_path.exists():
+        return None
+    run_dir = config_path.parent
+    if run_dir.parent.name != "runs":
+        return None
+    suffix = "_config.yaml"
+    if not config_path.name.endswith(suffix):
+        return None
+    experiment_id = config_path.name.removesuffix(suffix)
+    if not experiment_id.startswith(experiment_prefix):
+        return None
+    return _experiment_run_from_existing_dir(run_dir, experiment_id)
 
 
 def default_10c_pretraining_config() -> CommutativeCNNPretrainingConfig:
@@ -192,13 +220,27 @@ def run_10c_pretraining(config_path: str | Path = DEFAULT_10C_CONFIG_PATH) -> Pa
     config = load_commutative_cnn_pretraining_config(config_path) if config_path.exists() else default_10c_pretraining_config()
     raw_config = read_yaml_mapping(config_path) if config_path.exists() else {}
     experiment_output_dir = Path(raw_config.get("experiment_output_dir", "artifacts/pretrained_commutative_cnn"))
-    experiment_run = create_experiment_run(experiment_output_dir, "10C_pretrain_commutative_cnn")
+    experiment_run = _experiment_run_from_config_path(config_path, "10C_pretrain_commutative_cnn") or create_experiment_run(
+        experiment_output_dir,
+        "10C_pretrain_commutative_cnn",
+    )
     run_dir = Path(experiment_run.run_dir)
-    update_agent_run_status(status="running", experiment="10C", experiment_id=experiment_run.experiment_id, run_dir=run_dir)
     pretrained_encoder_path = run_dir / f"{experiment_run.experiment_id}_encoder_state.pt"
+    resume_checkpoint_path = run_dir / "resume" / f"{experiment_run.experiment_id}_training_resume.pt"
+    suspend_marker_path = run_dir / "control" / f"{experiment_run.experiment_id}.suspend"
+    update_agent_run_status(
+        status="running",
+        experiment="10C",
+        experiment_id=experiment_run.experiment_id,
+        run_dir=run_dir,
+        resume_checkpoint_path=resume_checkpoint_path,
+        suspend_marker_path=suspend_marker_path,
+    )
     optimization_config = replace(
         config.optimization_config,
         training_plot_dir=str(Path(experiment_run.loss_plot_dir) / "pretraining"),
+        resume_checkpoint_path=str(resume_checkpoint_path),
+        suspend_marker_path=str(suspend_marker_path),
     )
     resolved_config = replace(config, pretrained_encoder_path=pretrained_encoder_path, optimization_config=optimization_config)
     pretraining_config_path = write_commutative_cnn_pretraining_config(
@@ -252,7 +294,20 @@ def run_10c_pretraining(config_path: str | Path = DEFAULT_10C_CONFIG_PATH) -> Pa
         loss_weight_config=resolved_config.loss_weight_config,
         pretrained_state_path=previous_pretrained_encoder_path,
     )
-    model.pretrain(X_train, validation_data=X_val)
+    install_training_signal_handlers(model)
+    try:
+        model.pretrain(X_train, validation_data=X_val)
+    except TrainingSuspended as exc:
+        update_agent_run_status(
+            status="suspended",
+            experiment="10C",
+            experiment_id=experiment_run.experiment_id,
+            run_dir=run_dir,
+            resume_checkpoint_path=exc.checkpoint_path,
+            suspend_marker_path=suspend_marker_path,
+        )
+        print(f"Training suspended. Remove {suspend_marker_path} and rerun this config to resume.", flush=True)
+        return run_dir
     pretrained_encoder_path = model.save_pretrained_encoder(pretrained_encoder_path)
     latest_pretraining_config_path = write_commutative_cnn_pretraining_config(
         resolved_config,
@@ -303,15 +358,39 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
         )
 
     experiment_output_dir = Path(raw_config["experiment_output_dir"])
-    experiment_run = create_experiment_run(experiment_output_dir, "13C_finetune_commutative_cnn")
+    experiment_run = (
+        _experiment_run_from_config_path(config_path, "13C_finetune_commutative_cnn")
+        or (
+            _experiment_run_from_existing_dir(Path(raw_config["experiment_run_dir"]), str(raw_config["experiment_id"]))
+            if raw_config.get("experiment_run_dir") and raw_config.get("experiment_id")
+            else None
+        )
+        or create_experiment_run(experiment_output_dir, "13C_finetune_commutative_cnn")
+    )
     run_dir = Path(experiment_run.run_dir)
-    update_agent_run_status(status="running", experiment="13C", experiment_id=experiment_run.experiment_id, run_dir=run_dir)
     loss_plot_root = Path(experiment_run.loss_plot_dir)
     figure_dir = Path(experiment_run.figure_dir)
     binary_loss_plot_dir = loss_plot_root / "binary_hot_start"
     fine_tune_loss_plot_dir = loss_plot_root / "fine_tune"
+    resume_checkpoint_path = run_dir / "resume" / f"{experiment_run.experiment_id}_training_resume.pt"
+    suspend_marker_path = run_dir / "control" / f"{experiment_run.experiment_id}.suspend"
+    update_agent_run_status(
+        status="running",
+        experiment="13C",
+        experiment_id=experiment_run.experiment_id,
+        run_dir=run_dir,
+        resume_checkpoint_path=resume_checkpoint_path,
+        suspend_marker_path=suspend_marker_path,
+    )
 
-    optimization_config = OptimizationConfig(**{**dict(raw_config["optimization_config"]), "training_plot_dir": str(fine_tune_loss_plot_dir)})
+    optimization_config = OptimizationConfig(
+        **{
+            **dict(raw_config["optimization_config"]),
+            "training_plot_dir": str(fine_tune_loss_plot_dir),
+            "resume_checkpoint_path": str(resume_checkpoint_path),
+            "suspend_marker_path": str(suspend_marker_path),
+        }
+    )
     loss_weight_config = LossWeightConfig(**dict(raw_config["loss_weight_config"]))
     resolved_yaml_config = {
         **raw_config,
@@ -351,6 +430,7 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
         hot_start=bool(raw_config["hot_start"]),
     )
     model.live_checkpoint_path = run_dir / f"{experiment_run.experiment_id}_model_state.pt"
+    install_training_signal_handlers(model)
 
     binary_pretraining_data = None
     binary_pretraining_history = None
@@ -378,7 +458,19 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
 
     model.training_plot_dir = str(fine_tune_loss_plot_dir)
     model.training_plot_title = "Pretrained commutative CNN full fine-tune loss curves"
-    fit_estimator_on_experiment(model, experiment)
+    try:
+        fit_estimator_on_experiment(model, experiment)
+    except TrainingSuspended as exc:
+        update_agent_run_status(
+            status="suspended",
+            experiment="13C",
+            experiment_id=experiment_run.experiment_id,
+            run_dir=run_dir,
+            resume_checkpoint_path=exc.checkpoint_path,
+            suspend_marker_path=suspend_marker_path,
+        )
+        print(f"Training suspended. Remove {suspend_marker_path} and rerun this config to resume.", flush=True)
+        return run_dir
 
     predictions = model.predict(experiment.splits.X_holdout)
     probabilities = model.predict_proba(experiment.splits.X_holdout)

@@ -285,6 +285,8 @@ def classify_controller_status(config: dict[str, Any], status: dict[str, Any]) -
 
     if run_status.get("status") == "completed" and _completion_requirements_met(config, status):
         return "completed", "runner reported completion and history artifacts exist"
+    if run_status.get("status") == "suspended":
+        return "suspended", f"runner suspended; resume checkpoint: {run_status.get('resume_checkpoint_path')}"
     if run_status.get("status") == "failed":
         return "failed", f"runner reported failure: {run_status.get('error', 'unknown error')}"
     if "Traceback (most recent call last)" in log_tail or "ERROR" in log_tail:
@@ -541,7 +543,7 @@ def update_controller_state(
     run_dir = artifacts.get("run_dir")
     if run_dir:
         updates["run_dir"] = run_dir
-    if controller_status in {"completed", "failed"}:
+    if controller_status in {"completed", "failed", "suspended"}:
         updates["status"] = controller_status
         updates[f"{controller_status}_at"] = _now_iso()
     return _merge_json(state_path, updates)

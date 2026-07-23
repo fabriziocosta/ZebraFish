@@ -1834,6 +1834,9 @@ def build_tensor_embedding_2d(
         }
     )
     embedding_df["method"] = method_lower
+    if method_lower == "umap":
+        embedding_df["umap_n_neighbors"] = int(umap_n_neighbors)
+        embedding_df["umap_min_dist"] = float(umap_min_dist)
 
     if metadata is not None:
         metadata_reset = metadata.reset_index(drop=True).copy()
@@ -1912,6 +1915,7 @@ def plot_tensor_embedding_2d(
     svm_background_resolution: int = 300,
     svm_c: float = 1.0,
     svm_gamma: str | float = "scale",
+    show_embedding_params: bool = True,
 ):
     class_palette = [
         "#4E79A7",  # blue
@@ -2060,7 +2064,13 @@ def plot_tensor_embedding_2d(
 
     ax.set_xlabel("Component 1")
     ax.set_ylabel("Component 2")
-    ax.set_title(title or f"{embedding_df['method'].iloc[0].upper()} tensor embedding")
+    plot_title = title or f"{embedding_df['method'].iloc[0].upper()} tensor embedding"
+    if show_embedding_params and str(embedding_df["method"].iloc[0]).lower() == "umap":
+        if {"umap_n_neighbors", "umap_min_dist"}.issubset(embedding_df.columns):
+            n_neighbors = int(embedding_df["umap_n_neighbors"].iloc[0])
+            min_dist = float(embedding_df["umap_min_dist"].iloc[0])
+            plot_title = f"{plot_title} (UMAP n_neighbors={n_neighbors}, min_dist={min_dist:g})"
+    ax.set_title(plot_title)
     ax.tick_params(labelsize=13)
     ax.xaxis.label.set_size(15)
     ax.yaxis.label.set_size(15)

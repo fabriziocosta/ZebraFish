@@ -45,6 +45,13 @@ RESTARTABLE_TERMINAL_STATUSES = {
     "termination_race_stopped",
 }
 
+RESUMABLE_STOPPED_STATUSES = {
+    "failed",
+    "suspended",
+    "terminated",
+    "termination_race_stopped",
+}
+
 
 @dataclass(frozen=True)
 class CampaignDecision:
@@ -641,6 +648,62 @@ def _collect_stage_status(
     status["controller_status"] = controller_status
     status["controller_reason"] = controller_reason
     return status, controller_status, controller_reason
+
+
+def _resume_checkpoint_from_status(status: dict[str, Any]) -> Path | None:
+    run_status = status.get("run_status", {})
+    checkpoint = run_status.get("resume_checkpoint_path")
+    if not checkpoint:
+        return None
+    path = Path(str(checkpoint))
+    return path if path.exists() else None
+
+
+def _resume_current_stage(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    state: dict[str, Any],
+    status: dict[str, Any],
+    *,
+    stream: TextIO = sys.stdout,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    run_status = status.get("run_status", {})
+    suspend_marker = run_status.get("suspend_marker_path")
+    if suspend_marker:
+        Path(str(suspend_marker)).unlink(missing_ok=True)
+
+    run_dir = run_status.get("run_dir") or status.get("artifacts", {}).get("run_dir")
+    resume_checkpoint = _resume_checkpoint_from_status(status)
+    resume_config = _find_completed_stage_config(status)
+    if resume_checkpoint is None:
+        raise FileNotFoundError("No resume checkpoint is available for the current stage")
+    if resume_config is None:
+        raise FileNotFoundError(f"Could not find per-run config for resumable run_dir={run_dir}")
+
+    stage = str(state["current_stage"])
+    trial_dir = Path(state["current_trial_dir"])
+    trial_configs = dict(state.get("trial_configs", {}))
+    trial_configs[stage] = str(resume_config)
+    state["trial_configs"] = trial_configs
+    state["status"] = "launching"
+    state["resume_requested_at"] = _now_iso()
+    state["resume_checkpoint_path"] = str(resume_checkpoint)
+    state["updated_at"] = _now_iso()
+    _persist_campaign_state(campaign_config, state)
+
+    stage_loop_config = _loop_config_for_stage(loop_config, trial_dir, stage, trial_configs)
+    launched = experiment_loop.launch_experiment(stage_loop_config, stage, dry_run=False)
+    state["active_launch_state"] = launched
+    state["status"] = "running"
+    state["updated_at"] = _now_iso()
+    _persist_campaign_state(campaign_config, state)
+    print(
+        f"resumed campaign={campaign_config['campaign']['id']} trial={state.get('current_trial_id')} "
+        f"stage={stage} config={resume_config} checkpoint={resume_checkpoint} pid={launched.get('pid')}",
+        file=stream,
+        flush=True,
+    )
+    return state, launched
 
 
 def _advance_stage_or_complete_trial(
@@ -1880,12 +1943,36 @@ def run_campaign(
         state_path = _campaign_state_path(campaign_config)
         state = _read_json(state_path)
         if state and not new_trial and not dry_run and state.get("status") in RESTARTABLE_TERMINAL_STATUSES:
-            print(
-                f"previous campaign state is {state.get('status')}; starting a new campaign trial",
-                file=stream,
-                flush=True,
-            )
-            new_trial = True
+            active_status = _active_stage_status_if_available(campaign_config, loop_config, state)
+            if active_status is not None and active_status[0].get("process_running"):
+                print(
+                    f"previous campaign state is {state.get('status')} but trial={state.get('current_trial_id')} "
+                    f"stage={state.get('current_stage')} still has a running process; monitoring it",
+                    file=stream,
+                    flush=True,
+                )
+            elif active_status is not None and _resume_checkpoint_from_status(active_status[0]) is not None:
+                print(
+                    f"previous campaign state is {state.get('status')}; resuming trial={state.get('current_trial_id')} "
+                    f"stage={state.get('current_stage')} from checkpoint",
+                    file=stream,
+                    flush=True,
+                )
+                state, _launched = _resume_current_stage(
+                    campaign_config,
+                    loop_config,
+                    state,
+                    active_status[0],
+                    stream=stream,
+                )
+            else:
+                print(
+                    f"previous campaign state is {state.get('status')}; starting a new campaign trial "
+                    "(no resume checkpoint is available)",
+                    file=stream,
+                    flush=True,
+                )
+                new_trial = True
         if new_trial and state and not dry_run:
             active_status = _active_stage_status_if_available(campaign_config, loop_config, state)
             if active_status is not None and active_status[0].get("process_running"):
@@ -2039,6 +2126,14 @@ def run_campaign(
                         else:
                             action = "wait_stale"
                             reason = f"{controller_reason}; active process is still running, so new trial launch is blocked"
+                    elif controller_status == "suspended":
+                        state["status"] = "suspended"
+                        state["suspended_reason"] = controller_reason
+                        state["updated_at"] = _now_iso()
+                        if not dry_run:
+                            _persist_campaign_state(campaign_config, state)
+                        action = "wait_suspended"
+                        reason = f"{controller_reason}; remove the suspend marker and rerun the stage config to resume"
                     elif controller_status == "failed":
                         state["status"] = controller_status
                         state["failure_reason"] = controller_reason
@@ -2408,6 +2503,102 @@ def terminate_campaign(
         _release_campaign_lock(terminate_lock)
 
 
+def resume_suspended_campaign(
+    campaign_config: dict[str, Any],
+    *,
+    stream: TextIO = sys.stdout,
+) -> int:
+    loop_config = _load_loop_config(campaign_config)
+    terminate_lock = _acquire_terminate_lock(campaign_config)
+    try:
+        state_path = _campaign_state_path(campaign_config)
+        state = _read_json(state_path)
+        if not state:
+            print(f"no campaign state found campaign={campaign_config['campaign']['id']}", file=stream, flush=True)
+            return 1
+
+        status, controller_status, controller_reason = _collect_stage_status(campaign_config, loop_config, state)
+        if status.get("process_running"):
+            print(
+                f"refusing to resume because stage is already running trial={state.get('current_trial_id')} "
+                f"stage={state.get('current_stage')} pid={status.get('pid')}",
+                file=stream,
+                flush=True,
+            )
+            return 1
+        if controller_status not in RESUMABLE_STOPPED_STATUSES and state.get("status") not in RESTARTABLE_TERMINAL_STATUSES:
+            print(
+                f"campaign is not resumable trial={state.get('current_trial_id')} stage={state.get('current_stage')} "
+                f"controller={controller_status} reason={controller_reason}",
+                file=stream,
+                flush=True,
+            )
+            return 1
+        if _resume_checkpoint_from_status(status) is None:
+            print(
+                f"campaign stage has no resume checkpoint trial={state.get('current_trial_id')} "
+                f"stage={state.get('current_stage')}",
+                file=stream,
+                flush=True,
+            )
+            return 1
+
+        _resume_current_stage(campaign_config, loop_config, state, status, stream=stream)
+        return 0
+    finally:
+        _release_campaign_lock(terminate_lock)
+
+
+def suspend_campaign(
+    campaign_config: dict[str, Any],
+    *,
+    reason: str = "suspend requested by campaign CLI",
+    stream: TextIO = sys.stdout,
+) -> int:
+    terminate_lock = _acquire_terminate_lock(campaign_config)
+    try:
+        loop_config = _load_loop_config(campaign_config)
+        state = _read_json(_campaign_state_path(campaign_config))
+        if not state:
+            print(f"no campaign state found campaign={campaign_config['campaign']['id']}", file=stream, flush=True)
+            return 1
+        status, controller_status, controller_reason = _collect_stage_status(campaign_config, loop_config, state)
+        if not status.get("process_running"):
+            print(
+                f"no running stage to suspend trial={state.get('current_trial_id')} stage={state.get('current_stage')} "
+                f"controller={controller_status} reason={controller_reason}",
+                file=stream,
+                flush=True,
+            )
+            return 1
+        run_status = status.get("run_status", {})
+        suspend_marker = run_status.get("suspend_marker_path")
+        if not suspend_marker:
+            print(
+                "active run does not expose a suspend_marker_path; it may have been launched before suspend support was added",
+                file=stream,
+                flush=True,
+            )
+            return 1
+        marker_path = Path(str(suspend_marker))
+        marker_path.parent.mkdir(parents=True, exist_ok=True)
+        marker_path.write_text(json.dumps({"reason": reason, "requested_at": _now_iso()}, indent=2), encoding="utf-8")
+        state["status"] = "suspend_requested"
+        state["suspend_reason"] = reason
+        state["suspend_marker_path"] = str(marker_path)
+        state["updated_at"] = _now_iso()
+        _persist_campaign_state(campaign_config, state)
+        print(
+            f"suspend requested campaign={campaign_config['campaign']['id']} trial={state.get('current_trial_id')} "
+            f"stage={state.get('current_stage')} marker={marker_path}",
+            file=stream,
+            flush=True,
+        )
+        return 0
+    finally:
+        _release_campaign_lock(terminate_lock)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run or inspect a ZebraFish experiment campaign.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2442,6 +2633,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return nonzero if no running process is found.",
     )
+
+    resume_parser = subparsers.add_parser("resume", help="Resume a campaign stage suspended at an epoch boundary.")
+    resume_parser.add_argument("--campaign", default="configs/experiment_campaigns/cnn_campaign.yaml", help="Campaign YAML config.")
+
+    suspend_parser = subparsers.add_parser("suspend", help="Request cooperative suspension after the active epoch finishes.")
+    suspend_parser.add_argument("--campaign", default="configs/experiment_campaigns/cnn_campaign.yaml", help="Campaign YAML config.")
+    suspend_parser.add_argument("--reason", default="suspend requested by campaign CLI", help="Reason written to the suspend marker.")
 
     force_restart_parser = subparsers.add_parser(
         "force-restart",
@@ -2479,6 +2677,10 @@ def main(argv: list[str] | None = None) -> int:
             force_after=args.force_after,
             require_running=args.require_running,
         )
+    if args.command == "suspend":
+        return suspend_campaign(config, reason=args.reason)
+    if args.command == "resume":
+        return resume_suspended_campaign(config)
     if args.command == "force-restart":
         return force_restart_campaign(
             config,

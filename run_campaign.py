@@ -33,6 +33,8 @@ def command_help_text() -> str:
             "commands:",
             "  ./run_campaign <campaign> [options]    start or resume a campaign loop",
             "  ./run_campaign status <campaign>       print campaign status without launching",
+            "  ./run_campaign suspend [campaign]      request cooperative suspension after the current epoch",
+            "  ./run_campaign resume [campaign]       resume a suspended campaign stage",
             "  ./run_campaign terminate [campaign]    terminate the active training child",
             "  ./run_campaign force-restart <campaign> clean up and start a fresh campaign trial",
             "  ./run_campaign list                    list available campaigns",
@@ -142,6 +144,51 @@ def terminate_command(argv: list[str]) -> int:
     return campaign_main(forwarded)
 
 
+def suspend_command(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Request cooperative suspension after the active epoch finishes.",
+        epilog=available_campaigns_text(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("campaign", nargs="?", help="Campaign name, campaign id, or YAML path. Defaults only when exactly one known campaign is live.")
+    parser.add_argument("--campaign-id", default=None, help="Campaign id such as cnn_pretrain_finetune.")
+    parser.add_argument("--reason", default="suspend requested by run_campaign CLI", help="Reason written to the suspend marker.")
+    args = parser.parse_args(argv)
+    target = args.campaign_id or args.campaign
+    if target:
+        config_path = resolve_campaign(target)
+    else:
+        config_path, code = resolve_default_live_campaign()
+        if config_path is None:
+            if code == 0:
+                print("no running campaign found")
+                return 1
+            return code
+    return campaign_main(["suspend", "--campaign", config_path, "--reason", args.reason])
+
+
+def resume_command(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Resume a campaign stage suspended at an epoch boundary.",
+        epilog=available_campaigns_text(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("campaign", nargs="?", help="Campaign name, campaign id, or YAML path. Defaults only when exactly one known campaign is live.")
+    parser.add_argument("--campaign-id", default=None, help="Campaign id such as cnn_pretrain_finetune.")
+    args = parser.parse_args(argv)
+    target = args.campaign_id or args.campaign
+    if target:
+        config_path = resolve_campaign(target)
+    else:
+        config_path, code = resolve_default_live_campaign()
+        if config_path is None:
+            if code == 0:
+                print("no running campaign found")
+                return 1
+            return code
+    return campaign_main(["resume", "--campaign", config_path])
+
+
 def force_restart_command(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Terminate any active/stale processes for a campaign and start a fresh trial.",
@@ -189,6 +236,10 @@ def main(argv: list[str] | None = None) -> int:
         return campaign_main(["status", "--campaign", resolve_campaign(argv[1])])
     if argv[0] == "terminate":
         return terminate_command(argv[1:])
+    if argv[0] == "suspend":
+        return suspend_command(argv[1:])
+    if argv[0] == "resume":
+        return resume_command(argv[1:])
     if argv[0] == "force-restart":
         return force_restart_command(argv[1:])
     args = parser.parse_args(argv)

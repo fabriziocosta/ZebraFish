@@ -27,6 +27,8 @@ class OptimizationConfig:
     device: str | None = None
     verbose: bool = True
     class_weighting: str | None = None
+    resume_checkpoint_path: str | None = None
+    suspend_marker_path: str | None = None
 
 
 @dataclass(frozen=True)

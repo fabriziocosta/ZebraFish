@@ -13,6 +13,12 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from src.models.common import _PreparedData, _ensure_labels_1d, _ensure_tensor_5d
+from src.training.checkpointing import (
+    TrainingSuspended,
+    load_training_resume_checkpoint,
+    save_training_resume_checkpoint,
+    should_suspend_training,
+)
 
 
 def _format_eta(seconds: float) -> str:
@@ -375,20 +381,36 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
         else None
     )
 
-    history_rows: list[dict[str, float | int]] = []
+    history_rows: list[dict[str, float | int | str]] = []
     best_state = deepcopy(estimator.model_.state_dict())
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
     stopped_early = False
     early_stopping_start_epoch = max(1, int(getattr(estimator, "early_stopping_start_epoch", None) or 1))
+    start_epoch = 1
+    resume_state = load_training_resume_checkpoint(
+        estimator,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        expected_stage="supervised",
+    )
+    if resume_state is not None:
+        start_epoch = int(resume_state["start_epoch"])
+        history_rows = resume_state["history_rows"]
+        best_state = resume_state["best_state"]
+        best_metric = float(resume_state["best_metric"])
+        best_epoch = int(resume_state["best_epoch"])
+        epochs_without_improvement = int(resume_state["epochs_without_improvement"])
     training_start = time.perf_counter()
     if estimator.verbose:
         _, legend, header = _build_epoch_log_layout(include_val=val_loader is not None)
         print(legend)
         print(header)
+        if start_epoch > 1:
+            print(f"resuming supervised training from epoch {start_epoch:03d}/{estimator.epochs:03d}")
 
-    for epoch in range(1, estimator.epochs + 1):
+    for epoch in range(start_epoch, estimator.epochs + 1):
         estimator.model_.train()
         train_total_loss_sum = 0.0
         train_component_sums: dict[str, float] = {}
@@ -490,10 +512,23 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
             scheduler.step(monitor_metric)
 
         history_rows.append(row)
+        resume_checkpoint_path = save_training_resume_checkpoint(
+            estimator,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            epoch=epoch,
+            history_rows=history_rows,
+            best_state=best_state,
+            best_metric=best_metric,
+            best_epoch=best_epoch,
+            epochs_without_improvement=epochs_without_improvement,
+            stage="supervised",
+        )
         _maybe_save_training_history_pdfs(estimator, history_rows, epoch)
         if estimator.verbose:
             elapsed = time.perf_counter() - training_start
-            avg_epoch_seconds = elapsed / epoch
+            completed_since_resume = max(1, epoch - start_epoch + 1)
+            avg_epoch_seconds = elapsed / completed_since_resume
             eta = _format_eta(avg_epoch_seconds * (estimator.epochs - epoch))
             current_lr = optimizer.param_groups[0]["lr"]
             print(
@@ -505,6 +540,13 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
                     include_val="val_loss" in row,
                 )
             )
+
+        if should_suspend_training(estimator):
+            if estimator.verbose:
+                print(f"suspend requested after epoch={epoch:03d}; resume_checkpoint={resume_checkpoint_path}", flush=True)
+            if resume_checkpoint_path is None:
+                raise RuntimeError("Training suspend requested but resume_checkpoint_path is not configured")
+            raise TrainingSuspended(resume_checkpoint_path)
 
         if (
             should_monitor

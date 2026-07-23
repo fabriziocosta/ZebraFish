@@ -14,6 +14,12 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from src.models.common import _ensure_tensor_5d
 from src.models.probes import PROBE_TYPES, build_probe_masks, build_probe_targets, masked_probe_loss
+from src.training.checkpointing import (
+    TrainingSuspended,
+    load_training_resume_checkpoint,
+    save_training_resume_checkpoint,
+    should_suspend_training,
+)
 from src.training.losses import prototype_consistency_loss
 from src.training.loop import _format_eta
 from src.training.reporting import plot_grouped_independent_axis_history
@@ -401,12 +407,26 @@ def _pretrain_commutative_estimator(
     )
 
     n_epochs = int(epochs or estimator.epochs)
-    history_rows: list[dict[str, float | int]] = []
+    history_rows: list[dict[str, float | int | str]] = []
     best_state = deepcopy(estimator.model_.state_dict())
     best_metric = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
     early_stopping_start_epoch = _early_stopping_start_epoch_for_pretraining(estimator)
+    start_epoch = 1
+    resume_state = load_training_resume_checkpoint(
+        estimator,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        expected_stage="pretraining",
+    )
+    if resume_state is not None:
+        start_epoch = int(resume_state["start_epoch"])
+        history_rows = resume_state["history_rows"]
+        best_state = resume_state["best_state"]
+        best_metric = float(resume_state["best_metric"])
+        best_epoch = int(resume_state["best_epoch"])
+        epochs_without_improvement = int(resume_state["epochs_without_improvement"])
     training_start = time.perf_counter()
 
     if estimator.verbose:
@@ -432,8 +452,10 @@ def _pretrain_commutative_estimator(
                 f"{'trL':>8} {'trS':>8} {'trX':>8} {'trP':>8} {'trLA':>8} | "
                 f"{'vaL':>8} {'vaS':>8} {'vaX':>8} {'vaP':>8} {'vaLA':>8}"
             )
+        if start_epoch > 1:
+            print(f"resuming pretraining from epoch {start_epoch:03d}/{n_epochs:03d}")
 
-    for epoch in range(1, n_epochs + 1):
+    for epoch in range(start_epoch, n_epochs + 1):
         estimator.model_.train()
         train_loss_sum = 0.0
         train_component_sums: dict[str, float] = {}
@@ -506,10 +528,23 @@ def _pretrain_commutative_estimator(
             scheduler.step(monitor_metric)
 
         history_rows.append(row)
+        resume_checkpoint_path = save_training_resume_checkpoint(
+            estimator,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            epoch=epoch,
+            history_rows=history_rows,
+            best_state=best_state,
+            best_metric=best_metric,
+            best_epoch=best_epoch,
+            epochs_without_improvement=epochs_without_improvement,
+            stage="pretraining",
+        )
         _maybe_save_pretraining_loss_pdfs(estimator, history_rows, epoch)
         if estimator.verbose:
             elapsed = time.perf_counter() - training_start
-            avg_epoch_seconds = elapsed / epoch
+            completed_since_resume = max(1, epoch - start_epoch + 1)
+            avg_epoch_seconds = elapsed / completed_since_resume
             eta = _format_eta(avg_epoch_seconds * (n_epochs - epoch))
             current_lr = optimizer.param_groups[0]["lr"]
             train_parts = (
@@ -530,6 +565,13 @@ def _pretrain_commutative_estimator(
                 print(f"{epoch:03d}/{n_epochs:03d} {current_lr:8.2e} {eta:>9} | {train_parts} | {val_parts}")
             else:
                 print(f"{epoch:03d}/{n_epochs:03d} {current_lr:8.2e} {eta:>9} | {train_parts}")
+
+        if should_suspend_training(estimator):
+            if estimator.verbose:
+                print(f"suspend requested after epoch={epoch:03d}; resume_checkpoint={resume_checkpoint_path}", flush=True)
+            if resume_checkpoint_path is None:
+                raise RuntimeError("Training suspend requested but resume_checkpoint_path is not configured")
+            raise TrainingSuspended(resume_checkpoint_path)
 
         if (
             should_monitor

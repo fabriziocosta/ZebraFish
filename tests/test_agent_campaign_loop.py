@@ -618,6 +618,64 @@ prompts:
             self.assertNotEqual(saved_state["current_trial_id"], "old_interrupted")
             self.assertIn("previous campaign state is terminated; starting a new campaign trial", stream.getvalue())
 
+    def test_run_campaign_resumes_terminated_state_when_checkpoint_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            state_path = Path(campaign_config["artifacts"]["state_path"])
+            trial_dir = root / "old_interrupted"
+            run_dir = trial_dir / "outputs" / "10C" / "runs" / "10C_pretrain_commutative_cnn_20260706_120000"
+            resume_checkpoint = run_dir / "resume" / "10C_pretrain_commutative_cnn_20260706_120000_training_resume.pt"
+            resume_config = run_dir / "10C_pretrain_commutative_cnn_20260706_120000_config.yaml"
+            resume_checkpoint.parent.mkdir(parents=True)
+            resume_checkpoint.write_bytes(b"checkpoint")
+            resume_config.write_text("optimization_config:\n  epochs: 10\n", encoding="utf-8")
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "campaign_id": "test_campaign",
+                        "status": "terminated",
+                        "current_trial_id": "old_interrupted",
+                        "current_trial_dir": str(trial_dir),
+                        "current_stage_index": 0,
+                        "current_stage": "10C",
+                        "stage_state_path": str(trial_dir / "stage_state" / "10C.json"),
+                        "trial_configs": {"10C": str(root / "params10.yaml"), "13C": str(root / "params13.yaml")},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stopped_status = {
+                "process_running": False,
+                "run_status": {
+                    "run_dir": str(run_dir),
+                    "resume_checkpoint_path": str(resume_checkpoint),
+                    "suspend_marker_path": str(run_dir / "control" / "run.suspend"),
+                },
+                "artifacts": {"run_dir": str(run_dir), "latest_config_yamls": [str(resume_config)]},
+            }
+            running_status = {
+                "process_running": True,
+                "pid": 123,
+                "run_status": {"run_dir": str(run_dir), "resume_checkpoint_path": str(resume_checkpoint)},
+                "artifacts": {"run_dir": str(run_dir), "latest_config_yamls": [str(resume_config)]},
+            }
+            stream = io.StringIO()
+            with mock.patch("src.agent_campaign_loop._collect_stage_status", side_effect=[(stopped_status, "failed", "stopped"), (running_status, "running_wait", "running")]), mock.patch(
+                "src.agent_experiment_loop.launch_experiment"
+            ) as launch:
+                launch.return_value = {"active_experiment": "10C", "pid": 123}
+                code = run_campaign(campaign_config, once=True, client=_FakeClient("{}"), stream=stream)
+            self.assertEqual(code, 0)
+            saved_state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved_state["current_trial_id"], "old_interrupted")
+            self.assertEqual(saved_state["trial_configs"]["10C"], str(resume_config))
+            self.assertEqual(saved_state["resume_checkpoint_path"], str(resume_checkpoint))
+            self.assertIn("resuming trial=old_interrupted", stream.getvalue())
+
     def test_run_campaign_records_generic_openai_failure_as_retryable_state(self) -> None:
         class FailingResponses:
             def create(self, **kwargs):

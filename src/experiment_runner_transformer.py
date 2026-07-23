@@ -16,7 +16,9 @@ from src.experiment_runner_shared import merge_dicts, read_yaml_mapping, to_yaml
 from src.models.configs import CommutativeTransformerConfig, LossWeightConfig, OptimizationConfig
 from src.models.estimators import CommutativeTransformerClassifier
 from src.tensor_utils import build_tensor_embedding_2d, load_labeled_tensor_dataset, load_unlabeled_tensor_dataset, plot_tensor_embedding_2d
+from src.training.checkpointing import TrainingSuspended, install_training_signal_handlers
 from src.training.workflow import (
+    ExperimentRun,
     MultitaskEvaluationResult,
     build_reports_excluding_control,
     create_experiment_run,
@@ -30,6 +32,32 @@ from src.training.workflow import (
 
 DEFAULT_12T_CONFIG_PATH = Path("configs/experiments/12T_pretrain_next.yaml")
 DEFAULT_15T_CONFIG_PATH = Path("configs/experiments/15T_finetune_next.yaml")
+
+
+def _experiment_run_from_existing_dir(run_dir: Path, experiment_id: str) -> ExperimentRun:
+    (run_dir / "loss_plots").mkdir(parents=True, exist_ok=True)
+    (run_dir / "figures").mkdir(parents=True, exist_ok=True)
+    return ExperimentRun(
+        experiment_id=experiment_id,
+        run_dir=str(run_dir),
+        loss_plot_dir=str(run_dir / "loss_plots"),
+        figure_dir=str(run_dir / "figures"),
+    )
+
+
+def _experiment_run_from_config_path(config_path: Path, experiment_prefix: str) -> ExperimentRun | None:
+    if not config_path.exists():
+        return None
+    run_dir = config_path.parent
+    if run_dir.parent.name != "runs":
+        return None
+    suffix = "_config.yaml"
+    if not config_path.name.endswith(suffix):
+        return None
+    experiment_id = config_path.name.removesuffix(suffix)
+    if not experiment_id.startswith(experiment_prefix):
+        return None
+    return _experiment_run_from_existing_dir(run_dir, experiment_id)
 
 
 def default_12t_pretraining_config() -> CommutativeTransformerPretrainingConfig:
@@ -152,14 +180,27 @@ def run_12t_pretraining(config_path: str | Path = DEFAULT_12T_CONFIG_PATH) -> Pa
     config = load_commutative_transformer_pretraining_config(config_path) if config_path.exists() else default_12t_pretraining_config()
     raw_config = read_yaml_mapping(config_path) if config_path.exists() else {}
     experiment_output_dir = Path(raw_config.get("experiment_output_dir", "artifacts/pretrained_commutative_transformer"))
-    experiment_run = create_experiment_run(experiment_output_dir, "12T_pretrain_commutative_transformer")
+    experiment_run = _experiment_run_from_config_path(config_path, "12T_pretrain_commutative_transformer") or create_experiment_run(
+        experiment_output_dir,
+        "12T_pretrain_commutative_transformer",
+    )
     run_dir = Path(experiment_run.run_dir)
-    update_agent_run_status(status="running", experiment="12T", experiment_id=experiment_run.experiment_id, run_dir=run_dir)
-
     pretrained_encoder_path = run_dir / f"{experiment_run.experiment_id}_encoder_state.pt"
+    resume_checkpoint_path = run_dir / "resume" / f"{experiment_run.experiment_id}_training_resume.pt"
+    suspend_marker_path = run_dir / "control" / f"{experiment_run.experiment_id}.suspend"
+    update_agent_run_status(
+        status="running",
+        experiment="12T",
+        experiment_id=experiment_run.experiment_id,
+        run_dir=run_dir,
+        resume_checkpoint_path=resume_checkpoint_path,
+        suspend_marker_path=suspend_marker_path,
+    )
     optimization_config = replace(
         config.optimization_config,
         training_plot_dir=str(Path(experiment_run.loss_plot_dir) / "pretraining"),
+        resume_checkpoint_path=str(resume_checkpoint_path),
+        suspend_marker_path=str(suspend_marker_path),
     )
     resolved_config = replace(config, pretrained_encoder_path=pretrained_encoder_path, optimization_config=optimization_config)
     pretraining_config_path = write_commutative_transformer_pretraining_config(
@@ -185,7 +226,20 @@ def run_12t_pretraining(config_path: str | Path = DEFAULT_12T_CONFIG_PATH) -> Pa
         optimization_config=optimization_config,
         loss_weight_config=resolved_config.loss_weight_config,
     )
-    model.pretrain(unlabeled_dataset["tensors"])
+    install_training_signal_handlers(model)
+    try:
+        model.pretrain(unlabeled_dataset["tensors"])
+    except TrainingSuspended as exc:
+        update_agent_run_status(
+            status="suspended",
+            experiment="12T",
+            experiment_id=experiment_run.experiment_id,
+            run_dir=run_dir,
+            resume_checkpoint_path=exc.checkpoint_path,
+            suspend_marker_path=suspend_marker_path,
+        )
+        print(f"Training suspended. Remove {suspend_marker_path} and rerun this config to resume.", flush=True)
+        return run_dir
     pretrained_encoder_path = model.save_pretrained_encoder(pretrained_encoder_path)
     latest_pretraining_config_path = write_commutative_transformer_pretraining_config(
         resolved_config,
@@ -229,13 +283,37 @@ def run_15t_finetune(config_path: str | Path = DEFAULT_15T_CONFIG_PATH) -> Path:
         )
 
     experiment_output_dir = Path(raw_config["experiment_output_dir"])
-    experiment_run = create_experiment_run(experiment_output_dir, "15T_finetune_commutative_transformer")
+    experiment_run = (
+        _experiment_run_from_config_path(config_path, "15T_finetune_commutative_transformer")
+        or (
+            _experiment_run_from_existing_dir(Path(raw_config["experiment_run_dir"]), str(raw_config["experiment_id"]))
+            if raw_config.get("experiment_run_dir") and raw_config.get("experiment_id")
+            else None
+        )
+        or create_experiment_run(experiment_output_dir, "15T_finetune_commutative_transformer")
+    )
     run_dir = Path(experiment_run.run_dir)
-    update_agent_run_status(status="running", experiment="15T", experiment_id=experiment_run.experiment_id, run_dir=run_dir)
     loss_plot_dir = Path(experiment_run.loss_plot_dir) / "training"
     figure_dir = Path(experiment_run.figure_dir)
+    resume_checkpoint_path = run_dir / "resume" / f"{experiment_run.experiment_id}_training_resume.pt"
+    suspend_marker_path = run_dir / "control" / f"{experiment_run.experiment_id}.suspend"
+    update_agent_run_status(
+        status="running",
+        experiment="15T",
+        experiment_id=experiment_run.experiment_id,
+        run_dir=run_dir,
+        resume_checkpoint_path=resume_checkpoint_path,
+        suspend_marker_path=suspend_marker_path,
+    )
 
-    optimization_config = OptimizationConfig(**{**dict(raw_config["optimization_config"]), "training_plot_dir": str(loss_plot_dir)})
+    optimization_config = OptimizationConfig(
+        **{
+            **dict(raw_config["optimization_config"]),
+            "training_plot_dir": str(loss_plot_dir),
+            "resume_checkpoint_path": str(resume_checkpoint_path),
+            "suspend_marker_path": str(suspend_marker_path),
+        }
+    )
     loss_weight_config = LossWeightConfig(**dict(raw_config["loss_weight_config"]))
     resolved_yaml_config = {
         **raw_config,
@@ -272,7 +350,21 @@ def run_15t_finetune(config_path: str | Path = DEFAULT_15T_CONFIG_PATH) -> Path:
         pretrained_state_path=pretrained_encoder_path,
         freeze_backbone=bool(raw_config["freeze_backbone"]),
     )
-    fit_estimator_on_experiment(model, experiment)
+    model.live_checkpoint_path = run_dir / f"{experiment_run.experiment_id}_model_state.pt"
+    install_training_signal_handlers(model)
+    try:
+        fit_estimator_on_experiment(model, experiment)
+    except TrainingSuspended as exc:
+        update_agent_run_status(
+            status="suspended",
+            experiment="15T",
+            experiment_id=experiment_run.experiment_id,
+            run_dir=run_dir,
+            resume_checkpoint_path=exc.checkpoint_path,
+            suspend_marker_path=suspend_marker_path,
+        )
+        print(f"Training suspended. Remove {suspend_marker_path} and rerun this config to resume.", flush=True)
+        return run_dir
 
     predictions = model.predict(experiment.splits.X_holdout)
     probabilities = model.predict_proba(experiment.splits.X_holdout)

@@ -801,6 +801,29 @@ class CacheRetentionTests(unittest.TestCase):
         self.assertNotIn("0: Water", legend_labels)
         fig.clf()
 
+    def test_plot_tensor_embedding_2d_shows_umap_parameters_when_available(self) -> None:
+        embedding_df = pd.DataFrame(
+            {
+                "embed_x": [0.0, 1.0],
+                "embed_y": [0.0, 1.0],
+                "label": [0, 1],
+                "label_name": ["Water", "GABAAR_Antagonist"],
+                "method": ["umap", "umap"],
+                "umap_n_neighbors": [7, 7],
+                "umap_min_dist": [0.25, 0.25],
+            }
+        )
+
+        fig, ax = tensor_utils.plot_tensor_embedding_2d(
+            embedding_df,
+            title="Embedding",
+            marker_column=None,
+        )
+
+        self.assertIn("n_neighbors=7", ax.get_title())
+        self.assertIn("min_dist=0.25", ax.get_title())
+        fig.clf()
+
 
 if __name__ == "__main__":
     unittest.main()
