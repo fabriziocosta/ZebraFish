@@ -471,7 +471,7 @@ def _apply_decision(
             next_legacy = legacy.start_trial(campaign_config, loop_config, trial_patch=patch, dry_run=False)
             proposed_state = update_controller_state(
                 proposed_state,
-                {"status": "running", "active_trial_id": next_legacy.get("current_trial_id"), "last_decision": decision["decision"], "last_decision_at": _now(), "decision_rejections": 0, "last_rejection_reason": None},
+                {"status": "running", "active_trial_id": next_legacy.get("current_trial_id"), "last_decision": decision["decision"], "last_decision_at": _now(), "decision_rejections": 0, "last_rejection_reason": None, "safe_stop_reason": None},
             )
             return proposed_state, next_legacy, f"launched candidate {candidate['id']}"
     if decision["decision"] == "stop_campaign":
@@ -493,7 +493,7 @@ def _apply_decision(
         return proposed_state, legacy_state, "autonomous safe stop: no next candidate"
     proposed_state = update_controller_state(
         proposed_state,
-        {"status": "running", "last_decision": decision["decision"], "last_decision_at": _now(), "decision_rejections": 0},
+        {"status": "running", "last_decision": decision["decision"], "last_decision_at": _now(), "decision_rejections": 0, "safe_stop_reason": None},
     )
     return proposed_state, legacy_state, decision.get("reason") or decision["decision"]
 

@@ -294,6 +294,25 @@ Useful commands are:
 ./run_campaign terminate cnn
 ```
 
+## Dashboard
+
+`scientific_experiment_dashboard.ipynb` is a read-only, runnable view of the
+scientific state and the newest campaign artifact. Launch it from the
+repository root with:
+
+```bash
+.venv/bin/jupyter notebook scientific_experiment_dashboard.ipynb
+```
+
+The notebook shows the active process and stage, recent trials, hypotheses,
+open questions, deterministic observations, candidate experiments, and a
+Graphviz reasoning graph. Its detail slider ranges from 0 (trial-level
+overview) to 5 (all available entity metadata and labelled relations). The
+graph omits trials and stages that have no deterministic observation link.
+Hovering over a node reveals its complete untruncated scientific text.
+The dashboard does not mutate state or launch experiments; it is safe to leave
+open while a campaign runs.
+
 ## Migration
 
 `./run_campaign migrate-state <campaign>` imports campaign manifests, trial
