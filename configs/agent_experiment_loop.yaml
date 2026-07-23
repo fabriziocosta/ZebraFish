@@ -9,6 +9,15 @@ controller:
 state:
   path: artifacts/agent_experiment_loop/state.json
   log_dir: artifacts/agent_experiment_loop/logs
+scientific_state:
+  path: state/scientific_state.yaml
+observation:
+  plateau_window: 5
+  plateau_min_delta: 0.002
+  generalisation_gap_threshold: 0.10
+  instability_zscore: 3.0
+  regression_tolerance: 0.05
+  runtime_anomaly_factor: 2.0
 logbook:
   path: EXPERIMENTS_LOGBOOK.md
 experiments:

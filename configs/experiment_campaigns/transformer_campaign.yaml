@@ -4,6 +4,10 @@ campaign:
   poll_seconds: 3600
   trial_budget: 20
   max_patch_leaf_count: 4
+  max_single_trial_gpu_hours: 20
+  remaining_gpu_hours: null
+  max_decision_retries: 3
+  scientific_state_path: state/scientific_state.yaml
   stages: ["12T", "15T"]
 agent:
   max_output_tokens: 6000

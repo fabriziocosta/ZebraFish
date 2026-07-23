@@ -1,5 +1,9 @@
 # Agent Experiment Loop Infrastructure
 
+> The canonical autonomous scientific framework is documented in
+> [scientific_experiment_framework.md](scientific_experiment_framework.md).
+> This document describes the lower-level runner and compatibility behavior.
+
 ## Preface
 
 The experiment loop is a small local orchestration system for long-running scientific model experiments. Its purpose is to separate the mechanical parts of running experiments from the interpretive parts of deciding what to try next.

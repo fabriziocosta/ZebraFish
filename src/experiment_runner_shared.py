@@ -5,7 +5,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
+try:
+    import pandas as pd
+except ModuleNotFoundError:  # Controller-only commands do not need pandas.
+    pd = None
 
 try:
     import yaml
@@ -65,5 +68,10 @@ def update_agent_run_status(**updates: Any) -> None:
         except json.JSONDecodeError:
             payload = {}
     payload.update({key: to_yamlable(value) for key, value in updates.items()})
-    payload["updated_at"] = pd.Timestamp.now().isoformat(timespec="seconds")
+    if pd is not None:
+        payload["updated_at"] = pd.Timestamp.now().isoformat(timespec="seconds")
+    else:
+        from datetime import datetime, timezone
+
+        payload["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")

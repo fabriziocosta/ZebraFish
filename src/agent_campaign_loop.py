@@ -101,6 +101,10 @@ def load_campaign_config(path: str | Path) -> dict[str, Any]:
     campaign.setdefault("poll_seconds", 3600)
     campaign.setdefault("trial_budget", 20)
     campaign.setdefault("max_patch_leaf_count", 2)
+    campaign.setdefault("scientific_state_path", "state/scientific_state.yaml")
+    campaign.setdefault("max_single_trial_gpu_hours", 20.0)
+    campaign.setdefault("remaining_gpu_hours", None)
+    campaign.setdefault("max_decision_retries", 3)
     campaign.setdefault("stages", [])
     if not campaign["stages"]:
         raise ValueError(f"{target} must define campaign.stages")
@@ -125,6 +129,9 @@ def load_campaign_config(path: str | Path) -> dict[str, Any]:
 
     payload.setdefault("logbook", {})
     payload["logbook"].setdefault("path", "EXPERIMENTS_LOGBOOK.md")
+    payload.setdefault("scientific_state", {})
+    payload["scientific_state"].setdefault("path", campaign["scientific_state_path"])
+    payload.setdefault("observation", {})
     payload.setdefault("prompts", {})
     payload["prompts"].setdefault(
         "decision_schema",

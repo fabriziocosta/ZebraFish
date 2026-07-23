@@ -2,10 +2,49 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
-from src.agent_campaign_loop import campaign_live_status, load_campaign_config, main as campaign_main
+try:
+    import yaml
+except ModuleNotFoundError:
+    yaml = None
+
+from src.scientific_state import load_state
+
+
+def load_campaign_config(path):
+    try:
+        from src.agent_campaign_loop import load_campaign_config as _load_campaign_config
+
+        return _load_campaign_config(path)
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"pandas", "torch"}:
+            raise
+        target = Path(path)
+        text = target.read_text(encoding="utf-8")
+        payload = yaml.safe_load(text) if yaml is not None else json.loads(text)
+        campaign = payload.setdefault("campaign", {})
+        campaign.setdefault("id", target.stem)
+        campaign.setdefault("scientific_state_path", "state/scientific_state.yaml")
+        payload.setdefault("scientific_state", {"path": campaign["scientific_state_path"]})
+        payload.setdefault("artifacts", {})
+        payload["artifacts"].setdefault("root", f"artifacts/campaigns/{campaign['id']}")
+        payload["artifacts"].setdefault("state_path", f"{payload['artifacts']['root']}/campaign_state.json")
+        return payload
+
+
+def campaign_live_status(config):
+    from src.agent_campaign_loop import campaign_live_status as _campaign_live_status
+
+    return _campaign_live_status(config)
+
+
+def campaign_main(argv):
+    from src.agent_campaign_loop import main as _campaign_main
+
+    return _campaign_main(argv)
 
 
 CAMPAIGNS: dict[str, dict[str, str]] = {
@@ -37,6 +76,11 @@ def command_help_text() -> str:
             "  ./run_campaign resume [campaign]       resume a suspended campaign stage",
             "  ./run_campaign terminate [campaign]    terminate the active training child",
             "  ./run_campaign force-restart <campaign> clean up and start a fresh campaign trial",
+            "  ./run_campaign migrate-state <campaign> import historical campaign evidence",
+            "  ./run_campaign state [campaign]             print the scientific state",
+            "  ./run_campaign observations [campaign]      print deterministic observations",
+            "  ./run_campaign candidates [campaign]        print autonomous candidates",
+            "  ./run_campaign rebuild-views <campaign>     rebuild compatibility views",
             "  ./run_campaign list                    list available campaigns",
             "",
             available_campaigns_text(),
@@ -242,21 +286,51 @@ def main(argv: list[str] | None = None) -> int:
         return resume_command(argv[1:])
     if argv[0] == "force-restart":
         return force_restart_command(argv[1:])
+    if argv[0] in {"state", "observations", "candidates"}:
+        target = resolve_campaign(argv[1]) if len(argv) > 1 else CAMPAIGNS["cnn"]["config"]
+        config = load_campaign_config(target)
+        state = load_state(config.get("scientific_state", {}).get("path", "state/scientific_state.yaml"))
+        if argv[0] == "observations":
+            payload = state.get("entities", {}).get("observations", {})
+        elif argv[0] == "candidates":
+            payload = state.get("entities", {}).get("candidate_experiments", {})
+        else:
+            payload = state
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if argv[0] == "migrate-state":
+        if len(argv) < 2:
+            print("usage: ./run_campaign migrate-state <campaign>", file=sys.stderr)
+            return 2
+        config = load_campaign_config(resolve_campaign(argv[1]))
+        from src.state_migration import migrate_campaign
+
+        result = migrate_campaign(config)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if argv[0] == "rebuild-views":
+        if len(argv) < 2:
+            print("usage: ./run_campaign rebuild-views <campaign>", file=sys.stderr)
+            return 2
+        config = load_campaign_config(resolve_campaign(argv[1]))
+        from src.state_migration import rebuild_compatibility_views
+
+        print(json.dumps(rebuild_compatibility_views(config), indent=2, sort_keys=True))
+        return 0
     args = parser.parse_args(argv)
-    forwarded = ["run", "--campaign", resolve_campaign(args.campaign)]
+    config = load_campaign_config(resolve_campaign(args.campaign))
     if args.poll_seconds is not None:
-        forwarded.extend(["--poll-seconds", str(args.poll_seconds)])
-    if args.once:
-        forwarded.append("--once")
-    if args.dry_run:
-        forwarded.append("--dry-run")
-    if args.start_trial:
-        forwarded.extend(["--start-trial", args.start_trial])
-    if args.new_trial:
-        forwarded.append("--new-trial")
-    if args.terminate_child_on_exit:
-        forwarded.append("--terminate-child-on-exit")
-    return campaign_main(forwarded)
+        config["campaign"]["poll_seconds"] = args.poll_seconds
+    from src.autonomous_campaign import run_autonomous_campaign
+
+    return run_autonomous_campaign(
+        config,
+        once=args.once,
+        dry_run=args.dry_run,
+        start_trial_id=args.start_trial,
+        new_trial=args.new_trial,
+        terminate_child_on_exit=args.terminate_child_on_exit,
+    )
 
 
 if __name__ == "__main__":
