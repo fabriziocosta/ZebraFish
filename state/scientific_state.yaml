@@ -3901,8 +3901,8 @@ controller_state:
     created_at: '2026-07-23T14:29:02'
   safe_stop_reason: 'repeated invalid state operations: append target must be a list:
     candidate_experiments'
-  last_poll_at: '2026-07-23T15:50:28'
-  last_controller_status: running_progress
+  last_poll_at: '2026-07-25T09:50:52'
+  last_controller_status: running_wait
   last_rejection_reason: null
   last_decision: propose_trial
   last_decision_at: '2026-07-23T14:34:37'
@@ -8943,6 +8943,426 @@ audit_log:
       active_stage: 10C
       last_poll_at: '2026-07-23T15:50:28'
       last_controller_status: running_progress
+- id: op_0c6728a16940
+  created_at: '2026-07-23T15:50:28+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T16:50:28'
+      last_controller_status: running_progress
+- id: op_f3f56620c34c
+  created_at: '2026-07-23T16:50:29+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T17:50:29'
+      last_controller_status: running_progress
+- id: op_e7f4583d5cd9
+  created_at: '2026-07-23T17:50:29+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T18:50:29'
+      last_controller_status: running_progress
+- id: op_c5a808980703
+  created_at: '2026-07-23T18:50:30+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T19:50:30'
+      last_controller_status: running_progress
+- id: op_30769f168104
+  created_at: '2026-07-23T19:50:31+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T20:50:31'
+      last_controller_status: running_progress
+- id: op_44987a1cdf9a
+  created_at: '2026-07-23T20:50:31+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T21:50:31'
+      last_controller_status: running_wait
+- id: op_529129f81c17
+  created_at: '2026-07-23T21:50:32+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T22:50:32'
+      last_controller_status: running_progress
+- id: op_4aa4c4b5459e
+  created_at: '2026-07-23T22:50:32+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-23T23:50:32'
+      last_controller_status: running_progress
+- id: op_6f811e96b403
+  created_at: '2026-07-23T23:50:33+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T00:50:33'
+      last_controller_status: running_progress
+- id: op_50b4078ea904
+  created_at: '2026-07-24T00:50:33+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T01:50:33'
+      last_controller_status: running_progress
+- id: op_43b6a5efbdec
+  created_at: '2026-07-24T01:50:34+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T02:50:34'
+      last_controller_status: running_wait
+- id: op_5c47a479f9bc
+  created_at: '2026-07-24T02:50:34+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T03:50:34'
+      last_controller_status: running_progress
+- id: op_ee6f1bf7c13e
+  created_at: '2026-07-24T03:50:35+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T04:50:35'
+      last_controller_status: running_progress
+- id: op_0c014fca3e9f
+  created_at: '2026-07-24T04:50:36+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T05:50:36'
+      last_controller_status: running_progress
+- id: op_e4a09fdf6246
+  created_at: '2026-07-24T05:50:36+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T06:50:36'
+      last_controller_status: running_progress
+- id: op_e04a46f9b341
+  created_at: '2026-07-24T06:50:37+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T07:50:37'
+      last_controller_status: running_wait
+- id: op_243d3d5982f4
+  created_at: '2026-07-24T07:50:38+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T08:50:38'
+      last_controller_status: running_progress
+- id: op_ba150f4cf740
+  created_at: '2026-07-24T08:50:38+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T09:50:38'
+      last_controller_status: running_progress
+- id: op_8da34c0927ab
+  created_at: '2026-07-24T09:50:39+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T10:50:39'
+      last_controller_status: running_progress
+- id: op_ec4b0f7e9d25
+  created_at: '2026-07-24T10:50:39+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T11:50:39'
+      last_controller_status: running_progress
+- id: op_4dcf4d143304
+  created_at: '2026-07-24T11:50:40+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T12:50:40'
+      last_controller_status: running_wait
+- id: op_35eefedb50e3
+  created_at: '2026-07-24T12:50:40+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T13:50:40'
+      last_controller_status: running_progress
+- id: op_4d869e6d82c0
+  created_at: '2026-07-24T13:50:41+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T14:50:41'
+      last_controller_status: running_progress
+- id: op_047c527cf113
+  created_at: '2026-07-24T14:50:42+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T15:50:42'
+      last_controller_status: running_progress
+- id: op_baacecda61cd
+  created_at: '2026-07-24T15:50:42+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T16:50:42'
+      last_controller_status: running_progress
+- id: op_8bfcbd2c670b
+  created_at: '2026-07-24T16:50:43+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T17:50:43'
+      last_controller_status: running_wait
+- id: op_81dfd1b641c7
+  created_at: '2026-07-24T17:50:43+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T18:50:43'
+      last_controller_status: running_progress
+- id: op_bf912e770395
+  created_at: '2026-07-24T18:50:44+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T19:50:44'
+      last_controller_status: running_progress
+- id: op_8fbfa216f934
+  created_at: '2026-07-24T19:50:44+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T20:50:44'
+      last_controller_status: running_progress
+- id: op_d91e343be577
+  created_at: '2026-07-24T20:50:45+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T21:50:45'
+      last_controller_status: running_progress
+- id: op_1bb6e8723bf9
+  created_at: '2026-07-24T21:50:45+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T22:50:45'
+      last_controller_status: running_wait
+- id: op_59b53ed1be33
+  created_at: '2026-07-24T22:50:46+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-24T23:50:46'
+      last_controller_status: running_progress
+- id: op_71a7655035a5
+  created_at: '2026-07-24T23:50:47+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T00:50:47'
+      last_controller_status: running_progress
+- id: op_23c04ea6f35d
+  created_at: '2026-07-25T00:50:47+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T01:50:47'
+      last_controller_status: running_progress
+- id: op_72aacda3b5ab
+  created_at: '2026-07-25T01:50:48+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T02:50:48'
+      last_controller_status: running_progress
+- id: op_10dd6cb4e91e
+  created_at: '2026-07-25T02:50:48+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T03:50:48'
+      last_controller_status: running_wait
+- id: op_c75eb0b36bc4
+  created_at: '2026-07-25T03:50:49+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T04:50:49'
+      last_controller_status: running_progress
+- id: op_a8c0637d78f8
+  created_at: '2026-07-25T04:50:49+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T05:50:49'
+      last_controller_status: running_progress
+- id: op_aa5cb67ffddf
+  created_at: '2026-07-25T05:50:50+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T06:50:50'
+      last_controller_status: running_progress
+- id: op_34009e570653
+  created_at: '2026-07-25T06:50:51+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T07:50:51'
+      last_controller_status: running_progress
+- id: op_a79181900a85
+  created_at: '2026-07-25T07:50:51+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T08:50:51'
+      last_controller_status: running_progress
+- id: op_f53593034a99
+  created_at: '2026-07-25T08:50:52+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T09:50:52'
+      last_controller_status: running_wait
 /candidate_experiments/-:
   id: cand_20260723_augmentation_gap_test
   title: Increase 13C rotation augmentation to counter observed generalisation gaps

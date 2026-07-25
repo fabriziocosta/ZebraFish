@@ -51,7 +51,7 @@ class ScientificDashboardTests(unittest.TestCase):
             "obs_1",
             {
                 "type": "generalisation_gap",
-                "statement": "Validation trails training.",
+                "statement": "Validation trails training; macro f1=-0.252809...",
                 "source_experiments": ["exp_1", "exp_10", "exp_2"],
             },
         )
@@ -85,6 +85,8 @@ class ScientificDashboardTests(unittest.TestCase):
         self.assertIn("score: 0.988", detailed.nodes["trials:trial_10"]["label"])
         self.assertIn("TRIAL 3", detailed.nodes["trials:trial_2"]["label"])
         self.assertIn("Validation trails training", detailed.nodes["observations:obs_1"]["label"])
+        self.assertIn("-0.253", detailed.nodes["observations:obs_1"]["label"])
+        self.assertIn("macro f1=-0.253...", detailed.nodes["observations:obs_1"]["tooltip"])
         self.assertIn("Does regularisation improve generalisation?", detailed.nodes["questions:q_1"]["tooltip"])
         self.assertIn("Moderate regularisation reduces the validation gap.", detailed.nodes["hypotheses:h_1"]["tooltip"])
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import math
 import os
+import re
 import textwrap
 from typing import Any, Iterable
 
@@ -47,6 +48,8 @@ NODE_COLORS = {
     "dataset": "#79706e",
 }
 
+_DECIMAL_NUMBER = re.compile(r"(?<![A-Za-z_])[-+]?(?:\d+\.\d*|\.\d+)(?:[eE][-+]?\d+)?")
+
 
 def _short_id(value: Any, limit: int = 24) -> str:
     text = str(value)
@@ -64,13 +67,45 @@ def _summary_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _format_numbers_in_text(value: Any) -> str:
+    """Compact decimal numbers embedded in narrative dashboard text."""
+
+    text = str(value)
+
+    def replace(match: re.Match[str]) -> str:
+        raw = match.group(0)
+        try:
+            number = float(raw)
+        except ValueError:
+            return raw
+        if not math.isfinite(number):
+            return raw
+        return f"{number:.3g}"
+
+    return _DECIMAL_NUMBER.sub(replace, text)
+
+
+def _format_display_value(value: Any) -> Any:
+    """Format numeric values for tables without changing persisted state."""
+
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, float):
+        return _format_score(value)
+    if isinstance(value, dict):
+        return {key: _format_display_value(child) for key, child in value.items()}
+    if isinstance(value, list):
+        return [_format_display_value(child) for child in value]
+    return value
+
+
 def _truncate(value: Any, limit: int = 46) -> str:
-    text = " ".join(_summary_text(value).split())
+    text = " ".join(_format_numbers_in_text(_summary_text(value)).split())
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _wrapped_lines(value: Any, *, width: int = 28, max_lines: int = 2) -> list[str]:
-    text = " ".join(_summary_text(value).split())
+    text = " ".join(_format_numbers_in_text(_summary_text(value)).split())
     if not text:
         return []
     lines = textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False)
@@ -153,33 +188,35 @@ def _node_tooltip(collection: str, entity_id: str, entity: dict[str, Any]) -> st
     if collection == "trials":
         purpose = entity.get("purpose")
         if purpose:
-            lines.append(f"purpose: {_summary_text(purpose)}")
+            lines.append(f"purpose: {_format_numbers_in_text(_summary_text(purpose))}")
         outcome = entity.get("outcome", {})
         if isinstance(outcome, dict) and outcome.get("score") not in (None, ""):
             lines.append(f"score: {_format_score(outcome['score'])}")
     elif collection == "experiments":
         for key in ("stage", "trial_id", "final_objective_score"):
             if entity.get(key) not in (None, ""):
-                lines.append(f"{key}: {entity[key]}")
+                value = _format_score(entity[key]) if key == "final_objective_score" else _format_numbers_in_text(entity[key])
+                lines.append(f"{key}: {value}")
     elif collection == "observations":
         if entity.get("type"):
             lines.append(f"type: {entity['type']}")
         if entity.get("statement"):
-            lines.append(f"statement: {entity['statement']}")
+            lines.append(f"statement: {_format_numbers_in_text(entity['statement'])}")
         if entity.get("measurements"):
-            lines.append(f"measurements: {entity['measurements']}")
+            lines.append(f"measurements: {_format_numbers_in_text(entity['measurements'])}")
     elif collection in {"hypotheses", "beliefs", "questions"}:
         text = entity.get("statement") or entity.get("question") or entity.get("belief") or entity.get("title")
         if text:
-            lines.append(_summary_text(text))
+            lines.append(_format_numbers_in_text(_summary_text(text)))
     elif collection == "candidate_experiments":
-        for key in ("purpose", "expected_outcomes", "falsification_criteria", "risks"):
+        for key in ("purpose", "expected_outcomes", "falsification_criteria", "risks", "estimated_gpu_hours"):
             if entity.get(key) not in (None, ""):
-                lines.append(f"{key}: {_summary_text(entity[key])}")
+                value = _format_score(entity[key]) if key == "estimated_gpu_hours" else _format_numbers_in_text(_summary_text(entity[key]))
+                lines.append(f"{key}: {value}")
     else:
         for key in ("title", "description"):
             if entity.get(key):
-                lines.append(f"{key}: {_summary_text(entity[key])}")
+                lines.append(f"{key}: {_format_numbers_in_text(_summary_text(entity[key]))}")
     return "\n".join(lines)
 
 
@@ -234,13 +271,13 @@ def _entity_rows(state: dict[str, Any], collection: str, level: int) -> list[dic
             "id": entity_id,
             "type": ENTITY_LABELS.get(collection, collection),
             "status": entity.get("status", ""),
-            "title": entity.get("title") or entity.get("statement") or entity.get("question") or entity.get("purpose") or "",
+            "title": _format_numbers_in_text(entity.get("title") or entity.get("statement") or entity.get("question") or entity.get("purpose") or ""),
         }
         if level >= 3:
             row["created_at"] = entity.get("created_at", "")
             row["provenance"] = entity.get("provenance", {}).get("created_by", "") if isinstance(entity.get("provenance"), dict) else ""
         if level >= 4:
-            row["details"] = entity
+            row["details"] = _format_display_value(entity)
         rows.append(row)
     return rows
 
@@ -259,7 +296,7 @@ def _trial_rows(state: dict[str, Any], level: int) -> list[dict[str, Any]]:
         }
         if level >= 3:
             row["objective_eligible"] = outcome.get("objective_eligible", "")
-            row["metrics"] = _flatten_metrics(outcome.get("metrics", {}))
+            row["metrics"] = _format_display_value(_flatten_metrics(outcome.get("metrics", {})))
         if level >= 5:
             row["outcome"] = outcome
         rows.append(row)
