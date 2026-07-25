@@ -8,10 +8,13 @@ export const EvidenceSchema = z.object({
   type: z.string(),
   summary: z.string().default(""),
   statement: z.string().default(""),
-  direction: z.enum(["supports", "contradicts", "inconclusive"]),
+  direction: z.enum(["supporting", "contradicting", "inconclusive", "unclassified"]),
+  classification_source: z.string().default("unavailable"),
+  explanation: z.string().default(""),
   source_experiments: z.array(z.string()).default([]),
   reliability: Numeric,
   evidence_strength: Numeric,
+  confidence: Numeric,
   created_at: z.string().nullable().optional(),
   measurements: AnyRecord.default({}),
   detection: AnyRecord.default({}),
@@ -114,20 +117,39 @@ export const InvestigationSchema = z.object({
     checkpoint: z.string().nullable().optional(),
     history_path: z.string().nullable().optional(),
     primary_metric: z.string(),
+    metric_display: z.object({
+      requested_metric: z.string(),
+      display_metric: z.string().nullable().optional(),
+      role: z.enum(["primary", "diagnostic", "unavailable"]),
+      available: z.boolean(),
+      direction: z.string(),
+      source: z.string().nullable().optional(),
+      fallback_reason: z.string().nullable().optional(),
+    }),
     current_metric: Numeric,
     best_metric: Numeric,
     summary_metrics: z.record(z.string(), z.number()).default({}),
     metric_series: z.array(MetricPointSchema).default([]),
     artifact_updated_at: z.string().nullable().optional(),
+    artifact_freshness: z.record(z.string(), z.unknown()).default({}),
+    compute: z.object({ consumed_gpu_hours: Numeric, expected_gpu_hours: Numeric, remaining_gpu_hours: Numeric, available: z.boolean() }),
+    baseline_comparison: z.record(z.string(), z.unknown()).default({}),
   }),
-  expected_outcomes: z.array(z.object({ id: z.string(), statement: z.string(), status: z.string(), hypothesis_id: z.string().nullable().optional() })).default([]),
-  evidence: z.object({ supporting: z.array(EvidenceSchema), contradicting: z.array(EvidenceSchema), inconclusive: z.array(EvidenceSchema) }),
+  expected_outcomes: z.object({
+    registration_status: z.enum(["registered", "partial", "missing"]),
+    source_candidate_id: z.string().nullable().optional(),
+    predictions: z.array(z.object({ id: z.string(), statement: z.string(), hypothesis_ids: z.array(z.string().nullable()).default([]), observed_status: z.string(), source: z.string() })).default([]),
+    falsification_criteria: z.array(z.string()).default([]),
+    missing_reason: z.string().nullable().optional(),
+  }),
+  evidence: z.object({ supporting: z.array(EvidenceSchema), contradicting: z.array(EvidenceSchema), inconclusive: z.array(EvidenceSchema), unclassified: z.array(EvidenceSchema), total: z.number(), counts: z.record(z.string(), z.number()).default({}) }),
   candidates: z.array(CandidateSchema).default([]),
   belief_history: z.array(z.record(z.string(), z.unknown())).default([]),
   alerts: z.array(AlertSchema).default([]),
+  health: z.object({ status: z.string(), process_live: z.boolean(), artifact_freshness: z.record(z.string(), z.unknown()), controller_metadata: z.string(), intervention_required: z.boolean() }),
   controller: AnyRecord.default({}),
   graph: GraphSchema,
-  diagnostics: z.object({ errors: z.array(z.string()).default([]), missing_fields: z.array(z.string()).default([]), reference_warnings: z.array(z.string()).default([]) }),
+  diagnostics: z.object({ errors: z.array(z.string()).default([]), missing_fields: z.array(z.string()).default([]), reference_warnings: z.array(z.string()).default([]), data_coverage: z.record(z.string(), z.unknown()).default({}) }),
 });
 
 export type Investigation = z.infer<typeof InvestigationSchema>;
@@ -135,4 +157,3 @@ export type Evidence = z.infer<typeof EvidenceSchema>;
 export type Candidate = z.infer<typeof CandidateSchema>;
 export type Alert = z.infer<typeof AlertSchema>;
 export type MetricPoint = z.infer<typeof MetricPointSchema>;
-

@@ -24,6 +24,11 @@ class DashboardApiTests(unittest.TestCase):
         self.assertEqual(body["schema_version"], 1)
         self.assertIn("active_hypothesis", body)
         self.assertIn("current_experiment", body)
+        self.assertIn("metric_display", body["current_experiment"])
+        self.assertIn("compute", body["current_experiment"])
+        self.assertIn("registration_status", body["expected_outcomes"])
+        self.assertIn("unclassified", body["evidence"])
+        self.assertIn("health", body)
         self.assertIn("graph", body)
 
     def test_unknown_campaign_and_entity_are_errors(self) -> None:

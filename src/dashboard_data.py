@@ -13,7 +13,6 @@ import json
 import math
 import os
 from pathlib import Path
-import time
 from typing import Any
 
 from src.observation_engine import read_history, read_summary_metrics
@@ -165,11 +164,36 @@ def _latest_summary(run_dir: Path | None) -> Path | None:
     return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
 
 
-def _metric_series(rows: list[dict[str, float]], primary_metric: str) -> list[dict[str, float | int | None]]:
+def _metric_descriptor(rows: list[dict[str, float]], primary_metric: str) -> dict[str, Any]:
+    primary_keys = [primary_metric, primary_metric.replace(".", "_"), f"val_{primary_metric}"]
+    primary_key = next((key for key in primary_keys if any(key in row for row in rows)), None)
+    diagnostic_key = next((key for key in ("val_loss", "val_self_probe_loss", "train_loss") if any(key in row for row in rows)), None)
+    if primary_key:
+        return {
+            "requested_metric": primary_metric,
+            "display_metric": primary_key,
+            "role": "primary",
+            "available": True,
+            "direction": "higher_is_better",
+            "source": "history_csv",
+            "fallback_reason": None,
+        }
+    return {
+        "requested_metric": primary_metric,
+        "display_metric": diagnostic_key,
+        "role": "diagnostic" if diagnostic_key else "unavailable",
+        "available": bool(diagnostic_key),
+        "direction": "lower_is_better" if diagnostic_key and "loss" in diagnostic_key.lower() else "unknown",
+        "source": "history_csv" if diagnostic_key else None,
+        "fallback_reason": f"{primary_metric} is not recorded for this stage; showing {diagnostic_key}." if diagnostic_key else f"{primary_metric} is not recorded for this stage.",
+    }
+
+
+def _metric_series(rows: list[dict[str, float]], primary_metric: str, descriptor: dict[str, Any] | None = None) -> list[dict[str, float | int | None]]:
     if not rows:
         return []
-    candidates = [primary_metric, primary_metric.replace(".", "_"), f"val_{primary_metric}", "val_loss", "train_loss"]
-    primary_key = next((key for key in candidates if any(key in row for row in rows)), None)
+    descriptor = descriptor or _metric_descriptor(rows, primary_metric)
+    primary_key = descriptor.get("display_metric")
     validation_key = next((key for key in ("val_loss", "val_self_probe_loss") if any(key in row for row in rows)), None)
     train_key = next((key for key in ("train_loss", "train_self_probe_loss") if any(key in row for row in rows)), None)
     series: list[dict[str, float | int | None]] = []
@@ -213,39 +237,56 @@ def _references(state: dict[str, Any], entity_id: str) -> list[dict[str, Any]]:
     return result[:30]
 
 
-def _classify_observation(state: dict[str, Any], observation_id: str, hypothesis_id: str | None) -> str:
+def _classify_observation(state: dict[str, Any], observation_id: str, hypothesis_id: str | None) -> tuple[str, str, str]:
     for relation in state.get("relations", []):
         if relation.get("type") not in {"supports", "contradicts"}:
             continue
         endpoints = {str(relation.get("source")), str(relation.get("target"))}
         if observation_id in endpoints and (not hypothesis_id or hypothesis_id in endpoints):
-            return str(relation["type"])
+            direction = "supporting" if relation["type"] == "supports" else "contradicting"
+            return direction, "explicit_relation", f"The state records a {relation['type']} relation for this observation and hypothesis."
     observation = state.get("entities", {}).get("observations", {}).get(observation_id, {})
     direction = observation.get("direction") or observation.get("evidence_direction")
-    return str(direction) if direction in {"supports", "contradicts", "inconclusive"} else "inconclusive"
+    if direction in {"supports", "supporting"}:
+        return "supporting", "explicit_observation_field", "The observation explicitly marks itself as supporting."
+    if direction in {"contradicts", "contradicting"}:
+        return "contradicting", "explicit_observation_field", "The observation explicitly marks itself as contradicting."
+    if direction == "inconclusive":
+        return "inconclusive", "explicit_observation_field", "The observation explicitly marks itself as inconclusive."
+    return "unclassified", "unavailable", "No explicit support, contradiction, or inconclusive classification is recorded."
 
 
-def _evidence(state: dict[str, Any], hypothesis_id: str | None) -> list[dict[str, Any]]:
+def _evidence(state: dict[str, Any], hypothesis_id: str | None, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    filters = filters or {}
     result: list[dict[str, Any]] = []
     observations = state.get("entities", {}).get("observations", {})
     for observation_id, observation in observations.items():
-        if hypothesis_id and hypothesis_id not in json.dumps(observation, default=str):
-            relation = _classify_observation(state, observation_id, hypothesis_id)
-            if relation == "inconclusive" and not observation.get("source_experiments"):
-                continue
-        relation = _classify_observation(state, observation_id, hypothesis_id)
+        direction, classification_source, explanation = _classify_observation(state, observation_id, hypothesis_id)
         source_ids = observation.get("source_experiments", [])
+        reliability = _float(observation.get("reliability"))
+        evidence_strength = _float(observation.get("evidence_strength"))
+        confidence = max(value for value in (reliability, evidence_strength) if value is not None) if any(value is not None for value in (reliability, evidence_strength)) else None
+        if filters.get("confidence_min") is not None and (confidence is None or confidence < filters["confidence_min"]):
+            continue
+        created_at = _iso(observation.get("created_at"))
+        if filters.get("time_from") and created_at and created_at < str(filters["time_from"]):
+            continue
+        if filters.get("time_to") and created_at and created_at > str(filters["time_to"]):
+            continue
         result.append(
             {
                 "id": observation_id,
                 "type": observation.get("type", "observation"),
                 "summary": _short_text(observation.get("statement", "")),
                 "statement": observation.get("statement", ""),
-                "direction": relation,
+                "direction": direction,
+                "classification_source": classification_source,
+                "explanation": explanation,
                 "source_experiments": source_ids,
-                "reliability": _float(observation.get("reliability")),
-                "evidence_strength": _float(observation.get("evidence_strength")),
-                "created_at": _iso(observation.get("created_at")),
+                "reliability": reliability,
+                "evidence_strength": evidence_strength,
+                "confidence": confidence,
+                "created_at": created_at,
                 "measurements": observation.get("measurements", {}),
                 "detection": observation.get("detection", {}),
                 "references": _references(state, observation_id),
@@ -268,6 +309,24 @@ def _belief(hypothesis: dict[str, Any] | None) -> dict[str, Any]:
         "confidence": raw.get("confidence"),
         "calibrated": raw.get("calibrated") if "calibrated" in raw else None,
         "interpretation": "calibrated statistical probability" if raw.get("calibrated") is True else "heuristic decision-confidence score" if probability is not None else None,
+        "history_available": False,
+        "history_state": "no_belief_model" if probability is None else "initial_only",
+    }
+
+
+def _hypothesis_quality(hypothesis: dict[str, Any] | None) -> dict[str, Any]:
+    if not hypothesis:
+        return {"quality": "missing", "missing_fields": ["statement", "mechanism", "scope", "assumptions"], "falsification_criteria": []}
+    provenance = hypothesis.get("provenance", {}) if isinstance(hypothesis.get("provenance"), dict) else {}
+    missing = [field for field in ("statement", "mechanism", "scope", "assumptions") if not hypothesis.get(field)]
+    is_seed = "seed" in str(provenance.get("reason", "")).lower() or "bounded optimisation change" in str(hypothesis.get("title", "")).lower()
+    return {
+        "quality": "generic_seed" if is_seed else "specific" if not missing else "generic_seed",
+        "missing_fields": missing,
+        "mechanism": hypothesis.get("mechanism"),
+        "scope": hypothesis.get("scope"),
+        "assumptions": hypothesis.get("assumptions"),
+        "falsification_criteria": hypothesis.get("falsification_criteria", []),
     }
 
 
@@ -404,6 +463,14 @@ def _focused_graph(state: dict[str, Any], hypothesis_id: str | None, evidence: l
         if source in visible and target in visible and (not filters.get("relation_type") or data.get("relation") == filters["relation_type"])
     ]
     focused = graph.subgraph(visible).copy()
+    if filters.get("relation_type"):
+        focused.remove_edges_from(
+            [
+                (source, target, key)
+                for source, target, key, data in focused.edges(keys=True, data=True)
+                if data.get("relation") != filters["relation_type"]
+            ]
+        )
     svg = _graphviz_svg(focused, level)
     return {"nodes": nodes, "edges": edges, "svg": svg.decode("utf-8") if svg else None}
 
@@ -438,7 +505,8 @@ def build_investigation(
     history = read_history(history_path) if history_path else []
     summary_metrics = read_summary_metrics(summary_path) if summary_path else {}
     primary_metric = str(config.get("objective", {}).get("primary_metric", "macro_f1"))
-    series = _metric_series(history, primary_metric)
+    metric_display = _metric_descriptor(history, primary_metric)
+    series = _metric_series(history, primary_metric, metric_display)
     configured_epochs = None
     stage = campaign_state.get("current_stage")
     if stage:
@@ -481,18 +549,93 @@ def build_investigation(
         "checkpoint": run_status.get("checkpoint_path") or run_status.get("resume_checkpoint_path"),
         "history_path": str(history_path) if history_path else None,
         "primary_metric": primary_metric,
+        "metric_display": metric_display,
         "current_metric": _latest_metric(series),
         "best_metric": _best_metric(series, maximize=bool(config.get("objective", {}).get("maximize", True))),
         "summary_metrics": summary_metrics,
         "metric_series": series[-80:],
         "artifact_updated_at": datetime.fromtimestamp(max(artifact_mtimes), tz=timezone.utc).isoformat(timespec="seconds") if artifact_mtimes else None,
     }
-    evidence = _evidence(state, hypothesis_id)
+    filters = filters or {}
+    all_evidence = _evidence(state, hypothesis_id, filters)
+    evidence = all_evidence[-12:] if view == "current" else all_evidence[-50:] if view == "history" else all_evidence
     candidates = _candidate_rows(state)
     beliefs = _belief(active_hypothesis)
+    hypothesis_quality = _hypothesis_quality(active_hypothesis)
+    unclassified_count = sum(1 for item in all_evidence if item["direction"] == "unclassified")
+    classified_count = len(all_evidence) - unclassified_count
+    primary_candidate = candidates[0] if candidates else None
+    current["purpose"] = (
+        _entity_text(campaign_state.get("purpose", {}))
+        if isinstance(campaign_state.get("purpose"), dict)
+        else ""
+    ) or (primary_candidate.get("purpose", "") if primary_candidate else "") or _entity_text(stage_state.get("purpose", {})) or "Purpose not recorded for this stage."
+    current["compute"] = {
+        "consumed_gpu_hours": None,
+        "expected_gpu_hours": primary_candidate.get("estimated_gpu_hours") if primary_candidate else None,
+        "remaining_gpu_hours": campaign_config.get("remaining_gpu_hours"),
+        "available": bool(primary_candidate and primary_candidate.get("estimated_gpu_hours") is not None) or campaign_config.get("remaining_gpu_hours") is not None,
+    }
+    current["baseline_comparison"] = {"available": False, "reason": "No directly comparable baseline metric is recorded for the active stage."}
+    current["artifact_freshness"] = {"status": "fresh" if artifact_age is not None and artifact_age <= 7200 else "stale" if artifact_age is not None else "unknown", "age_seconds": artifact_age, "updated_at": current.get("artifact_updated_at")}
+    raw_predictions = primary_candidate.get("expected_outcomes", []) if primary_candidate else []
+    raw_falsification = primary_candidate.get("falsification_criteria", []) if primary_candidate else []
+    registration_status = "registered" if raw_predictions and raw_falsification else "partial" if raw_predictions or raw_falsification else "missing"
+    expected_outcomes = {
+        "registration_status": registration_status,
+        "source_candidate_id": primary_candidate.get("id") if primary_candidate else None,
+        "predictions": [
+            {
+                "id": f"prediction-{index}",
+                "statement": statement,
+                "hypothesis_ids": primary_candidate.get("hypothesis_ids", [hypothesis_id]) if primary_candidate else [hypothesis_id],
+                "observed_status": "not_yet_observed",
+                "source": "pre_registered",
+            }
+            for index, statement in enumerate(raw_predictions, start=1)
+        ],
+        "falsification_criteria": raw_falsification,
+        "missing_reason": "This experiment has no registered predictions and cannot currently distinguish competing hypotheses." if registration_status == "missing" else None,
+    }
     errors = [error for error in (config_error, campaign_state_error, run_status_error, stage_state_error) if error]
     alerts = _alerts(state, current, artifact_age)
-    for observation in evidence:
+    if registration_status != "registered":
+        alerts.append(
+            {
+                "id": "missing-expected-outcomes",
+                "severity": "warning",
+                "type": "missing_predictions",
+                "condition": expected_outcomes["missing_reason"] or "Expected outcomes are only partially registered.",
+                "measurements": {"registration_status": registration_status, "prediction_count": len(raw_predictions), "falsification_count": len(raw_falsification)},
+                "recommended_action": "Register predictions and falsification criteria before treating the experiment as discriminative.",
+                "automatic": False,
+            }
+        )
+    if metric_display.get("role") != "primary":
+        alerts.append(
+            {
+                "id": "primary-metric-unavailable",
+                "severity": "warning",
+                "type": "missing_metric",
+                "condition": f"Primary metric {primary_metric} is unavailable for this stage; the displayed series is diagnostic.",
+                "measurements": {"requested_metric": primary_metric, "display_metric": metric_display.get("display_metric")},
+                "recommended_action": "Do not interpret the diagnostic curve as the primary optimization result.",
+                "automatic": False,
+            }
+        )
+    if unclassified_count:
+        alerts.append(
+            {
+                "id": "unclassified-evidence",
+                "severity": "warning",
+                "type": "insufficient_evidence_classification",
+                "condition": f"{unclassified_count} observations have no explicit support, contradiction, or inconclusive classification.",
+                "measurements": {"unclassified": unclassified_count, "classified": classified_count, "total": len(evidence)},
+                "recommended_action": "Add explicit evidence relations or observation direction fields before using these observations to update belief.",
+                "automatic": False,
+            }
+        )
+    for observation in all_evidence:
         if observation["type"] in {"non_finite_metric", "unstable_metric", "regression"}:
             alerts.append(
                 {
@@ -511,6 +654,22 @@ def build_investigation(
         operation = audit.get("operation", {})
         if operation.get("operation") == "controller_update" and any(key in operation.get("value", {}) for key in ("belief", "belief_probability")):
             histories.append({"id": audit.get("id"), "timestamp": audit.get("created_at"), "rationale": operation, "actor": audit.get("actor")})
+    if histories:
+        beliefs["history_available"] = True
+        beliefs["history_state"] = "auditable_updates"
+    elif beliefs.get("probability") is not None:
+        histories.append(
+            {
+                "id": "belief-baseline",
+                "timestamp": active_hypothesis.get("created_at") if active_hypothesis else None,
+                "previous_score": None,
+                "new_score": beliefs.get("probability"),
+                "direction": "initial",
+                "rationale": "Initial belief recorded with the hypothesis; no subsequent belief update is available.",
+                "actor": (active_hypothesis.get("provenance", {}) or {}).get("created_by", "unknown") if active_hypothesis else "unknown",
+                "provenance": active_hypothesis.get("provenance", {}) if active_hypothesis else {},
+            }
+        )
     project = state.get("project", {})
     return {
         "schema_version": 1,
@@ -531,23 +690,48 @@ def build_investigation(
             "view": view,
         },
         "active_question": {"id": question_id, **(active_question or {}), "text": _entity_text(active_question or {})} if active_question or question_id else None,
-        "active_hypothesis": {"id": hypothesis_id, **(active_hypothesis or {}), "belief_score": beliefs} if active_hypothesis or hypothesis_id else None,
+        "active_hypothesis": {"id": hypothesis_id, **(active_hypothesis or {}), "belief": beliefs, "belief_score": beliefs, "hypothesis_quality": hypothesis_quality} if active_hypothesis or hypothesis_id else None,
         "current_experiment": current,
-        "expected_outcomes": [
-            {"id": f"outcome-{index}", "statement": statement, "status": "unobserved", "hypothesis_id": hypothesis_id}
-            for index, statement in enumerate((candidates[0].get("expected_outcomes", []) if candidates else []), start=1)
-        ],
+        "expected_outcomes": expected_outcomes,
         "evidence": {
-            "supporting": [item for item in evidence if item["direction"] == "supports"],
-            "contradicting": [item for item in evidence if item["direction"] == "contradicts"],
+            "supporting": [item for item in evidence if item["direction"] == "supporting"],
+            "contradicting": [item for item in evidence if item["direction"] == "contradicting"],
             "inconclusive": [item for item in evidence if item["direction"] == "inconclusive"],
+            "unclassified": [item for item in evidence if item["direction"] == "unclassified"],
+            "total": len(all_evidence),
+            "counts": {
+                "supporting": sum(1 for item in all_evidence if item["direction"] == "supporting"),
+                "contradicting": sum(1 for item in all_evidence if item["direction"] == "contradicting"),
+                "inconclusive": sum(1 for item in all_evidence if item["direction"] == "inconclusive"),
+                "unclassified": unclassified_count,
+            },
         },
         "candidates": candidates,
         "belief_history": histories,
         "alerts": alerts,
+        "health": {
+            "status": "critical" if any(alert["severity"] == "critical" for alert in alerts) else "warning" if alerts else "healthy",
+            "process_live": process_running,
+            "artifact_freshness": {"status": "fresh" if artifact_age is not None and artifact_age <= 7200 else "stale" if artifact_age is not None else "unknown", "age_seconds": artifact_age, "updated_at": current.get("artifact_updated_at")},
+            "controller_metadata": "stale" if state.get("controller_state", {}).get("safe_stop_reason") and process_running else "consistent",
+            "intervention_required": any(alert["severity"] == "critical" for alert in alerts),
+        },
         "controller": state.get("controller_state", {}),
         "graph": focused_graph,
-        "diagnostics": {"errors": errors, "missing_fields": [], "reference_warnings": []},
+        "diagnostics": {
+            "errors": errors,
+            "missing_fields": hypothesis_quality.get("missing_fields", []),
+            "reference_warnings": [],
+            "data_coverage": {
+                "missing_beliefs": beliefs.get("probability") is None,
+                "missing_predictions": registration_status == "missing",
+                "partial_predictions": registration_status == "partial",
+                "unclassified_observations": unclassified_count,
+                "classified_observations": classified_count,
+                "missing_baseline": True,
+                "missing_metric": metric_display.get("role") != "primary",
+            },
+        },
     }
 
 
