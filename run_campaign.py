@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -81,6 +82,7 @@ def command_help_text() -> str:
             "  ./run_campaign observations [campaign]      print deterministic observations",
             "  ./run_campaign candidates [campaign]        print autonomous candidates",
             "  ./run_campaign rebuild-views <campaign>     rebuild compatibility views",
+            "  ./run_campaign dashboard [campaign]         serve the read-only mission-control dashboard",
             "  ./run_campaign list                    list available campaigns",
             "",
             available_campaigns_text(),
@@ -263,6 +265,22 @@ def force_restart_command(argv: list[str]) -> int:
     return campaign_main(forwarded)
 
 
+def dashboard_command(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Serve the local read-only mission-control dashboard.")
+    parser.add_argument("campaign", nargs="?", default="cnn", help="Campaign alias or id (default: cnn).")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind address; defaults to localhost only.")
+    parser.add_argument("--port", type=int, default=8000, help="HTTP port.")
+    parser.add_argument("--reload", action="store_true", help="Reload the API during development.")
+    args = parser.parse_args(argv)
+    # Validate before starting the server so a typo does not produce a blank UI.
+    resolve_campaign(args.campaign)
+    os.environ["ZEBRAFISH_DASHBOARD_CAMPAIGN"] = args.campaign
+    import uvicorn
+
+    uvicorn.run("src.dashboard_api:app", host=args.host, port=args.port, reload=args.reload)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_arg_parser()
@@ -286,6 +304,8 @@ def main(argv: list[str] | None = None) -> int:
         return resume_command(argv[1:])
     if argv[0] == "force-restart":
         return force_restart_command(argv[1:])
+    if argv[0] == "dashboard":
+        return dashboard_command(argv[1:])
     if argv[0] in {"state", "observations", "candidates"}:
         target = resolve_campaign(argv[1]) if len(argv) > 1 else CAMPAIGNS["cnn"]["config"]
         config = load_campaign_config(target)
