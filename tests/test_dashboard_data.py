@@ -25,6 +25,10 @@ class DashboardDataTests(unittest.TestCase):
         self.assertIn("inconclusive", payload["evidence"])
         self.assertIn("unclassified", payload["evidence"])
         self.assertIn("metric_display", payload["current_experiment"])
+        self.assertIn("metric_plot", payload["current_experiment"])
+        self.assertIn("statistics", payload["current_experiment"]["metric_plot"])
+        self.assertIn("events", payload["current_experiment"]["metric_plot"])
+        self.assertIn("interpretation", payload["current_experiment"]["metric_plot"])
         self.assertIn("data_coverage", payload["diagnostics"])
         if payload["current_experiment"]["stage"] == "10C":
             self.assertIn(payload["current_experiment"]["metric_display"]["role"], {"diagnostic", "unavailable"})

@@ -48,6 +48,19 @@ NODE_COLORS = {
     "dataset": "#79706e",
 }
 
+RELATION_COLORS = {
+    "supports": "#2f8f6b",
+    "contradicts": "#c95b5b",
+    "tests": "#4f8fe8",
+    "produced": "#c88a2b",
+    "contains": "#71808a",
+    "addresses": "#7b6fb1",
+    "motivates": "#b36b9c",
+    "reuses_checkpoint": "#3b9caa",
+    "alternative_to": "#8b6f47",
+    "derived_from": "#6f88a8",
+}
+
 _DECIMAL_NUMBER = re.compile(r"(?<![A-Za-z_])[-+]?(?:\d+\.\d*|\.\d+)(?:[eE][-+]?\d+)?")
 _LLM_LABEL_CACHE: dict[str, tuple[str, str]] = {}
 
@@ -683,11 +696,14 @@ def _graphviz_svg(graph: Any, level: int) -> bytes | None:
         )
     for source, target, key, data in graph.edges(keys=True, data=True):
         edge = dot.get_edge(source, target, key)
+        relation = str(data.get("relation", ""))
+        relation_color = RELATION_COLORS.get(relation, "#777777")
         edge.attr.update(
-            label=data.get("relation", "") if level >= 4 else "",
-            color="#777777",
+            label=relation,
+            color=relation_color,
+            fontcolor=relation_color,
             fontname="Helvetica",
-            fontsize="8",
+            fontsize="7",
             arrowsize="0.7",
         )
     dot.layout(prog="dot")

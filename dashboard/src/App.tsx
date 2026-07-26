@@ -60,7 +60,7 @@ export default function App() {
       <div className="story-grid"><ExpectedOutcomes data={data} /><DecisionQueue data={data} onSelect={(candidate: Candidate) => titleDetail(candidate.title, candidate)} /></div>
       <EvidencePanel data={data} onSelect={(item: Evidence) => titleDetail(item.type.replaceAll("_", " "), item)} />
       <div className="two-column"><BeliefTimeline data={data} onSelect={(event) => titleDetail("Belief update", event)} /><AlertPanel data={data} acknowledged={acknowledged} onAcknowledge={(id) => setAcknowledged((current) => new Set(current).add(id))} /></div>
-      <FocusedGraph data={data} level={level} relationDepth={relationDepth} scale={graphScale} entityType={entityType} relationType={relationType} onLevel={setLevel} onDepth={setRelationDepth} onScale={setGraphScale} onEntityType={setEntityType} onRelationType={setRelationType} onNodeSelect={(node) => titleDetail(String(node.tooltip || node.label || node.id), node)} />
+      <FocusedGraph data={data} level={level} relationDepth={relationDepth} scale={graphScale} entityType={entityType} relationType={relationType} onLevel={setLevel} onDepth={setRelationDepth} onScale={setGraphScale} onEntityType={setEntityType} onRelationType={setRelationType} onNodeSelect={(node) => titleDetail(String(node.label || node.tooltip || node.id).replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim(), node)} />
     </div>}
     <DetailDrawer detail={detail} onClose={() => setDetail(null)} />
   </main>;

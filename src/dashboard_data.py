@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from src.observation_engine import read_history, read_summary_metrics
-from src.scientific_dashboard import _graphviz_svg, build_reasoning_graph
+from src.scientific_dashboard import RELATION_COLORS, _graphviz_svg, build_reasoning_graph
 from src.scientific_state import load_state
 
 try:
@@ -199,7 +199,7 @@ def _metric_series(rows: list[dict[str, float]], primary_metric: str, descriptor
     if not rows:
         return []
     descriptor = descriptor or _metric_descriptor(rows, primary_metric)
-    primary_key = descriptor.get("display_metric")
+    display_key = descriptor.get("display_metric")
     validation_key = next((key for key in ("val_loss", "val_self_probe_loss") if any(key in row for row in rows)), None)
     train_key = next((key for key in ("train_loss", "train_self_probe_loss") if any(key in row for row in rows)), None)
     series: list[dict[str, float | int | None]] = []
@@ -208,7 +208,8 @@ def _metric_series(rows: list[dict[str, float]], primary_metric: str, descriptor
             {
                 "step": index,
                 "epoch": index,
-                "primary": row.get(primary_key) if primary_key else None,
+                "primary": row.get(display_key) if display_key and descriptor.get("role") == "primary" else None,
+                "displayed": row.get(display_key) if display_key else None,
                 "train": row.get(train_key) if train_key else None,
                 "validation": row.get(validation_key) if validation_key else None,
             }
@@ -226,6 +227,123 @@ def _best_metric(series: list[dict[str, Any]], key: str = "primary", maximize: b
     values = [_float(row.get(key)) for row in series]
     values = [value for value in values if value is not None]
     return (max(values) if maximize else min(values)) if values else None
+
+
+def _series_slope(series: list[dict[str, Any]], key: str) -> float | None:
+    points = [(float(row.get("epoch", index)), _float(row.get(key))) for index, row in enumerate(series, start=1)]
+    points = [(x, y) for x, y in points if y is not None]
+    if len(points) < 2:
+        return None
+    points = points[-min(10, len(points)):]
+    mean_x = sum(x for x, _ in points) / len(points)
+    mean_y = sum(y for _, y in points) / len(points)
+    denominator = sum((x - mean_x) ** 2 for x, _ in points)
+    return sum((x - mean_x) * (y - mean_y) for x, y in points) / denominator if denominator else None
+
+
+def _metric_plot_events(series: list[dict[str, Any]], descriptor: dict[str, Any], state: dict[str, Any], experiment_id: str | None) -> list[dict[str, Any]]:
+    key = "primary" if descriptor.get("role") == "primary" else "displayed"
+    values = [(index, _float(row.get(key))) for index, row in enumerate(series, start=1)]
+    values = [(index, value) for index, value in values if value is not None]
+    if not values:
+        return []
+    maximize = descriptor.get("direction") == "higher_is_better"
+    best_index, best_value = (max(values, key=lambda item: item[1]) if maximize else min(values, key=lambda item: item[1]))
+    events: list[dict[str, Any]] = [
+        {"id": "best-value", "epoch": best_index, "type": "best", "label": "Best observed value", "value": best_value},
+    ]
+    if best_index != values[-1][0]:
+        events.append({"id": "latest-value", "epoch": values[-1][0], "type": "latest", "label": "Latest value", "value": values[-1][1]})
+    for observation_id, observation in state.get("entities", {}).get("observations", {}).items():
+        if experiment_id and experiment_id not in [str(item) for item in observation.get("source_experiments", [])]:
+            continue
+        measurements = observation.get("measurements", {}) if isinstance(observation.get("measurements"), dict) else {}
+        epoch = measurements.get("epoch", measurements.get("step"))
+        try:
+            epoch = int(float(epoch))
+        except (TypeError, ValueError):
+            continue
+        if 1 <= epoch <= len(series):
+            events.append({"id": observation_id, "epoch": epoch, "type": observation.get("type", "observation"), "label": observation.get("statement", observation.get("type", "Observation")), "value": _float(series[epoch - 1].get(key))})
+    return events[:12]
+
+
+def _metric_interpretation(series: list[dict[str, Any]], descriptor: dict[str, Any], stats: dict[str, Any]) -> str:
+    if not stats.get("latest"):
+        return "No time-series metric is available for this stage."
+    slope = stats.get("slope")
+    if slope is None:
+        return "The trajectory is too short to estimate a trend."
+    direction = descriptor.get("direction")
+    improving = (slope > 0) if direction == "higher_is_better" else (slope < 0) if direction == "lower_is_better" else None
+    trend = "improving" if improving is True else "declining" if improving is False else "changing"
+    text = f"The {descriptor.get('display_metric') or 'displayed metric'} is {trend} over the latest {min(10, len(series))} epochs."
+    gap = stats.get("train_validation_gap")
+    if gap is not None:
+        text += f" The latest train–validation gap is {gap:.3g}."
+    if descriptor.get("role") != "primary":
+        text += " This is diagnostic evidence; the primary objective is not yet recorded."
+    return text
+
+
+def _metric_plot(series: list[dict[str, Any]], descriptor: dict[str, Any], state: dict[str, Any], experiment_id: str | None) -> dict[str, Any]:
+    display_key = "primary" if descriptor.get("role") == "primary" else "displayed"
+    values = [_float(row.get(display_key)) for row in series]
+    values = [value for value in values if value is not None]
+    train_values = [_float(row.get("train")) for row in series]
+    validation_values = [_float(row.get("validation")) for row in series]
+    train_values = [value for value in train_values if value is not None]
+    validation_values = [value for value in validation_values if value is not None]
+    latest = values[-1] if values else None
+    maximize = descriptor.get("direction") == "higher_is_better"
+    best = (max(values) if maximize else min(values)) if values else None
+    slope = _series_slope(series, display_key)
+    gap = validation_values[-1] - train_values[-1] if train_values and validation_values else None
+    plotted_values = values + train_values + validation_values
+    if plotted_values:
+        minimum = min(plotted_values)
+        maximum = max(plotted_values)
+        padding = (maximum - minimum) * 0.08 or max(abs(maximum) * 0.08, 0.1)
+        y_min, y_max = minimum - padding, maximum + padding
+    else:
+        y_min, y_max = None, None
+    stats = {"latest": latest, "best": best, "slope": slope, "train_validation_gap": gap, "epochs": len(series)}
+    return {
+        "y_axis_label": descriptor.get("display_metric") or descriptor.get("requested_metric"),
+        "x_axis_label": "epoch",
+        "direction": descriptor.get("direction", "unknown"),
+        "y_min": y_min,
+        "y_max": y_max,
+        "statistics": stats,
+        "events": _metric_plot_events(series, descriptor, state, experiment_id),
+        "comparisons": [],
+        "interpretation": _metric_interpretation(series, descriptor, stats),
+    }
+
+
+def _comparable_metric_series(state: dict[str, Any], stage: str | None, current_run_dir: Path | None, primary_metric: str) -> list[dict[str, Any]]:
+    if not stage:
+        return []
+    candidates: list[dict[str, Any]] = []
+    for experiment_id, experiment in state.get("entities", {}).get("experiments", {}).items():
+        if experiment.get("stage") != stage:
+            continue
+        execution = experiment.get("execution", {}) if isinstance(experiment.get("execution"), dict) else {}
+        run_dir_value = execution.get("run_dir") or (execution.get("artifacts", {}) if isinstance(execution.get("artifacts"), dict) else {}).get("run_dir")
+        run_dir = Path(str(run_dir_value)) if run_dir_value else None
+        if run_dir is None or (current_run_dir and run_dir.resolve() == current_run_dir.resolve()) or not run_dir.exists():
+            continue
+        history_path = _latest_history(run_dir)
+        rows = read_history(history_path) if history_path else []
+        descriptor = _metric_descriptor(rows, primary_metric)
+        series = _metric_series(rows, primary_metric, descriptor)
+        if not any(row.get("displayed") is not None or row.get("primary") is not None for row in series):
+            continue
+        candidates.append({"id": experiment_id, "trial_id": experiment.get("trial_id"), "stage": stage, "label": f"Prior {stage} trial", "metric": descriptor.get("display_metric"), "points": series[-80:], "created_at": experiment.get("created_at")})
+    candidates.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    for index, item in enumerate(candidates[:3], start=1):
+        item["label"] = f"Prior trial {index}"
+    return candidates[:3]
 
 
 def _references(state: dict[str, Any], entity_id: str) -> list[dict[str, Any]]:
@@ -478,7 +596,12 @@ def _focused_graph(state: dict[str, Any], hypothesis_id: str | None, evidence: l
         if node in visible
     ]
     edges = [
-        {"source": source, "target": target, "relation": data.get("relation", "")}
+        {
+            "source": source,
+            "target": target,
+            "relation": data.get("relation", ""),
+            "color": RELATION_COLORS.get(data.get("relation", ""), "#777777"),
+        }
         for source, target, _key, data in graph.edges(keys=True, data=True)
         if source in visible and target in visible and (not filters.get("relation_type") or data.get("relation") == filters["relation_type"])
     ]
@@ -526,7 +649,9 @@ def build_investigation(
     summary_metrics = read_summary_metrics(summary_path) if summary_path else {}
     primary_metric = str(config.get("objective", {}).get("primary_metric", "macro_f1"))
     metric_display = _metric_descriptor(history, primary_metric)
+    metric_display["source_path"] = str(history_path) if history_path else None
     series = _metric_series(history, primary_metric, metric_display)
+    metric_plot = _metric_plot(series, metric_display, state, run_status.get("experiment_id") or campaign_state.get("current_stage"))
     configured_epochs = None
     stage = campaign_state.get("current_stage")
     if stage:
@@ -572,12 +697,14 @@ def build_investigation(
         "history_path": str(history_path) if history_path else None,
         "primary_metric": primary_metric,
         "metric_display": metric_display,
-        "current_metric": _latest_metric(series),
-        "best_metric": _best_metric(series, maximize=bool(config.get("objective", {}).get("maximize", True))),
+        "current_metric": _latest_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed"),
+        "best_metric": _best_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed", maximize=bool(config.get("objective", {}).get("maximize", True))),
         "summary_metrics": summary_metrics,
         "metric_series": series[-80:],
+        "metric_plot": metric_plot,
         "artifact_updated_at": datetime.fromtimestamp(max(artifact_mtimes), tz=timezone.utc).isoformat(timespec="seconds") if artifact_mtimes else None,
     }
+    current["metric_plot"]["comparisons"] = _comparable_metric_series(state, stage, run_dir, primary_metric)
     filters = dict(filters or {})
     filters.setdefault("campaign_id", campaign_id)
     all_evidence = _evidence(state, hypothesis_id, filters)

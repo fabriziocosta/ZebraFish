@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import type { Alert, Candidate, Evidence, Investigation, MetricPoint } from "./model";
 
 export function formatNumber(value: number | null | undefined): string {
@@ -87,16 +87,82 @@ export function ActiveHypothesisCard({ data, onSelect }: { data: Investigation; 
   </Card>;
 }
 
-function Sparkline({ points, metric }: { points: MetricPoint[]; metric: string }) {
-  const values = points.flatMap((point) => [point.train, point.validation, point.primary].filter((value): value is number => typeof value === "number"));
-  if (!values.length) return <div className="spark-empty">No time-series metric available</div>;
-  const min = Math.min(...values); const max = Math.max(...values); const range = max - min || 1;
-  const line = (key: "train" | "validation" | "primary", color: string) => {
-    const selected = points.map((point, index) => ({ point: point[key], index })).filter((item): item is { point: number; index: number } => typeof item.point === "number");
-    if (!selected.length) return null;
-    return <polyline fill="none" stroke={color} strokeWidth="2" points={selected.map(({ point, index }) => `${(index / Math.max(1, points.length - 1)) * 100},${38 - ((point - min) / range) * 32}`).join(" ")} />;
+function movingAverage(points: Array<{ epoch: number; value: number }>, window = 5) {
+  return points.map((point, index) => {
+    const start = Math.max(0, index - window + 1);
+    const windowValues = points.slice(start, index + 1).map((item) => item.value);
+    return { epoch: point.epoch, value: windowValues.reduce((sum, value) => sum + value, 0) / windowValues.length };
+  });
+}
+
+function MetricPlot({ experiment }: { experiment: Investigation["current_experiment"] }) {
+  const metric = experiment.metric_display;
+  const plot = experiment.metric_plot;
+  const freshness = String(experiment.artifact_freshness.status || "unknown");
+  const [windowMode, setWindowMode] = useState<"all" | "recent">("all");
+  const [smoothed, setSmoothed] = useState(true);
+  const [showComparisons, setShowComparisons] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [hoverEpoch, setHoverEpoch] = useState<number | null>(null);
+  const sourcePoints = windowMode === "recent" ? experiment.metric_series.slice(-30) : experiment.metric_series;
+  const validPoints = sourcePoints.filter((point) => [point.primary, point.displayed, point.train, point.validation].some((value) => typeof value === "number"));
+  if (!validPoints.length) return <div className="metric-plot-empty"><strong>No time-series metric available</strong><span>The run has not written a history CSV with a plottable metric yet.</span></div>;
+
+  const width = 720;
+  const height = 270;
+  const margin = { top: 25, right: 20, bottom: 42, left: 52 };
+  const chartWidth = width - margin.left - margin.right;
+  const chartHeight = height - margin.top - margin.bottom;
+  const xMin = validPoints[0].epoch;
+  const xMax = Math.max(xMin + 1, validPoints[validPoints.length - 1].epoch);
+  const displayedKey = metric.role === "primary" ? "primary" : "displayed";
+  const currentValues = validPoints.flatMap((point) => [point[displayedKey], point.train, point.validation].filter((value): value is number => typeof value === "number"));
+  const comparisonValues = showComparisons ? plot.comparisons.flatMap((comparison) => comparison.points.flatMap((point) => [point[displayedKey], point.validation].filter((value): value is number => typeof value === "number"))) : [];
+  const values = [...currentValues, ...comparisonValues];
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  const range = dataMax - dataMin || Math.max(Math.abs(dataMax) * 0.08, 0.1);
+  const yMin = Math.min(plot.y_min ?? dataMin, dataMin) - range * 0.08;
+  const yMax = Math.max(plot.y_max ?? dataMax, dataMax) + range * 0.08;
+  const yRange = yMax - yMin || 1;
+  const x = (epoch: number) => margin.left + ((epoch - xMin) / Math.max(1, xMax - xMin)) * chartWidth;
+  const y = (value: number) => margin.top + chartHeight - ((value - yMin) / yRange) * chartHeight;
+  const pointSet = (key: "primary" | "displayed" | "train" | "validation", points = validPoints) => points.map((point) => ({ epoch: point.epoch, value: point[key] })).filter((point): point is { epoch: number; value: number } => typeof point.value === "number");
+  const series = [
+    ...(metric.role === "primary" ? [{ key: "primary" as const, label: `primary metric · ${metric.requested_metric}`, color: "#2e9b78", dash: "" }] : []),
+    ...(pointSet("train").length ? [{ key: "train" as const, label: "train", color: "#4f8fe8", dash: "6 4" }] : []),
+    ...(pointSet("validation").length ? [{ key: "validation" as const, label: "validation", color: "#e58b45", dash: "" }] : []),
+    ...(metric.role !== "primary" && !pointSet("validation").length && pointSet("displayed").length ? [{ key: "displayed" as const, label: `displayed diagnostic · ${metric.display_metric}`, color: "#2e9b78", dash: "" }] : []),
+  ];
+  const linePoints = (key: "primary" | "displayed" | "train" | "validation", points = validPoints) => {
+    const raw = pointSet(key, points);
+    const valuesForLine = smoothed && key !== "primary" ? movingAverage(raw) : raw;
+    return valuesForLine.map((point) => `${x(point.epoch)},${y(point.value)}`).join(" ");
   };
-  return <div><div className="spark-caption"><span>{metric}</span><span className="spark-legend"><i className="legend-primary" /> displayed <i className="legend-train" /> train <i className="legend-validation" /> validation</span></div><svg className="sparkline" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${metric} history`}>{line("train", "#6aa6ff")}{line("validation", "#ef9b55")}{line("primary", "#67d4a4")}</svg></div>;
+  const tickValues = Array.from({ length: 4 }, (_, index) => yMin + ((yMax - yMin) * index) / 3);
+  const eventMarkers = plot.events.filter((event) => event.epoch >= xMin && event.epoch <= xMax);
+  const latestEpoch = validPoints[validPoints.length - 1].epoch;
+  const handleMove = (event: MouseEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relativeX = ((event.clientX - rect.left) / rect.width) * width;
+    setHoverEpoch(Math.round(xMin + ((relativeX - margin.left) / chartWidth) * (xMax - xMin)));
+  };
+  return <div className={`metric-plot ${focused ? "metric-plot-focused" : ""}`}>
+    <div className="plot-heading"><div><strong>{metric.role === "primary" ? metric.requested_metric : `Diagnostic: ${metric.display_metric || "metric unavailable"}`}</strong><span className="plot-subtitle">{metric.role === "primary" ? "primary objective" : "primary objective unavailable for this stage"} · {metric.direction.replaceAll("_", " ")} · source {metric.source || "unavailable"}</span><span className={`plot-freshness freshness-${freshness}`}>artifact {freshness === "unknown" ? "freshness unknown" : freshness}</span></div><div className="plot-actions"><button className={windowMode === "recent" ? "selected" : ""} onClick={() => setWindowMode(windowMode === "recent" ? "all" : "recent")}>recent 30</button><button className={smoothed ? "selected" : ""} onClick={() => setSmoothed(!smoothed)}>{smoothed ? "smoothed" : "raw"}</button>{plot.comparisons.length > 0 && <button className={showComparisons ? "selected" : ""} onClick={() => setShowComparisons(!showComparisons)}>compare prior</button>}<button onClick={() => setFocused(!focused)}>{focused ? "close focus" : "focus chart"}</button></div></div>
+    <div className="plot-stat-grid"><div><span>latest</span><strong>{formatNumber(plot.statistics.latest)}</strong></div><div><span>best</span><strong>{formatNumber(plot.statistics.best)}</strong></div><div><span>slope / epoch</span><strong>{plot.statistics.slope === null || plot.statistics.slope === undefined ? "—" : `${plot.statistics.slope >= 0 ? "+" : ""}${formatNumber(plot.statistics.slope)}`}</strong></div><div><span>train–validation gap</span><strong>{formatNumber(plot.statistics.train_validation_gap)}</strong></div></div>
+    <div className="plot-frame"><svg className="metric-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${plot.y_axis_label || metric.requested_metric} trajectory`} onMouseMove={handleMove} onMouseLeave={() => setHoverEpoch(null)}>
+      {tickValues.map((tick, index) => <g key={tick}><line x1={margin.left} x2={width - margin.right} y1={y(tick)} y2={y(tick)} className="plot-gridline" /><text x={margin.left - 9} y={y(tick) + 4} textAnchor="end" className="plot-axis-text">{formatNumber(tick)}</text></g>)}
+      <line x1={margin.left} x2={margin.left} y1={margin.top} y2={height - margin.bottom} className="plot-axis" /><line x1={margin.left} x2={width - margin.right} y1={height - margin.bottom} y2={height - margin.bottom} className="plot-axis" />
+      <text x={margin.left} y={15} className="plot-axis-title">{plot.y_axis_label || metric.requested_metric}</text><text x={width - margin.right} y={height - 10} textAnchor="end" className="plot-axis-title">epoch</text>
+      <text x={margin.left} y={height - 25} className="plot-axis-text">{xMin}</text><text x={width - margin.right} y={height - 25} textAnchor="end" className="plot-axis-text">{xMax}</text>
+      {showComparisons && plot.comparisons.map((comparison) => <polyline key={comparison.id} fill="none" stroke="#9aa8ad" strokeWidth="1.5" strokeDasharray="3 4" opacity=".65" points={linePoints(displayedKey, comparison.points)}><title>{comparison.label}</title></polyline>)}
+      {series.map((item) => <g key={item.key}><polyline fill="none" stroke={item.color} strokeWidth={item.key === "validation" || item.key === "primary" ? "3" : "2"} strokeDasharray={item.dash} points={linePoints(item.key)}><title>{item.label}</title></polyline>{pointSet(item.key).filter((_, index) => index === pointSet(item.key).length - 1).map((point) => <circle key={`${item.key}-${point.epoch}`} cx={x(point.epoch)} cy={y(point.value)} r="4" fill={item.color}><title>{`${item.label}: ${formatNumber(point.value)} at epoch ${point.epoch}`}</title></circle>)}</g>)}
+      {eventMarkers.map((event) => <g key={event.id}><line x1={x(event.epoch)} x2={x(event.epoch)} y1={margin.top} y2={height - margin.bottom} className={`plot-event plot-event-${event.type === "best" ? "best" : "observation"}`}><title>{`${event.label}: ${formatNumber(event.value)} at epoch ${event.epoch}`}</title></line><circle cx={x(event.epoch)} cy={event.type === "best" ? margin.top + 7 : margin.top + 18} r="3" className="plot-event-dot" /></g>)}
+      {hoverEpoch !== null && hoverEpoch >= xMin && hoverEpoch <= xMax && <g><line x1={x(hoverEpoch)} x2={x(hoverEpoch)} y1={margin.top} y2={height - margin.bottom} className="plot-hover-line" /><text x={Math.min(width - margin.right - 6, Math.max(margin.left + 6, x(hoverEpoch)))} y={margin.top - 5} textAnchor="middle" className="plot-hover-label">epoch {hoverEpoch}</text></g>}
+    </svg></div>
+    <div className="plot-legend">{series.map((item) => <span key={item.key}><i style={{ background: item.color }} />{item.label}</span>)}{showComparisons && <span><i className="comparison-swatch" />prior trials</span>}</div>
+    <p className="plot-interpretation">{formatText(plot.interpretation)}</p>
+  </div>;
 }
 
 export function CurrentExperimentCard({ data }: { data: Investigation }) {
@@ -107,7 +173,7 @@ export function CurrentExperimentCard({ data }: { data: Investigation }) {
     <div className="experiment-title"><div><h3>{experiment.title}</h3><p className="muted">{experiment.id || "No active experiment ID"} · trial {experiment.trial_id || "—"}</p></div><Badge tone={experiment.process_running ? "healthy" : "warning"}>{experiment.status}</Badge></div>
     <p>{formatText(experiment.purpose || "Purpose not recorded.")}</p>
     <div className="metric-grid"><div><span className="eyebrow">PHASE</span><strong>{experiment.stage || "—"}</strong></div><div><span className="eyebrow">PROGRESS</span><strong>{experiment.current_epoch && experiment.total_epochs ? `${experiment.current_epoch}/${experiment.total_epochs}` : "—"}</strong></div><div><span className="eyebrow">ELAPSED</span><strong>{formatDuration(experiment.elapsed_seconds)}</strong></div><div><span className="eyebrow">ETA</span><strong>{formatDuration(experiment.estimated_remaining_seconds)}</strong></div><div><span className="eyebrow">DISPLAYED VALUE</span><strong>{formatNumber(experiment.current_metric)}</strong></div><div><span className="eyebrow">BEST</span><strong>{formatNumber(experiment.best_metric)}</strong></div></div>
-    <div className="progress-track"><span style={{ width: `${Math.max(0, Math.min(1, experiment.progress_fraction || 0)) * 100}%` }} /></div><div className="metric-caption"><strong>{metric.role === "diagnostic" ? `Primary metric: ${metric.requested_metric} — unavailable during pretraining` : `Primary metric: ${metric.requested_metric}`}</strong><span className="muted">{metric.role === "diagnostic" ? `Diagnostic shown: ${metric.display_metric === "val_loss" ? "validation loss" : metric.display_metric || "diagnostic series"} — ${metric.direction.replaceAll("_", " ")}` : metric.direction.replaceAll("_", " ")} · checkpoint {experiment.checkpoint ? "available" : "not recorded"}</span></div>{metric.fallback_reason && <div className="metric-warning">{formatText(metric.fallback_reason)}</div>}<div className="compute-row"><span>compute consumed <b>{formatNumber(compute.consumed_gpu_hours)} GPU h</b></span><span>expected <b>{formatNumber(compute.expected_gpu_hours)} GPU h</b></span><span>remaining <b>{formatNumber(compute.remaining_gpu_hours)} GPU h</b></span></div><div className="baseline-note">Baseline comparison: {formatText(experiment.baseline_comparison.reason || "not available")}</div><Sparkline points={experiment.metric_series} metric={metric.display_metric === "val_loss" ? "validation loss" : metric.display_metric || metric.requested_metric} />
+    <div className="progress-track"><span style={{ width: `${Math.max(0, Math.min(1, experiment.progress_fraction || 0)) * 100}%` }} /></div><div className="metric-caption"><strong>{metric.role === "diagnostic" ? `Primary metric: ${metric.requested_metric} — unavailable during pretraining` : `Primary metric: ${metric.requested_metric}`}</strong><span className="muted">{metric.role === "diagnostic" ? `Diagnostic shown: ${metric.display_metric === "val_loss" ? "validation loss" : metric.display_metric || "diagnostic series"} — ${metric.direction.replaceAll("_", " ")}` : metric.direction.replaceAll("_", " ")} · checkpoint {experiment.checkpoint ? "available" : "not recorded"}</span></div>{metric.fallback_reason && <div className="metric-warning">{formatText(metric.fallback_reason)}</div>}<div className="compute-row"><span>compute consumed <b>{formatNumber(compute.consumed_gpu_hours)} GPU h</b></span><span>expected <b>{formatNumber(compute.expected_gpu_hours)} GPU h</b></span><span>remaining <b>{formatNumber(compute.remaining_gpu_hours)} GPU h</b></span></div><div className="baseline-note">Baseline comparison: {formatText(experiment.baseline_comparison.reason || "not available")}</div><MetricPlot experiment={experiment} />
   </Card>;
 }
 
@@ -147,13 +213,37 @@ export function AlertPanel({ data, acknowledged, onAcknowledge }: { data: Invest
 
 export function FocusedGraph({ data, level, relationDepth, scale, entityType, relationType, onLevel, onDepth, onScale, onEntityType, onRelationType, onNodeSelect }: { data: Investigation; level: number; relationDepth: number; scale: number; entityType: string; relationType: string; onLevel: (value: number) => void; onDepth: (value: number) => void; onScale: (value: number) => void; onEntityType: (value: string) => void; onRelationType: (value: string) => void; onNodeSelect: (node: Record<string, unknown>) => void }) {
   const kinds = [...new Set(data.graph.nodes.map((node) => node.kind))].sort();
-  const relations = [...new Set(data.graph.edges.map((edge) => edge.relation).filter(Boolean))].sort();
-  return <Card title="Focused reasoning graph" eyebrow="SECONDARY DRILL-DOWN"><div className="graph-controls"><label>detail <input type="range" min="0" max="5" value={level} onChange={(event) => onLevel(Number(event.target.value))} /></label><label>relations <input type="range" min="0" max="5" value={relationDepth} onChange={(event) => onDepth(Number(event.target.value))} /></label><label>scale <input aria-label="Scale graph" type="range" min="40" max="100" step="5" value={scale} onChange={(event) => onScale(Number(event.target.value))} /><span>{scale}%</span></label><label>node type <select value={entityType} onChange={(event) => onEntityType(event.target.value)}><option value="">all</option>{kinds.map((kind) => <option key={kind}>{kind}</option>)}</select></label><label>relation <select value={relationType} onChange={(event) => onRelationType(event.target.value)}><option value="">all</option>{relations.map((relation) => <option key={relation}>{relation}</option>)}</select></label><span className="muted">{data.graph.nodes.length} nodes · {data.graph.edges.length} edges</span></div><div className="graph-legend"><span><i className="node-key node-hypothesis" /> hypothesis</span><span><i className="node-key node-observation" /> observation</span><span><i className="node-key node-experiment" /> experiment/stage</span><span>→ relation direction</span></div>{data.graph.svg ? <div className="graph-svg"><div className="graph-canvas" style={{ transform: `scale(${scale / 100})`, transformOrigin: "top left" }} dangerouslySetInnerHTML={{ __html: data.graph.svg }} /></div> : <div className="empty">No focused graph evidence is available.</div>}<div className="graph-node-list"><span className="eyebrow">SELECT A NODE FOR DETAILS</span>{data.graph.nodes.map((node) => <button key={node.id} onClick={() => onNodeSelect(node)}><span className={`node-key node-${node.kind}`} />{node.label}<small>{node.kind}</small></button>)}</div></Card>;
+  const relations = [...new Set(data.graph.edges.map((edge) => edge.relation).filter((relation): relation is string => Boolean(relation)))].sort();
+  const relationColor = (relation: string) => data.graph.edges.find((edge) => edge.relation === relation)?.color || "#777777";
+  return <Card title="Focused reasoning graph" eyebrow="SECONDARY DRILL-DOWN"><div className="graph-controls"><label>detail <input type="range" min="0" max="5" value={level} onChange={(event) => onLevel(Number(event.target.value))} /></label><label>relations <input type="range" min="0" max="5" value={relationDepth} onChange={(event) => onDepth(Number(event.target.value))} /></label><label>scale <input aria-label="Scale graph" type="range" min="40" max="100" step="5" value={scale} onChange={(event) => onScale(Number(event.target.value))} /><span>{scale}%</span></label><label>node type <select value={entityType} onChange={(event) => onEntityType(event.target.value)}><option value="">all</option>{kinds.map((kind) => <option key={kind}>{kind}</option>)}</select></label><label>relation <select value={relationType} onChange={(event) => onRelationType(event.target.value)}><option value="">all</option>{relations.map((relation) => <option key={relation}>{relation}</option>)}</select></label><span className="muted">{data.graph.nodes.length} nodes · {data.graph.edges.length} edges</span></div><div className="graph-legend"><span><i className="node-key node-hypothesis" /> hypothesis</span><span><i className="node-key node-observation" /> observation</span><span><i className="node-key node-experiment" /> experiment/stage</span><span>→ relation direction</span></div>{relations.length > 0 && <div className="graph-relation-legend"><span className="eyebrow">EDGE RELATIONS</span>{relations.map((relation) => <span className="relation-legend-item" key={relation}><i className="relation-key" style={{ borderTopColor: relationColor(relation) }} />{relation}</span>)}</div>}{data.graph.svg ? <div className="graph-svg"><div className="graph-canvas" style={{ transform: `scale(${scale / 100})`, transformOrigin: "top left" }} dangerouslySetInnerHTML={{ __html: data.graph.svg }} /></div> : <div className="empty">No focused graph evidence is available.</div>}<div className="graph-node-list"><span className="eyebrow">SELECT A NODE FOR DETAILS</span>{data.graph.nodes.map((node) => <button key={node.id} onClick={() => onNodeSelect(node)}><span className="node-picker-heading"><span className="node-key" style={{ backgroundColor: node.color || "var(--blue)" }} /><span className="node-picker-kind">{node.kind}</span></span><span className="node-picker-summary">{nodePickerSummary(node)}</span></button>)}</div></Card>;
+}
+
+function nodePickerSummary(node: { label: string; kind: string }): string {
+  const text = node.label.replace(/\s+/g, " ").trim();
+  if (node.kind === "trial") {
+    const trial = text.match(/^TRIAL\s+(\d+)\s*/i);
+    if (trial) return `#${trial[1]} ${text.slice(trial[0].length).replace(/^trial:\s*/i, "")}`.trim();
+  }
+  const escapedKind = node.kind.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const prefix = new RegExp(`^${escapedKind}(?::|\\s+)\\s*`, "i");
+  return text.replace(prefix, "").trim() || text;
+}
+
+function PrettyString({ value }: { value: string }) {
+  const lines = value.split("\n");
+  const keyValuePattern = /^([A-Za-z][A-Za-z0-9 _-]{0,30}:)\s*(.*)$/;
+  const hasSecondaryKeys = lines.some((line) => /^[A-Za-z][A-Za-z0-9 _-]{0,30}:\s*/.test(line));
+  if (!hasSecondaryKeys) return <span className="pretty-string">{value}</span>;
+  return <span className="pretty-string pretty-structured-text">{lines.map((line, index) => {
+    const match = line.match(keyValuePattern);
+    if (!match) return <span className="pretty-text-line" key={index}>{line}</span>;
+    return <span className="pretty-text-line" key={index}><strong className="pretty-secondary-key">{match[1]}</strong><span className="pretty-text-value">{match[2]}</span></span>;
+  })}</span>;
 }
 
 function PrettyValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (value === null) return <span className="pretty-null">null</span>;
-  if (typeof value === "string") return <span className="pretty-string">{value}</span>;
+  if (typeof value === "string") return <PrettyString value={value} />;
   if (typeof value === "number") return <span className="pretty-number">{formatNumber(value)}</span>;
   if (typeof value === "boolean") return <span className="pretty-boolean">{String(value)}</span>;
   if (Array.isArray(value)) {

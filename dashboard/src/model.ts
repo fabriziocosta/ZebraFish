@@ -65,7 +65,7 @@ export const GraphNodeSchema = z.object({
 
 export const GraphSchema = z.object({
   nodes: z.array(GraphNodeSchema),
-  edges: z.array(z.object({ source: z.string(), target: z.string(), relation: z.string().optional() })),
+  edges: z.array(z.object({ source: z.string(), target: z.string(), relation: z.string().optional(), color: z.string().optional() })),
   svg: z.string().nullable().optional(),
 });
 
@@ -73,8 +73,27 @@ export const MetricPointSchema = z.object({
   step: z.number(),
   epoch: z.number(),
   primary: Numeric,
+  displayed: Numeric,
   train: Numeric,
   validation: Numeric,
+});
+
+export const MetricPlotSchema = z.object({
+  y_axis_label: z.string().nullable().optional(),
+  x_axis_label: z.string().default("epoch"),
+  direction: z.string().default("unknown"),
+  y_min: Numeric,
+  y_max: Numeric,
+  statistics: z.object({
+    latest: Numeric,
+    best: Numeric,
+    slope: Numeric,
+    train_validation_gap: Numeric,
+    epochs: z.number().default(0),
+  }).default({ epochs: 0 }),
+  events: z.array(z.object({ id: z.string(), epoch: z.number(), type: z.string(), label: z.string(), value: Numeric })).default([]),
+  comparisons: z.array(z.object({ id: z.string(), trial_id: z.string().nullable().optional(), stage: z.string(), label: z.string(), metric: z.string().nullable().optional(), points: z.array(MetricPointSchema) })).default([]),
+  interpretation: z.string().default(""),
 });
 
 export const InvestigationSchema = z.object({
@@ -124,12 +143,14 @@ export const InvestigationSchema = z.object({
       available: z.boolean(),
       direction: z.string(),
       source: z.string().nullable().optional(),
+      source_path: z.string().nullable().optional(),
       fallback_reason: z.string().nullable().optional(),
     }),
     current_metric: Numeric,
     best_metric: Numeric,
     summary_metrics: z.record(z.string(), z.number()).default({}),
     metric_series: z.array(MetricPointSchema).default([]),
+    metric_plot: MetricPlotSchema.default({ x_axis_label: "epoch", direction: "unknown", statistics: { epochs: 0 }, events: [], comparisons: [], interpretation: "" }),
     artifact_updated_at: z.string().nullable().optional(),
     artifact_freshness: z.record(z.string(), z.unknown()).default({}),
     compute: z.object({ consumed_gpu_hours: Numeric, expected_gpu_hours: Numeric, remaining_gpu_hours: Numeric, available: z.boolean() }),
