@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from src.scientific_dashboard import build_dashboard_snapshot, build_reasoning_graph, nx
+from src.scientific_dashboard import _llm_graph_labels, build_dashboard_snapshot, build_reasoning_graph, nx
 from src.scientific_state import empty_state, record_entity, save_state
 
 
@@ -125,6 +125,24 @@ class ScientificDashboardTests(unittest.TestCase):
             self.assertEqual(snapshot["current_run"]["pid"], 123)
             self.assertEqual(len(snapshot["trial_rows"]), 4)
             self.assertEqual(len(snapshot["observation_rows"]), 1)
+
+    def test_llm_label_provider_returns_semantic_wrapped_label(self) -> None:
+        class Responses:
+            def create(self, **kwargs):
+                return type(
+                    "Response",
+                    (),
+                    {"output_text": json.dumps({"labels": [{"key": "questions:q_1", "label": "Question: rotation improves generalisation"}]})},
+                )()
+
+        class Client:
+            responses = Responses()
+
+        labels = _llm_graph_labels(
+            [{"key": "questions:q_1", "kind": "question", "fields": {"question": "Does rotation help?"}}],
+            client=Client(),
+        )
+        self.assertEqual(labels["questions:q_1"], "Question: rotation improves\ngeneralisation")
 
 
 if __name__ == "__main__":

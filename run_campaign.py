@@ -275,6 +275,10 @@ def dashboard_command(argv: list[str]) -> int:
     # Validate before starting the server so a typo does not produce a blank UI.
     resolve_campaign(args.campaign)
     os.environ["ZEBRAFISH_DASHBOARD_CAMPAIGN"] = args.campaign
+    # Generate concise semantic graph labels once per unchanged node while the
+    # dashboard is running.  The API remains read-only; labels are in-memory
+    # presentation metadata and failures fall back to deterministic labels.
+    os.environ.setdefault("ZEBRAFISH_DASHBOARD_LLM_LABELS", "on")
     import uvicorn
 
     uvicorn.run("src.dashboard_api:app", host=args.host, port=args.port, reload=args.reload)

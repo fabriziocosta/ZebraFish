@@ -22,7 +22,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
-  const [detail, setDetail] = useState<{ title: string; body: string } | null>(null);
+  const [detail, setDetail] = useState<{ title: string; value: unknown } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +43,7 @@ export default function App() {
     window.localStorage.setItem("mission-control-theme", dark ? "dark" : "light");
   }, [dark]);
 
-  const titleDetail = (title: string, value: unknown) => setDetail({ title, body: JSON.stringify(value, null, 2) });
+  const titleDetail = (title: string, value: unknown) => setDetail({ title, value });
   const theme = dark ? "theme-dark" : "theme-light";
   const hasData = Boolean(data);
   const diagnostics = useMemo(() => data?.diagnostics.errors || [], [data]);
@@ -60,7 +60,7 @@ export default function App() {
       <div className="story-grid"><ExpectedOutcomes data={data} /><DecisionQueue data={data} onSelect={(candidate: Candidate) => titleDetail(candidate.title, candidate)} /></div>
       <EvidencePanel data={data} onSelect={(item: Evidence) => titleDetail(item.type.replaceAll("_", " "), item)} />
       <div className="two-column"><BeliefTimeline data={data} onSelect={(event) => titleDetail("Belief update", event)} /><AlertPanel data={data} acknowledged={acknowledged} onAcknowledge={(id) => setAcknowledged((current) => new Set(current).add(id))} /></div>
-      <FocusedGraph data={data} level={level} relationDepth={relationDepth} scale={graphScale} entityType={entityType} relationType={relationType} onLevel={setLevel} onDepth={setRelationDepth} onScale={setGraphScale} onEntityType={setEntityType} onRelationType={setRelationType} onNodeSelect={(node) => titleDetail(String(node.label || node.id), node)} />
+      <FocusedGraph data={data} level={level} relationDepth={relationDepth} scale={graphScale} entityType={entityType} relationType={relationType} onLevel={setLevel} onDepth={setRelationDepth} onScale={setGraphScale} onEntityType={setEntityType} onRelationType={setRelationType} onNodeSelect={(node) => titleDetail(String(node.tooltip || node.label || node.id), node)} />
     </div>}
     <DetailDrawer detail={detail} onClose={() => setDetail(null)} />
   </main>;

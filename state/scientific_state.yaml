@@ -338,6 +338,38 @@ entities:
         created_by: state_migration
         source: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf
       created_at: '2026-07-23T13:15:00+00:00'
+    cnn_pretrain_finetune_20260723_143437_ff3df9:
+      id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      status: terminated
+      stage_experiment_ids:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:13C
+      purpose:
+        question_id: q_cnn_pretrain_finetune_objective
+        hypothesis_ids:
+        - hyp_cnn_pretrain_finetune_objective
+      configuration:
+        10C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+        13C: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/13C_13C_finetune_next.yaml
+      outcome:
+        status: terminated_before_finetuning
+        downstream_objective_score: null
+        guardrail_result: not_observed
+        termination_reason: User-requested termination during 10C pretraining; 13C
+          was not launched.
+      execution:
+        terminated_at: '2026-07-25T17:23:17'
+        artifacts:
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+          run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
+          latest_config_yamls:
+          - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+      provenance:
+        created_by: scientific_state_initialization
+        source: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/campaign_state.json
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
   experiments:
     cnn_pretrain_finetune_20260625_115021_08a733:10C:
       id: cnn_pretrain_finetune_20260625_115021_08a733:10C
@@ -1047,6 +1079,47 @@ entities:
         created_by: state_migration
         source: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf
       created_at: '2026-07-23T13:15:00+00:00'
+    cnn_pretrain_finetune_20260723_143437_ff3df9:10C:
+      id: cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      stage: 10C
+      status: terminated
+      configuration:
+        resolved_config_paths: &id001
+        - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+        trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+      execution:
+        run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+        started_at: '2026-07-23T14:34:37'
+        completed_at: '2026-07-25T17:28:55'
+        artifacts:
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+          run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
+          latest_config_yamls: *id001
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+        provenance:
+          created_by: autonomous_controller
+          legacy_state: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/stage_state/10C.json
+      outcome:
+        controller_status: terminated
+        run_status:
+          experiment: 10C
+          experiment_id: 10C_pretrain_commutative_cnn_20260723_143440
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+          status: terminated
+          suspend_marker_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/control/10C_pretrain_commutative_cnn_20260723_143440.suspend
+          terminated_at: '2026-07-25T17:23:17'
+          terminated_pid: 3281820
+          terminating_at: '2026-07-25T17:23:17'
+          terminating_pid: 3281820
+          termination_reason: terminated by run_campaign CLI
+          termination_signal: SIGTERM
+          updated_at: '2026-07-23T14:34:40'
+      provenance:
+        created_by: autonomous_controller
+        source: campaign_stage_status
+      created_at: '2026-07-25T16:28:55+00:00'
   observations:
     obs_c57136a4ce8e:
       id: obs_c57136a4ce8e
@@ -3751,32 +3824,772 @@ entities:
       provenance:
         created_by: observation_engine
         created_at: '2026-07-23T13:18:03+00:00'
+    obs_f2a2d8ab6945:
+      id: obs_f2a2d8ab6945
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_derivative_loss changed by at most 0.000214746
+        over the last 5 recorded points.
+      measurements:
+        metric: train_cross_probe_derivative_loss
+        window: 5
+        spread: 0.00021474600743893926
+        last_value: 0.0007495157543655613
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_ce05adef1b10:
+      id: obs_ce05adef1b10
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_frequency_loss changed by at most 0.00130097 over
+        the last 5 recorded points.
+      measurements:
+        metric: train_cross_probe_frequency_loss
+        window: 5
+        spread: 0.0013009680920146593
+        last_value: 0.0052671512470270875
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_e911f6704b00:
+      id: obs_e911f6704b00
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_lambda_cross changed by at most 0 over the last 5 recorded
+        points.
+      measurements:
+        metric: train_lambda_cross
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_8308ff871ba4:
+      id: obs_8308ff871ba4
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_lambda_proto changed by at most 0 over the last 5 recorded
+        points.
+      measurements:
+        metric: train_lambda_proto
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_caa2b1807cc3:
+      id: obs_caa2b1807cc3
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_latent_alignment_weight changed by at most 0 over the last
+        5 recorded points.
+      measurements:
+        metric: train_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_437308b4dfe0:
+      id: obs_437308b4dfe0
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_prototype_alignment_loss changed by at most 0 over the last
+        5 recorded points.
+      measurements:
+        metric: train_prototype_alignment_loss
+        window: 5
+        spread: 0.0
+        last_value: 4.1588826179504395
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_99bd1bb72da1:
+      id: obs_99bd1bb72da1
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_derivative_loss changed by at most 0.000272678 over
+        the last 5 recorded points.
+      measurements:
+        metric: train_self_probe_derivative_loss
+        window: 5
+        spread: 0.000272678262622476
+        last_value: 0.001011883690628033
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_13e2d338155f:
+      id: obs_13e2d338155f
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_frequency_loss changed by at most 0.000427862 over
+        the last 5 recorded points.
+      measurements:
+        metric: train_self_probe_frequency_loss
+        window: 5
+        spread: 0.0004278619766785352
+        last_value: 0.003100511504737936
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_e16d8d9ae84b:
+      id: obs_e16d8d9ae84b
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_cross_probe_derivative_loss changed by at most 0.00015105 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_cross_probe_derivative_loss
+        window: 5
+        spread: 0.00015105038052769162
+        last_value: 0.0017845897263445893
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_ff4d64d6e9fe:
+      id: obs_ff4d64d6e9fe
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_cross_probe_frequency_loss changed by at most 0.00105024 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_cross_probe_frequency_loss
+        window: 5
+        spread: 0.0010502351569416733
+        last_value: 0.009979240595571327
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_13d190e53029:
+      id: obs_13d190e53029
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_feature_alignment_loss changed by at most 0.00174894 over the
+        last 5 recorded points.
+      measurements:
+        metric: val_feature_alignment_loss
+        window: 5
+        spread: 0.00174893947861951
+        last_value: 0.22710409621644465
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_8e7f38d206d3:
+      id: obs_8e7f38d206d3
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_lambda_cross changed by at most 0 over the last 5 recorded points.
+      measurements:
+        metric: val_lambda_cross
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_0de0ce2d49a6:
+      id: obs_0de0ce2d49a6
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_lambda_proto changed by at most 0 over the last 5 recorded points.
+      measurements:
+        metric: val_lambda_proto
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_ad721ca65277:
+      id: obs_ad721ca65277
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_latent_alignment_loss changed by at most 0.00174894 over the
+        last 5 recorded points.
+      measurements:
+        metric: val_latent_alignment_loss
+        window: 5
+        spread: 0.00174893947861951
+        last_value: 0.22710409621644465
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_7abe8ebfad79:
+      id: obs_7abe8ebfad79
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_latent_alignment_weight changed by at most 0 over the last 5
+        recorded points.
+      measurements:
+        metric: val_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_c80c2cfc54e5:
+      id: obs_c80c2cfc54e5
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_prototype_alignment_loss changed by at most 0 over the last 5
+        recorded points.
+      measurements:
+        metric: val_prototype_alignment_loss
+        window: 5
+        spread: 0.0
+        last_value: 4.1588826179504395
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_72443afaefa3:
+      id: obs_72443afaefa3
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_self_probe_correlation_loss changed by at most 0.000670862 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_self_probe_correlation_loss
+        window: 5
+        spread: 0.0006708623089405341
+        last_value: 0.7308782985121567
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_ee70915f90fe:
+      id: obs_ee70915f90fe
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_self_probe_derivative_loss changed by at most 0.000233459 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_self_probe_derivative_loss
+        window: 5
+        spread: 0.0002334586659016851
+        last_value: 0.007482298664309038
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_9b947ef26ce3:
+      id: obs_9b947ef26ce3
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_self_probe_frequency_loss changed by at most 0.000526744 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_self_probe_frequency_loss
+        window: 5
+        spread: 0.0005267439128090598
+        last_value: 0.00654272184929932
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_9fb172b3a1b5:
+      id: obs_9fb172b3a1b5
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_loss and val_loss differ by 1.26451 at the final recorded point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 0.7112399311378418
+        validation: 1.9757503751688492
+        gap: 1.2645104440310075
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_c55d7343b6a6:
+      id: obs_c55d7343b6a6
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_loss and val_self_probe_loss differ by 1.26451 at
+        the final recorded point.
+      measurements:
+        train_metric: train_self_probe_loss
+        validation_metric: val_self_probe_loss
+        train: 0.7112399311378418
+        validation: 1.9757503751688492
+        gap: 1.2645104440310075
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_07b1a04204a2:
+      id: obs_07b1a04204a2
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_loss and val_cross_probe_loss differ by 1.27856
+        at the final recorded point.
+      measurements:
+        train_metric: train_cross_probe_loss
+        validation_metric: val_cross_probe_loss
+        train: 1.0248963533441662
+        validation: 2.30345608266244
+        gap: 1.278559729318274
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_8d79d2d4b982:
+      id: obs_8d79d2d4b982
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_local_loss and val_self_probe_local_loss differ
+        by 0.427195 at the final recorded point.
+      measurements:
+        train_metric: train_self_probe_local_loss
+        validation_metric: val_self_probe_local_loss
+        train: 0.2557301338865298
+        validation: 0.6829247037382646
+        gap: 0.4271945698517348
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_581d227a841c:
+      id: obs_581d227a841c
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_local_loss and val_cross_probe_local_loss differ
+        by 0.639956 at the final recorded point.
+      measurements:
+        train_metric: train_cross_probe_local_loss
+        validation_metric: val_cross_probe_local_loss
+        train: 0.5269189489030092
+        validation: 1.1668752754419487
+        gap: 0.6399563265389395
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_dc7ee67ccbf7:
+      id: obs_dc7ee67ccbf7
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_region_time_loss and val_self_probe_region_time_loss
+        differ by 0.836881 at the final recorded point.
+      measurements:
+        train_metric: train_self_probe_region_time_loss
+        validation_metric: val_self_probe_region_time_loss
+        train: 0.4168755098621225
+        validation: 1.2537568562045138
+        gap: 0.8368813463423913
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+    obs_81b7f2d6244a:
+      id: obs_81b7f2d6244a
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_region_time_loss and val_cross_probe_region_time_loss
+        differ by 0.638228 at the final recorded point.
+      measurements:
+        train_metric: train_cross_probe_region_time_loss
+        validation_metric: val_cross_probe_region_time_loss
+        train: 0.48185146851291316
+        validation: 1.1200796899917935
+        gap: 0.6382282214788804
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
   hypotheses:
     hyp_cnn_pretrain_finetune_objective:
-      title: A bounded optimisation change can improve the campaign objective.
-      statement: At least one allowlisted optimisation or loss-weight change will
-        improve compound macro-F1 without violating the action guardrail.
+      title: Moderate 13C rotation augmentation will improve CNN compound generalisation
+      statement: For the CNN pretraining-to-finetuning chain, a moderate 13C rotation-augmentation
+        policy (8 random rotations with a 20 degree range), with architecture, data
+        split, optimizer, loss weights, and the 10C checkpoint held fixed, will reduce
+        the 13C train-validation loss gap and improve compound macro-F1 over the historical
+        baseline of 0.253 without reducing action accuracy below 0.30.
       status: active
       belief:
-        probability: 0.5
-        confidence: initial
+        probability: 0.55
+        confidence: low
+        calibrated: false
+        interpretation: heuristic prior, not a calibrated probability
+        previous_probability: null
+        source_observations:
+        - obs_8d79d2d4b982
+        - obs_581d227a841c
+        - obs_dc7ee67ccbf7
+        - obs_81b7f2d6244a
+        - obs_8e7f38d206d3
+        - obs_0de0ce2d49a6
+        - obs_ad721ca65277
+        - obs_7abe8ebfad79
+        - obs_c80c2cfc54e5
+        - obs_72443afaefa3
+        - obs_ee70915f90fe
+        - obs_9b947ef26ce3
+        updated_at: '2026-07-25T16:28:55+00:00'
       question_id: q_cnn_pretrain_finetune_objective
       provenance:
         created_by: autonomous_controller
-        reason: campaign objective seed
+        reason: replace generic seed with mechanism and falsification criteria
+        updated_by: scientific_state_initialization
+        updated_at: '2026-07-25T16:28:55+00:00'
       created_at: '2026-07-23T13:28:42+00:00'
-  beliefs: {}
+      mechanism: Moderate rotations expose label-preserving orientation variation
+        during finetuning, reducing memorisation of training views and improving representation
+        generalisation.
+      scope: CNN 13C finetuning after the specified 10C checkpoint; only train_num_random_rotations
+        and rotation_range_degrees vary.
+      assumptions: Rotations preserve labels; data splits, seeds, checkpoint, architecture,
+        optimizer, and loss weights remain fixed; the 13C evaluator is unchanged.
+      expected_outcomes:
+      - compound.macro_f1 > 0.253
+      - action.accuracy >= 0.30
+      - 13C validation-minus-training loss gap < 0.172
+      falsification_criteria:
+      - compound.macro_f1 <= 0.253
+      - action.accuracy < 0.30
+      - 13C validation-minus-training loss gap >= 0.172
+      - missing or invalid 13C objective artifacts
+      source_observations:
+      - obs_8d79d2d4b982
+      - obs_581d227a841c
+      - obs_dc7ee67ccbf7
+      - obs_81b7f2d6244a
+      - obs_8e7f38d206d3
+      - obs_0de0ce2d49a6
+      - obs_ad721ca65277
+      - obs_7abe8ebfad79
+      - obs_c80c2cfc54e5
+      - obs_72443afaefa3
+      - obs_ee70915f90fe
+      - obs_9b947ef26ce3
+      confidence: low heuristic prior; direct augmentation effect not yet tested
+    hyp_transformer_pretrain_finetune_objective:
+      id: hyp_transformer_pretrain_finetune_objective
+      title: Moderate 12T attention dropout will improve transformer compound generalisation
+      statement: For the transformer 12T-to-15T chain, setting 12T attention dropout
+        to 0.10 while holding architecture, data, optimizer, loss weights, and evaluation
+        protocol fixed will improve 15T compound macro-F1 over the registered baseline
+        without reducing action accuracy below 0.30.
+      mechanism: Small attention dropout regularizes reliance on individual token-to-token
+        interactions, reducing representation overfitting while preserving the shared
+        encoder structure.
+      scope: Transformer 12T pretraining followed by 15T finetuning; only model_config.attention_dropout
+        varies in the candidate.
+      assumptions: The dropout value is supported by the runner; the data split and
+        evaluation protocol are unchanged; the intervention does not alter architecture
+        dimensions.
+      expected_outcomes:
+      - 15T compound.macro_f1 improves over the registered transformer baseline
+      - action.accuracy >= 0.30
+      falsification_criteria:
+      - no compound macro-F1 improvement
+      - action.accuracy < 0.30
+      - required 15T objective artifacts are missing
+      source_observations: []
+      confidence: low heuristic prior; no transformer evidence registered
+      belief:
+        probability: 0.5
+        confidence: low
+        calibrated: false
+        interpretation: heuristic prior, not a calibrated probability
+        previous_probability: null
+        source_observations: []
+        updated_at: '2026-07-25T16:28:55+00:00'
+      question_id: q_transformer_pretrain_finetune_objective
+      provenance:
+        created_by: scientific_state_initialization
+        reason: campaign branch initialization
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+  beliefs:
+    belief_cnn_rotation_augmentation:
+      id: belief_cnn_rotation_augmentation
+      hypothesis_id: hyp_cnn_pretrain_finetune_objective
+      probability: 0.55
+      score: 0.55
+      confidence: low
+      calibrated: false
+      interpretation: heuristic prior, not a calibrated probability
+      previous_value: null
+      source_observations:
+      - obs_8d79d2d4b982
+      - obs_581d227a841c
+      - obs_dc7ee67ccbf7
+      - obs_81b7f2d6244a
+      - obs_8e7f38d206d3
+      - obs_0de0ce2d49a6
+      - obs_ad721ca65277
+      - obs_7abe8ebfad79
+      - obs_c80c2cfc54e5
+      - obs_72443afaefa3
+      - obs_ee70915f90fe
+      - obs_9b947ef26ce3
+      update_reason: Moderate augmentation is mechanistically plausible given observed
+        generalisation gaps, but no direct augmentation trial has completed.
+      provenance:
+        created_by: scientific_state_initialization
+        source: historical baseline observations and registered hypothesis
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+    belief_transformer_attention_dropout:
+      id: belief_transformer_attention_dropout
+      hypothesis_id: hyp_transformer_pretrain_finetune_objective
+      probability: 0.5
+      score: 0.5
+      confidence: low
+      calibrated: false
+      interpretation: heuristic prior, not a calibrated probability
+      previous_value: null
+      source_observations: []
+      update_reason: No transformer run or direct evidence is currently available.
+      provenance:
+        created_by: scientific_state_initialization
+        source: registered transformer hypothesis
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
   questions:
     q_cnn_pretrain_finetune_objective:
-      question: Which permitted training change most improves downstream compound
-        discrimination while preserving action performance?
+      question: Does moderate, label-preserving rotation augmentation during 13C finetuning
+        improve CNN compound generalisation while preserving action accuracy?
       status: open
       importance: 1.0
       decision_relevance: 1.0
       provenance:
         created_by: autonomous_controller
-        reason: campaign objective seed
+        reason: replace generic seed with registered bounded question
+        updated_by: scientific_state_initialization
+        updated_at: '2026-07-25T16:28:55+00:00'
       created_at: '2026-07-23T13:28:42+00:00'
+      scope: CNN 10C-to-13C trials using the same dataset split, checkpoint handoff,
+        objective metrics, and deterministic evaluation protocol.
+      success_criterion: Compound macro-F1 exceeds 0.253, action accuracy is at least
+        0.30, and the final 13C validation-minus-training loss gap is lower than the
+        historical baseline gap of 0.172.
+      falsification_criteria:
+      - compound.macro_f1 <= 0.253
+      - action.accuracy < 0.30
+      - 13C validation-minus-training loss gap is not reduced below 0.172
+      - required 13C objective artifacts are missing
+      required_evidence:
+      - 13C summary metrics
+      - action guardrail
+      - 13C train and validation loss trajectories
+      - resolved configuration and checkpoint provenance
+      source_observations:
+      - obs_8d79d2d4b982
+      - obs_581d227a841c
+      - obs_dc7ee67ccbf7
+      - obs_81b7f2d6244a
+      - obs_8e7f38d206d3
+      - obs_0de0ce2d49a6
+      - obs_ad721ca65277
+      - obs_7abe8ebfad79
+      - obs_c80c2cfc54e5
+      - obs_72443afaefa3
+      - obs_ee70915f90fe
+      - obs_9b947ef26ce3
+      confidence: moderate question relevance; outcome untested
+    q_transformer_pretrain_finetune_objective:
+      id: q_transformer_pretrain_finetune_objective
+      question: Does moderate transformer attention dropout during 12T pretraining
+        improve downstream compound generalisation while preserving action accuracy?
+      scope: Transformer 12T-to-15T trials with fixed architecture, data protocol,
+        checkpoint handoff, and evaluation metrics.
+      success_criterion: 15T compound macro-F1 improves over the registered transformer
+        baseline and action accuracy remains at least 0.30.
+      falsification_criteria:
+      - compound.macro_f1 does not improve
+      - action.accuracy < 0.30
+      - required 15T artifacts are missing
+      required_evidence:
+      - 12T and 15T summary metrics
+      - action guardrail
+      - resolved configuration
+      - checkpoint provenance
+      source_observations: []
+      confidence: moderate question relevance; outcome untested
+      provenance:
+        created_by: scientific_state_initialization
+        reason: campaign branch initialization
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
   candidate_experiments:
     cand_20260723_13c_rotation_regularization_v1:
       id: cand_20260723_13c_rotation_regularization_v1
@@ -3787,7 +4600,7 @@ entities:
       question_id: q_cnn_pretrain_finetune_objective
       hypothesis_ids:
       - hyp_cnn_pretrain_finetune_objective
-      base_experiment: cnn_pretrain_finetune_20260704_141700_197670
+      base_experiment: cnn_pretrain_finetune_20260704_141700_197670:13C
       configuration_patch:
         13C:
           train_num_random_rotations: 8
@@ -3818,7 +4631,97 @@ entities:
       provenance:
         created_by: llm
         decision: propose_trial
+        updated_by: scientific_state_initialization
+        updated_at: '2026-07-25T16:28:55+00:00'
+        reason: complete scientific rationale and evidence links
       created_at: '2026-07-23T13:34:37+00:00'
+      rationale: 'This is the smallest bounded intervention that directly tests the
+        registered mechanism: vary only 13C rotation count and range, reuse the completed
+        10C checkpoint, and compare against the historical 13C baseline.'
+      source_observations:
+      - obs_8d79d2d4b982
+      - obs_581d227a841c
+      - obs_dc7ee67ccbf7
+      - obs_81b7f2d6244a
+      - obs_8e7f38d206d3
+      - obs_0de0ce2d49a6
+      - obs_ad721ca65277
+      - obs_7abe8ebfad79
+      - obs_c80c2cfc54e5
+      - obs_72443afaefa3
+      - obs_ee70915f90fe
+      - obs_9b947ef26ce3
+      confidence: moderate design confidence; outcome untested
+      decision_value:
+        expected_information_gain: 0.6
+        scientific_value: 0.8
+        estimation_method: bounded heuristic prior; not an observed result
+      checkpoint_reference: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+      checkpoint_status: available_from_terminated_10C
+      dataset_reference: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+      required_artifacts:
+      - 13C history CSV
+      - 13C summary metrics CSV
+      - 13C checkpoint
+      - 13C confusion matrices
+      - 13C UMAP PDF
+      baseline_metrics:
+        compound.macro_f1: 0.253
+        action.accuracy: 0.394
+        train_val_loss_gap: 0.172
+        source_experiment: cnn_pretrain_finetune_20260704_141700_197670:13C
+        recorded_at: '2026-07-25T16:32:58+00:00'
+    cand_transformer_attention_dropout_v1:
+      id: cand_transformer_attention_dropout_v1
+      title: Set moderate 12T attention dropout
+      purpose: Test whether small attention dropout improves transformer 15T compound
+        generalisation without violating the action guardrail.
+      question_id: q_transformer_pretrain_finetune_objective
+      hypothesis_ids:
+      - hyp_transformer_pretrain_finetune_objective
+      base_experiment: null
+      configuration_patch:
+        12T:
+          model_config:
+            attention_dropout: 0.1
+      fixed_variables:
+        12T: all settings except attention_dropout fixed
+        15T: unchanged; reuse the 12T checkpoint
+      expected_outcomes:
+      - 15T compound.macro_f1 improves over the registered transformer baseline
+      - action.accuracy remains >= 0.30
+      falsification_criteria:
+      - no compound macro-F1 improvement
+      - action.accuracy < 0.30
+      - required 15T artifacts are missing
+      estimated_gpu_hours: 14
+      estimated_wall_hours: 20
+      risks:
+      - too much dropout may underfit the encoder
+      - no transformer baseline is currently registered
+      allowed_stages:
+      - 12T
+      - 15T
+      status: proposed
+      source_observations: []
+      confidence: low design confidence until a transformer baseline exists
+      provenance:
+        created_by: scientific_state_initialization
+        reason: campaign branch initialization
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+      checkpoint_status: unavailable_until_12T_completes
+      dataset_reference: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+      required_artifacts:
+      - 12T history CSV
+      - 12T summary metrics CSV
+      - 12T checkpoint
+      - 15T history CSV
+      - 15T summary metrics CSV
+      - 15T checkpoint
+      - 15T confusion matrices
+      - 15T UMAP PDF
+      baseline_status: not_registered
 relations:
 - type: reuses_checkpoint
   source: cnn_pretrain_finetune_20260625_115021_08a733:13C
@@ -3848,9 +4751,33 @@ relations:
   source: cnn_pretrain_finetune_20260705_232039_eadccf:13C
   target: cnn_pretrain_finetune_20260705_232039_eadccf:10C
   created_at: '2026-07-23T13:18:03+00:00'
+- type: derived_from
+  source: hyp_cnn_pretrain_finetune_objective
+  target: q_cnn_pretrain_finetune_objective
+  created_at: '2026-07-25T16:28:55+00:00'
+- type: tests
+  source: cand_20260723_13c_rotation_regularization_v1
+  target: hyp_cnn_pretrain_finetune_objective
+  created_at: '2026-07-25T16:28:55+00:00'
+- type: motivates
+  source: q_cnn_pretrain_finetune_objective
+  target: cand_20260723_13c_rotation_regularization_v1
+  created_at: '2026-07-25T16:28:55+00:00'
+- type: derived_from
+  source: hyp_transformer_pretrain_finetune_objective
+  target: q_transformer_pretrain_finetune_objective
+  created_at: '2026-07-25T16:28:55+00:00'
+- type: tests
+  source: cand_transformer_attention_dropout_v1
+  target: hyp_transformer_pretrain_finetune_objective
+  created_at: '2026-07-25T16:28:55+00:00'
+- type: motivates
+  source: q_transformer_pretrain_finetune_objective
+  target: cand_transformer_attention_dropout_v1
+  created_at: '2026-07-25T16:28:55+00:00'
 controller_state:
   status: running
-  active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+  active_trial_id: cnn_pretrain_finetune_20260725_174326_4f984d
   active_stage: 10C
   last_migration:
     campaign_id: cnn_pretrain_finetune
@@ -3899,13 +4826,23 @@ controller_state:
     - 'non-allowlisted parameter: 10C.13C.train_num_random_rotations'
     - 'non-allowlisted parameter: 10C.13C.rotation_range_degrees'
     created_at: '2026-07-23T14:29:02'
-  safe_stop_reason: 'repeated invalid state operations: append target must be a list:
-    candidate_experiments'
-  last_poll_at: '2026-07-25T09:50:52'
+  safe_stop_reason: null
+  last_poll_at: '2026-07-25T17:43:26'
   last_controller_status: running_wait
   last_rejection_reason: null
   last_decision: propose_trial
-  last_decision_at: '2026-07-23T14:34:37'
+  last_decision_at: '2026-07-25T17:43:26'
+  termination_reason: user_requested
+  initialization:
+    completed_at: '2026-07-25T16:28:55+00:00'
+    cnn_hypothesis_id: hyp_cnn_pretrain_finetune_objective
+    transformer_hypothesis_id: hyp_transformer_pretrain_finetune_objective
+    records_completed: true
+  previous_safe_stop_reason: User requested termination after 10C pretraining; no
+    new process was launched during initialization.
+  user_requested_stop: false
+  restart_requested_at: '2026-07-25T16:43:04+00:00'
+  restart_reason: Explicit user request to start a new autonomous trial with --new-trial.
 audit_log:
 - id: op_bd4dc5214365
   created_at: '2026-07-23T13:15:00+00:00'
@@ -9362,6 +10299,1497 @@ audit_log:
       active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
       active_stage: 10C
       last_poll_at: '2026-07-25T09:50:52'
+      last_controller_status: running_wait
+- id: op_3f383a207002
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: autonomous_controller
+  operation:
+    operation: create
+    path: entities.experiments.cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+    value:
+      id: cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      stage: 10C
+      status: terminated
+      configuration:
+        resolved_config_paths: &id002
+        - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+        trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+      execution:
+        run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+        started_at: '2026-07-23T14:34:37'
+        completed_at: '2026-07-25T17:28:55'
+        artifacts:
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+          run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
+          latest_config_yamls: *id002
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+        provenance:
+          created_by: autonomous_controller
+          legacy_state: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/stage_state/10C.json
+      outcome:
+        controller_status: terminated
+        run_status:
+          experiment: 10C
+          experiment_id: 10C_pretrain_commutative_cnn_20260723_143440
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+          status: terminated
+          suspend_marker_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/control/10C_pretrain_commutative_cnn_20260723_143440.suspend
+          terminated_at: '2026-07-25T17:23:17'
+          terminated_pid: 3281820
+          terminating_at: '2026-07-25T17:23:17'
+          terminating_pid: 3281820
+          termination_reason: terminated by run_campaign CLI
+          termination_signal: SIGTERM
+          updated_at: '2026-07-23T14:34:40'
+      provenance:
+        created_by: autonomous_controller
+        source: campaign_stage_status
+      created_at: '2026-07-25T16:28:55+00:00'
+- id: op_10c54280e9bf
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_f2a2d8ab6945
+    value:
+      id: obs_f2a2d8ab6945
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_derivative_loss changed by at most 0.000214746
+        over the last 5 recorded points.
+      measurements:
+        metric: train_cross_probe_derivative_loss
+        window: 5
+        spread: 0.00021474600743893926
+        last_value: 0.0007495157543655613
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_26cecaa0a361
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_ce05adef1b10
+    value:
+      id: obs_ce05adef1b10
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_frequency_loss changed by at most 0.00130097 over
+        the last 5 recorded points.
+      measurements:
+        metric: train_cross_probe_frequency_loss
+        window: 5
+        spread: 0.0013009680920146593
+        last_value: 0.0052671512470270875
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_32b2159e9835
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_e911f6704b00
+    value:
+      id: obs_e911f6704b00
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_lambda_cross changed by at most 0 over the last 5 recorded
+        points.
+      measurements:
+        metric: train_lambda_cross
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_9550d8325b22
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_8308ff871ba4
+    value:
+      id: obs_8308ff871ba4
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_lambda_proto changed by at most 0 over the last 5 recorded
+        points.
+      measurements:
+        metric: train_lambda_proto
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_766b5b257abd
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_caa2b1807cc3
+    value:
+      id: obs_caa2b1807cc3
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_latent_alignment_weight changed by at most 0 over the last
+        5 recorded points.
+      measurements:
+        metric: train_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_2e48407da305
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_437308b4dfe0
+    value:
+      id: obs_437308b4dfe0
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_prototype_alignment_loss changed by at most 0 over the last
+        5 recorded points.
+      measurements:
+        metric: train_prototype_alignment_loss
+        window: 5
+        spread: 0.0
+        last_value: 4.1588826179504395
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_cd20e722a9f0
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_99bd1bb72da1
+    value:
+      id: obs_99bd1bb72da1
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_derivative_loss changed by at most 0.000272678 over
+        the last 5 recorded points.
+      measurements:
+        metric: train_self_probe_derivative_loss
+        window: 5
+        spread: 0.000272678262622476
+        last_value: 0.001011883690628033
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_385e862bab18
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_13e2d338155f
+    value:
+      id: obs_13e2d338155f
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_frequency_loss changed by at most 0.000427862 over
+        the last 5 recorded points.
+      measurements:
+        metric: train_self_probe_frequency_loss
+        window: 5
+        spread: 0.0004278619766785352
+        last_value: 0.003100511504737936
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_ce49c971b65a
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_e16d8d9ae84b
+    value:
+      id: obs_e16d8d9ae84b
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_cross_probe_derivative_loss changed by at most 0.00015105 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_cross_probe_derivative_loss
+        window: 5
+        spread: 0.00015105038052769162
+        last_value: 0.0017845897263445893
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_a2c9b81f9550
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_ff4d64d6e9fe
+    value:
+      id: obs_ff4d64d6e9fe
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_cross_probe_frequency_loss changed by at most 0.00105024 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_cross_probe_frequency_loss
+        window: 5
+        spread: 0.0010502351569416733
+        last_value: 0.009979240595571327
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_399e55cb33e3
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_13d190e53029
+    value:
+      id: obs_13d190e53029
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_feature_alignment_loss changed by at most 0.00174894 over the
+        last 5 recorded points.
+      measurements:
+        metric: val_feature_alignment_loss
+        window: 5
+        spread: 0.00174893947861951
+        last_value: 0.22710409621644465
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_8ca5a7201737
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_8e7f38d206d3
+    value:
+      id: obs_8e7f38d206d3
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_lambda_cross changed by at most 0 over the last 5 recorded points.
+      measurements:
+        metric: val_lambda_cross
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_50e6dabed866
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_0de0ce2d49a6
+    value:
+      id: obs_0de0ce2d49a6
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_lambda_proto changed by at most 0 over the last 5 recorded points.
+      measurements:
+        metric: val_lambda_proto
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_068cddf6b1aa
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_ad721ca65277
+    value:
+      id: obs_ad721ca65277
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_latent_alignment_loss changed by at most 0.00174894 over the
+        last 5 recorded points.
+      measurements:
+        metric: val_latent_alignment_loss
+        window: 5
+        spread: 0.00174893947861951
+        last_value: 0.22710409621644465
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_47d4c2f7ae3d
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_7abe8ebfad79
+    value:
+      id: obs_7abe8ebfad79
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_latent_alignment_weight changed by at most 0 over the last 5
+        recorded points.
+      measurements:
+        metric: val_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_b6180345fe8e
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_c80c2cfc54e5
+    value:
+      id: obs_c80c2cfc54e5
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_prototype_alignment_loss changed by at most 0 over the last 5
+        recorded points.
+      measurements:
+        metric: val_prototype_alignment_loss
+        window: 5
+        spread: 0.0
+        last_value: 4.1588826179504395
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_b440fa5e1d24
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_72443afaefa3
+    value:
+      id: obs_72443afaefa3
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_self_probe_correlation_loss changed by at most 0.000670862 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_self_probe_correlation_loss
+        window: 5
+        spread: 0.0006708623089405341
+        last_value: 0.7308782985121567
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_7e3c0d8deaff
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_ee70915f90fe
+    value:
+      id: obs_ee70915f90fe
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_self_probe_derivative_loss changed by at most 0.000233459 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_self_probe_derivative_loss
+        window: 5
+        spread: 0.0002334586659016851
+        last_value: 0.007482298664309038
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_c353b2cd219f
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_9b947ef26ce3
+    value:
+      id: obs_9b947ef26ce3
+      type: loss_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: val_self_probe_frequency_loss changed by at most 0.000526744 over
+        the last 5 recorded points.
+      measurements:
+        metric: val_self_probe_frequency_loss
+        window: 5
+        spread: 0.0005267439128090598
+        last_value: 0.00654272184929932
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_e79712d03ed5
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_9fb172b3a1b5
+    value:
+      id: obs_9fb172b3a1b5
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_loss and val_loss differ by 1.26451 at the final recorded point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 0.7112399311378418
+        validation: 1.9757503751688492
+        gap: 1.2645104440310075
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_dbe586c5e6f9
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_c55d7343b6a6
+    value:
+      id: obs_c55d7343b6a6
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_loss and val_self_probe_loss differ by 1.26451 at
+        the final recorded point.
+      measurements:
+        train_metric: train_self_probe_loss
+        validation_metric: val_self_probe_loss
+        train: 0.7112399311378418
+        validation: 1.9757503751688492
+        gap: 1.2645104440310075
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_45046a61b29d
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_07b1a04204a2
+    value:
+      id: obs_07b1a04204a2
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_loss and val_cross_probe_loss differ by 1.27856
+        at the final recorded point.
+      measurements:
+        train_metric: train_cross_probe_loss
+        validation_metric: val_cross_probe_loss
+        train: 1.0248963533441662
+        validation: 2.30345608266244
+        gap: 1.278559729318274
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_16cd1f192a15
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_8d79d2d4b982
+    value:
+      id: obs_8d79d2d4b982
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_local_loss and val_self_probe_local_loss differ
+        by 0.427195 at the final recorded point.
+      measurements:
+        train_metric: train_self_probe_local_loss
+        validation_metric: val_self_probe_local_loss
+        train: 0.2557301338865298
+        validation: 0.6829247037382646
+        gap: 0.4271945698517348
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_895a729e36f8
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_581d227a841c
+    value:
+      id: obs_581d227a841c
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_local_loss and val_cross_probe_local_loss differ
+        by 0.639956 at the final recorded point.
+      measurements:
+        train_metric: train_cross_probe_local_loss
+        validation_metric: val_cross_probe_local_loss
+        train: 0.5269189489030092
+        validation: 1.1668752754419487
+        gap: 0.6399563265389395
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_a44a6a8df02d
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_dc7ee67ccbf7
+    value:
+      id: obs_dc7ee67ccbf7
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_self_probe_region_time_loss and val_self_probe_region_time_loss
+        differ by 0.836881 at the final recorded point.
+      measurements:
+        train_metric: train_self_probe_region_time_loss
+        validation_metric: val_self_probe_region_time_loss
+        train: 0.4168755098621225
+        validation: 1.2537568562045138
+        gap: 0.8368813463423913
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_4fa621ec4759
+  created_at: '2026-07-25T16:28:56+00:00'
+  actor: observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_81b7f2d6244a
+    value:
+      id: obs_81b7f2d6244a
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      statement: train_cross_probe_region_time_loss and val_cross_probe_region_time_loss
+        differ by 0.638228 at the final recorded point.
+      measurements:
+        train_metric: train_cross_probe_region_time_loss
+        validation_metric: val_cross_probe_region_time_loss
+        train: 0.48185146851291316
+        validation: 1.1200796899917935
+        gap: 0.6382282214788804
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-25T16:28:55+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-25T16:28:55+00:00'
+- id: op_77c8a40c795c
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: create
+    path: entities.trials.cnn_pretrain_finetune_20260723_143437_ff3df9
+    value:
+      id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      status: terminated
+      stage_experiment_ids:
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:10C
+      - cnn_pretrain_finetune_20260723_143437_ff3df9:13C
+      purpose:
+        question_id: q_cnn_pretrain_finetune_objective
+        hypothesis_ids:
+        - hyp_cnn_pretrain_finetune_objective
+      configuration:
+        10C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+        13C: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/13C_13C_finetune_next.yaml
+      outcome:
+        status: terminated_before_finetuning
+        downstream_objective_score: null
+        guardrail_result: not_observed
+        termination_reason: User-requested termination during 10C pretraining; 13C
+          was not launched.
+      execution:
+        terminated_at: '2026-07-25T17:23:17'
+        artifacts:
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
+          run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
+          latest_config_yamls:
+          - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+      provenance:
+        created_by: scientific_state_initialization
+        source: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/campaign_state.json
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+- id: op_d6255d7a3574
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.question
+    value: Does moderate, label-preserving rotation augmentation during 13C finetuning
+      improve CNN compound generalisation while preserving action accuracy?
+    expected_old: Which permitted training change most improves downstream compound
+      discrimination while preserving action performance?
+- id: op_9498b7ce03e4
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.scope
+    value: CNN 10C-to-13C trials using the same dataset split, checkpoint handoff,
+      objective metrics, and deterministic evaluation protocol.
+- id: op_9ad8cdcc83ee
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.success_criterion
+    value: Compound macro-F1 exceeds 0.253, action accuracy is at least 0.30, and
+      the final 13C validation-minus-training loss gap is lower than the historical
+      baseline gap of 0.172.
+- id: op_3b704c4a1857
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.falsification_criteria
+    value:
+    - compound.macro_f1 <= 0.253
+    - action.accuracy < 0.30
+    - 13C validation-minus-training loss gap is not reduced below 0.172
+    - required 13C objective artifacts are missing
+- id: op_0418ca7cbf90
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.required_evidence
+    value:
+    - 13C summary metrics
+    - action guardrail
+    - 13C train and validation loss trajectories
+    - resolved configuration and checkpoint provenance
+- id: op_c6c79e586ba9
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.source_observations
+    value:
+    - obs_8d79d2d4b982
+    - obs_581d227a841c
+    - obs_dc7ee67ccbf7
+    - obs_81b7f2d6244a
+    - obs_8e7f38d206d3
+    - obs_0de0ce2d49a6
+    - obs_ad721ca65277
+    - obs_7abe8ebfad79
+    - obs_c80c2cfc54e5
+    - obs_72443afaefa3
+    - obs_ee70915f90fe
+    - obs_9b947ef26ce3
+- id: op_5c1dcbb79804
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.confidence
+    value: moderate question relevance; outcome untested
+- id: op_68c7ca5eec63
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.questions.q_cnn_pretrain_finetune_objective.provenance
+    value:
+      created_by: autonomous_controller
+      reason: replace generic seed with registered bounded question
+      updated_by: scientific_state_initialization
+      updated_at: '2026-07-25T16:28:55+00:00'
+    expected_old:
+      created_by: autonomous_controller
+      reason: campaign objective seed
+- id: op_6f3f4929a5a2
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.title
+    value: Moderate 13C rotation augmentation will improve CNN compound generalisation
+    expected_old: A bounded optimisation change can improve the campaign objective.
+- id: op_d1421119ae39
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.statement
+    value: For the CNN pretraining-to-finetuning chain, a moderate 13C rotation-augmentation
+      policy (8 random rotations with a 20 degree range), with architecture, data
+      split, optimizer, loss weights, and the 10C checkpoint held fixed, will reduce
+      the 13C train-validation loss gap and improve compound macro-F1 over the historical
+      baseline of 0.253 without reducing action accuracy below 0.30.
+    expected_old: At least one allowlisted optimisation or loss-weight change will
+      improve compound macro-F1 without violating the action guardrail.
+- id: op_252561c5b626
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.mechanism
+    value: Moderate rotations expose label-preserving orientation variation during
+      finetuning, reducing memorisation of training views and improving representation
+      generalisation.
+- id: op_b4af0aad7ed2
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.scope
+    value: CNN 13C finetuning after the specified 10C checkpoint; only train_num_random_rotations
+      and rotation_range_degrees vary.
+- id: op_0962d592772f
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.assumptions
+    value: Rotations preserve labels; data splits, seeds, checkpoint, architecture,
+      optimizer, and loss weights remain fixed; the 13C evaluator is unchanged.
+- id: op_56a9f4678d29
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.expected_outcomes
+    value:
+    - compound.macro_f1 > 0.253
+    - action.accuracy >= 0.30
+    - 13C validation-minus-training loss gap < 0.172
+- id: op_d2fd64e309c4
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.falsification_criteria
+    value:
+    - compound.macro_f1 <= 0.253
+    - action.accuracy < 0.30
+    - 13C validation-minus-training loss gap >= 0.172
+    - missing or invalid 13C objective artifacts
+- id: op_dc9f7895d1f6
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.source_observations
+    value:
+    - obs_8d79d2d4b982
+    - obs_581d227a841c
+    - obs_dc7ee67ccbf7
+    - obs_81b7f2d6244a
+    - obs_8e7f38d206d3
+    - obs_0de0ce2d49a6
+    - obs_ad721ca65277
+    - obs_7abe8ebfad79
+    - obs_c80c2cfc54e5
+    - obs_72443afaefa3
+    - obs_ee70915f90fe
+    - obs_9b947ef26ce3
+- id: op_712467b00eca
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.confidence
+    value: low heuristic prior; direct augmentation effect not yet tested
+- id: op_cec33b7b8708
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.belief
+    value:
+      probability: 0.55
+      confidence: low
+      calibrated: false
+      interpretation: heuristic prior, not a calibrated probability
+      previous_probability: null
+      source_observations:
+      - obs_8d79d2d4b982
+      - obs_581d227a841c
+      - obs_dc7ee67ccbf7
+      - obs_81b7f2d6244a
+      - obs_8e7f38d206d3
+      - obs_0de0ce2d49a6
+      - obs_ad721ca65277
+      - obs_7abe8ebfad79
+      - obs_c80c2cfc54e5
+      - obs_72443afaefa3
+      - obs_ee70915f90fe
+      - obs_9b947ef26ce3
+      updated_at: '2026-07-25T16:28:55+00:00'
+    expected_old:
+      probability: 0.5
+      confidence: initial
+- id: op_6f739d3a5db7
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.hypotheses.hyp_cnn_pretrain_finetune_objective.provenance
+    value:
+      created_by: autonomous_controller
+      reason: replace generic seed with mechanism and falsification criteria
+      updated_by: scientific_state_initialization
+      updated_at: '2026-07-25T16:28:55+00:00'
+    expected_old:
+      created_by: autonomous_controller
+      reason: campaign objective seed
+- id: op_542add2425fa
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.rationale
+    value: 'This is the smallest bounded intervention that directly tests the registered
+      mechanism: vary only 13C rotation count and range, reuse the completed 10C checkpoint,
+      and compare against the historical 13C baseline.'
+- id: op_7fec1478f074
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.source_observations
+    value:
+    - obs_8d79d2d4b982
+    - obs_581d227a841c
+    - obs_dc7ee67ccbf7
+    - obs_81b7f2d6244a
+    - obs_8e7f38d206d3
+    - obs_0de0ce2d49a6
+    - obs_ad721ca65277
+    - obs_7abe8ebfad79
+    - obs_c80c2cfc54e5
+    - obs_72443afaefa3
+    - obs_ee70915f90fe
+    - obs_9b947ef26ce3
+- id: op_1ecd812b6006
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.confidence
+    value: moderate design confidence; outcome untested
+- id: op_1a4a2e37294a
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.decision_value
+    value:
+      expected_information_gain: 0.6
+      scientific_value: 0.8
+      estimation_method: bounded heuristic prior; not an observed result
+- id: op_589a1b4ddf45
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.provenance
+    value:
+      created_by: llm
+      decision: propose_trial
+      updated_by: scientific_state_initialization
+      updated_at: '2026-07-25T16:28:55+00:00'
+      reason: complete scientific rationale and evidence links
+- id: op_8a4287bc7fff
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: create
+    path: entities.beliefs.belief_cnn_rotation_augmentation
+    value:
+      id: belief_cnn_rotation_augmentation
+      hypothesis_id: hyp_cnn_pretrain_finetune_objective
+      probability: 0.55
+      score: 0.55
+      confidence: low
+      calibrated: false
+      interpretation: heuristic prior, not a calibrated probability
+      previous_value: null
+      source_observations:
+      - obs_8d79d2d4b982
+      - obs_581d227a841c
+      - obs_dc7ee67ccbf7
+      - obs_81b7f2d6244a
+      - obs_8e7f38d206d3
+      - obs_0de0ce2d49a6
+      - obs_ad721ca65277
+      - obs_7abe8ebfad79
+      - obs_c80c2cfc54e5
+      - obs_72443afaefa3
+      - obs_ee70915f90fe
+      - obs_9b947ef26ce3
+      update_reason: Moderate augmentation is mechanistically plausible given observed
+        generalisation gaps, but no direct augmentation trial has completed.
+      provenance:
+        created_by: scientific_state_initialization
+        source: historical baseline observations and registered hypothesis
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+- id: op_4d0db9271ab0
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: create
+    path: entities.questions.q_transformer_pretrain_finetune_objective
+    value:
+      id: q_transformer_pretrain_finetune_objective
+      question: Does moderate transformer attention dropout during 12T pretraining
+        improve downstream compound generalisation while preserving action accuracy?
+      scope: Transformer 12T-to-15T trials with fixed architecture, data protocol,
+        checkpoint handoff, and evaluation metrics.
+      success_criterion: 15T compound macro-F1 improves over the registered transformer
+        baseline and action accuracy remains at least 0.30.
+      falsification_criteria:
+      - compound.macro_f1 does not improve
+      - action.accuracy < 0.30
+      - required 15T artifacts are missing
+      required_evidence:
+      - 12T and 15T summary metrics
+      - action guardrail
+      - resolved configuration
+      - checkpoint provenance
+      source_observations: []
+      confidence: moderate question relevance; outcome untested
+      provenance:
+        created_by: scientific_state_initialization
+        reason: campaign branch initialization
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+- id: op_3aafea03ce46
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: create
+    path: entities.hypotheses.hyp_transformer_pretrain_finetune_objective
+    value:
+      id: hyp_transformer_pretrain_finetune_objective
+      title: Moderate 12T attention dropout will improve transformer compound generalisation
+      statement: For the transformer 12T-to-15T chain, setting 12T attention dropout
+        to 0.10 while holding architecture, data, optimizer, loss weights, and evaluation
+        protocol fixed will improve 15T compound macro-F1 over the registered baseline
+        without reducing action accuracy below 0.30.
+      mechanism: Small attention dropout regularizes reliance on individual token-to-token
+        interactions, reducing representation overfitting while preserving the shared
+        encoder structure.
+      scope: Transformer 12T pretraining followed by 15T finetuning; only model_config.attention_dropout
+        varies in the candidate.
+      assumptions: The dropout value is supported by the runner; the data split and
+        evaluation protocol are unchanged; the intervention does not alter architecture
+        dimensions.
+      expected_outcomes:
+      - 15T compound.macro_f1 improves over the registered transformer baseline
+      - action.accuracy >= 0.30
+      falsification_criteria:
+      - no compound macro-F1 improvement
+      - action.accuracy < 0.30
+      - required 15T objective artifacts are missing
+      source_observations: []
+      confidence: low heuristic prior; no transformer evidence registered
+      belief:
+        probability: 0.5
+        confidence: low
+        calibrated: false
+        interpretation: heuristic prior, not a calibrated probability
+        previous_probability: null
+        source_observations: []
+        updated_at: '2026-07-25T16:28:55+00:00'
+      question_id: q_transformer_pretrain_finetune_objective
+      provenance:
+        created_by: scientific_state_initialization
+        reason: campaign branch initialization
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+- id: op_9a1f6388438c
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: create
+    path: entities.beliefs.belief_transformer_attention_dropout
+    value:
+      id: belief_transformer_attention_dropout
+      hypothesis_id: hyp_transformer_pretrain_finetune_objective
+      probability: 0.5
+      score: 0.5
+      confidence: low
+      calibrated: false
+      interpretation: heuristic prior, not a calibrated probability
+      previous_value: null
+      source_observations: []
+      update_reason: No transformer run or direct evidence is currently available.
+      provenance:
+        created_by: scientific_state_initialization
+        source: registered transformer hypothesis
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+- id: op_df95284d035d
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: create
+    path: entities.candidate_experiments.cand_transformer_attention_dropout_v1
+    value:
+      id: cand_transformer_attention_dropout_v1
+      title: Set moderate 12T attention dropout
+      purpose: Test whether small attention dropout improves transformer 15T compound
+        generalisation without violating the action guardrail.
+      question_id: q_transformer_pretrain_finetune_objective
+      hypothesis_ids:
+      - hyp_transformer_pretrain_finetune_objective
+      base_experiment: null
+      configuration_patch:
+        12T:
+          model_config:
+            attention_dropout: 0.1
+      fixed_variables:
+        12T: all settings except attention_dropout fixed
+        15T: unchanged; reuse the 12T checkpoint
+      expected_outcomes:
+      - 15T compound.macro_f1 improves over the registered transformer baseline
+      - action.accuracy remains >= 0.30
+      falsification_criteria:
+      - no compound macro-F1 improvement
+      - action.accuracy < 0.30
+      - required 15T artifacts are missing
+      estimated_gpu_hours: 14
+      estimated_wall_hours: 20
+      risks:
+      - too much dropout may underfit the encoder
+      - no transformer baseline is currently registered
+      allowed_stages:
+      - 12T
+      - 15T
+      status: proposed
+      source_observations: []
+      confidence: low design confidence until a transformer baseline exists
+      provenance:
+        created_by: scientific_state_initialization
+        reason: campaign branch initialization
+        created_at: '2026-07-25T16:28:55+00:00'
+      created_at: '2026-07-25T16:28:55+00:00'
+- id: op_9ffca838cf43
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: relation
+    value:
+      type: derived_from
+      source: hyp_cnn_pretrain_finetune_objective
+      target: q_cnn_pretrain_finetune_objective
+- id: op_767c9e6b3093
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: relation
+    value:
+      type: tests
+      source: cand_20260723_13c_rotation_regularization_v1
+      target: hyp_cnn_pretrain_finetune_objective
+- id: op_af285d37f147
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: relation
+    value:
+      type: motivates
+      source: q_cnn_pretrain_finetune_objective
+      target: cand_20260723_13c_rotation_regularization_v1
+- id: op_9cdb65935b15
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: relation
+    value:
+      type: derived_from
+      source: hyp_transformer_pretrain_finetune_objective
+      target: q_transformer_pretrain_finetune_objective
+- id: op_852de8bd30e2
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: relation
+    value:
+      type: tests
+      source: cand_transformer_attention_dropout_v1
+      target: hyp_transformer_pretrain_finetune_objective
+- id: op_28351da4a20f
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: relation
+    value:
+      type: motivates
+      source: q_transformer_pretrain_finetune_objective
+      target: cand_transformer_attention_dropout_v1
+- id: op_bf2891e0d552
+  created_at: '2026-07-25T16:28:55+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: controller_update
+    value:
+      status: autonomous_safe_stop
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_controller_status: terminated
+      safe_stop_reason: User requested termination after 10C pretraining; no new process
+        was launched during initialization.
+      termination_reason: user_requested
+      last_poll_at: '2026-07-25T16:28:55+00:00'
+      initialization:
+        completed_at: '2026-07-25T16:28:55+00:00'
+        cnn_hypothesis_id: hyp_cnn_pretrain_finetune_objective
+        transformer_hypothesis_id: hyp_transformer_pretrain_finetune_objective
+        records_completed: true
+- id: op_53f2d41193d4
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.base_experiment
+    value: cnn_pretrain_finetune_20260704_141700_197670:13C
+- id: op_a9ed9ad52234
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.checkpoint_reference
+    value: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+- id: op_217cbceca77e
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.checkpoint_status
+    value: available_from_terminated_10C
+- id: op_42eac98be061
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.dataset_reference
+    value: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+- id: op_29efcb6dd615
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.required_artifacts
+    value:
+    - 13C history CSV
+    - 13C summary metrics CSV
+    - 13C checkpoint
+    - 13C confusion matrices
+    - 13C UMAP PDF
+- id: op_3757abc55dee
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_20260723_13c_rotation_regularization_v1.baseline_metrics
+    value:
+      compound.macro_f1: 0.253
+      action.accuracy: 0.394
+      train_val_loss_gap: 0.172
+      source_experiment: cnn_pretrain_finetune_20260704_141700_197670:13C
+      recorded_at: '2026-07-25T16:32:58+00:00'
+- id: op_5fefdd8fc475
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_transformer_attention_dropout_v1.checkpoint_status
+    value: unavailable_until_12T_completes
+- id: op_b9b65995cbbc
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_transformer_attention_dropout_v1.dataset_reference
+    value: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+- id: op_180085578153
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_transformer_attention_dropout_v1.required_artifacts
+    value:
+    - 12T history CSV
+    - 12T summary metrics CSV
+    - 12T checkpoint
+    - 15T history CSV
+    - 15T summary metrics CSV
+    - 15T checkpoint
+    - 15T confusion matrices
+    - 15T UMAP PDF
+- id: op_70e2ba21368b
+  created_at: '2026-07-25T16:32:58+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: update
+    path: entities.candidate_experiments.cand_transformer_attention_dropout_v1.baseline_status
+    value: not_registered
+- id: op_450088c173a4
+  created_at: '2026-07-25T16:34:15+00:00'
+  actor: scientific_state_initialization
+  operation:
+    operation: controller_update
+    value:
+      status: terminated
+      safe_stop_reason: null
+      previous_safe_stop_reason: User requested termination after 10C pretraining;
+        no new process was launched during initialization.
+      last_controller_status: terminated
+      termination_reason: user_requested
+      user_requested_stop: true
+      last_poll_at: '2026-07-25T16:34:15+00:00'
+- id: op_87ac3c8ebcad
+  created_at: '2026-07-25T16:37:04+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: autonomous_safe_stop
+      safe_stop_reason: The campaign is in a user-requested terminated state, and
+        the latest trial ended before 13C evaluation, so no new objective-eligible
+        evidence justifies autonomous restart.
+      last_decision_at: '2026-07-25T17:37:04'
+- id: op_cdbf3f9b44d7
+  created_at: '2026-07-25T16:37:04+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260723_143437_ff3df9
+      active_stage: 10C
+      last_poll_at: '2026-07-25T17:37:04'
+      last_controller_status: failed
+- id: op_e1cb425d95bf
+  created_at: '2026-07-25T16:42:05+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: autonomous_safe_stop
+      safe_stop_reason: Campaign is already in a user-requested safe-stop state, and
+        the most recent trial was terminated before 13C so there is no new objective-eligible
+        evidence to justify autonomous restart or further trialing.
+      last_decision_at: '2026-07-25T17:42:05'
+- id: op_68bc3613ac01
+  created_at: '2026-07-25T16:43:04+00:00'
+  actor: user_restart_request
+  operation:
+    operation: controller_update
+    value:
+      status: terminated
+      safe_stop_reason: null
+      user_requested_stop: false
+      restart_requested_at: '2026-07-25T16:43:04+00:00'
+      restart_reason: Explicit user request to start a new autonomous trial with --new-trial.
+      last_controller_status: restart_requested
+- id: op_28c1995be996
+  created_at: '2026-07-25T16:43:26+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      active_trial_id: cnn_pretrain_finetune_20260725_174326_4f984d
+      last_decision: propose_trial
+      last_decision_at: '2026-07-25T17:43:26'
+      decision_rejections: 0
+      last_rejection_reason: null
+      safe_stop_reason: null
+- id: op_ad8249e1f898
+  created_at: '2026-07-25T16:43:26+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260725_174326_4f984d
+      active_stage: 10C
+      last_poll_at: '2026-07-25T17:43:26'
       last_controller_status: running_wait
 /candidate_experiments/-:
   id: cand_20260723_augmentation_gap_test

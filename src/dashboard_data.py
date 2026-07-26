@@ -35,6 +35,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _local_timezone():
+    """Timezone used by legacy campaign timestamps without an explicit offset."""
+
+    return datetime.now().astimezone().tzinfo or timezone.utc
+
+
 def _iso(value: Any) -> str | None:
     if value in (None, ""):
         return None
@@ -44,7 +50,7 @@ def _iso(value: Any) -> str | None:
     except ValueError:
         return text
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=_local_timezone())
     return parsed.isoformat(timespec="seconds")
 
 
@@ -142,7 +148,7 @@ def _timestamp_seconds(value: Any) -> float | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=_local_timezone())
     return parsed.timestamp()
 
 
@@ -263,6 +269,9 @@ def _evidence(state: dict[str, Any], hypothesis_id: str | None, filters: dict[st
     for observation_id, observation in observations.items():
         direction, classification_source, explanation = _classify_observation(state, observation_id, hypothesis_id)
         source_ids = observation.get("source_experiments", [])
+        campaign_id = filters.get("campaign_id")
+        if campaign_id and (not source_ids or not any(str(source).startswith(str(campaign_id)) for source in source_ids)):
+            continue
         reliability = _float(observation.get("reliability"))
         evidence_strength = _float(observation.get("evidence_strength"))
         confidence = max(value for value in (reliability, evidence_strength) if value is not None) if any(value is not None for value in (reliability, evidence_strength)) else None
@@ -319,7 +328,10 @@ def _hypothesis_quality(hypothesis: dict[str, Any] | None) -> dict[str, Any]:
         return {"quality": "missing", "missing_fields": ["statement", "mechanism", "scope", "assumptions"], "falsification_criteria": []}
     provenance = hypothesis.get("provenance", {}) if isinstance(hypothesis.get("provenance"), dict) else {}
     missing = [field for field in ("statement", "mechanism", "scope", "assumptions") if not hypothesis.get(field)]
-    is_seed = "seed" in str(provenance.get("reason", "")).lower() or "bounded optimisation change" in str(hypothesis.get("title", "")).lower()
+    is_seed = (
+        ("seed" in str(provenance.get("reason", "")).lower() and bool(missing))
+        or "bounded optimisation change" in str(hypothesis.get("title", "")).lower()
+    )
     return {
         "quality": "generic_seed" if is_seed else "specific" if not missing else "generic_seed",
         "missing_fields": missing,
@@ -351,12 +363,18 @@ def _active_entities(state: dict[str, Any], campaign: dict[str, Any], campaign_i
     return question, hypothesis, question_id, hypothesis_id
 
 
-def _candidate_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
+def _candidate_rows(state: dict[str, Any], question_id: str | None = None, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
     controller = state.get("controller_state", {})
     rejected = controller.get("last_rejected_candidate", {})
     rejected_id = rejected.get("candidate", {}).get("id") if isinstance(rejected, dict) else None
     result = []
     for candidate_id, candidate in state.get("entities", {}).get("candidate_experiments", {}).items():
+        candidate_question = candidate.get("question_id") or candidate.get("addresses", {}).get("question_id")
+        candidate_hypotheses = candidate.get("hypothesis_ids") or candidate.get("addresses", {}).get("hypothesis_ids", [])
+        if question_id and candidate_question and candidate_question != question_id:
+            continue
+        if hypothesis_id and candidate_hypotheses and hypothesis_id not in candidate_hypotheses:
+            continue
         status = candidate.get("status", "proposed")
         reasons: list[str] = []
         if candidate_id == rejected_id:
@@ -389,11 +407,13 @@ def _candidate_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(result, key=lambda item: (item.get("status") != "running", item.get("status") == "rejected", -(item.get("value_per_gpu_hour") or 0.0)))
 
 
-def _alerts(state: dict[str, Any], current: dict[str, Any], artifact_age_seconds: float | None) -> list[dict[str, Any]]:
+def _alerts(state: dict[str, Any], current: dict[str, Any], artifact_age_seconds: float | None, *, campaign_id: str | None = None) -> list[dict[str, Any]]:
     controller = state.get("controller_state", {})
     result: list[dict[str, Any]] = []
     safe_reason = controller.get("safe_stop_reason")
-    if safe_reason:
+    active_trial_id = str(controller.get("active_trial_id") or "")
+    controller_applies = not campaign_id or active_trial_id.startswith(campaign_id)
+    if safe_reason and controller_applies:
         result.append(
             {
                 "id": "controller-safe-stop-metadata",
@@ -525,6 +545,8 @@ def build_investigation(
         investigation_status = "stalled" if not process_running else "running"
     elif process_running:
         investigation_status = "running"
+    elif campaign_state.get("status") in {"terminated", "failed"}:
+        investigation_status = str(campaign_state.get("status"))
     elif campaign_state.get("status") in {"trial_completed", "campaign_completed", "analysis_completed"}:
         investigation_status = "completed"
     else:
@@ -556,10 +578,11 @@ def build_investigation(
         "metric_series": series[-80:],
         "artifact_updated_at": datetime.fromtimestamp(max(artifact_mtimes), tz=timezone.utc).isoformat(timespec="seconds") if artifact_mtimes else None,
     }
-    filters = filters or {}
+    filters = dict(filters or {})
+    filters.setdefault("campaign_id", campaign_id)
     all_evidence = _evidence(state, hypothesis_id, filters)
     evidence = all_evidence[-12:] if view == "current" else all_evidence[-50:] if view == "history" else all_evidence
-    candidates = _candidate_rows(state)
+    candidates = _candidate_rows(state, question_id, hypothesis_id)
     beliefs = _belief(active_hypothesis)
     hypothesis_quality = _hypothesis_quality(active_hypothesis)
     unclassified_count = sum(1 for item in all_evidence if item["direction"] == "unclassified")
@@ -598,7 +621,7 @@ def build_investigation(
         "missing_reason": "This experiment has no registered predictions and cannot currently distinguish competing hypotheses." if registration_status == "missing" else None,
     }
     errors = [error for error in (config_error, campaign_state_error, run_status_error, stage_state_error) if error]
-    alerts = _alerts(state, current, artifact_age)
+    alerts = _alerts(state, current, artifact_age, campaign_id=campaign_id)
     if registration_status != "registered":
         alerts.append(
             {

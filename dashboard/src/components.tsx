@@ -15,6 +15,7 @@ export function formatText(value: unknown): string {
 
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return "—";
+  if (seconds < 60) return `${Math.max(0, Math.floor(seconds))}s`;
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
@@ -150,7 +151,25 @@ export function FocusedGraph({ data, level, relationDepth, scale, entityType, re
   return <Card title="Focused reasoning graph" eyebrow="SECONDARY DRILL-DOWN"><div className="graph-controls"><label>detail <input type="range" min="0" max="5" value={level} onChange={(event) => onLevel(Number(event.target.value))} /></label><label>relations <input type="range" min="0" max="5" value={relationDepth} onChange={(event) => onDepth(Number(event.target.value))} /></label><label>scale <input aria-label="Scale graph" type="range" min="40" max="100" step="5" value={scale} onChange={(event) => onScale(Number(event.target.value))} /><span>{scale}%</span></label><label>node type <select value={entityType} onChange={(event) => onEntityType(event.target.value)}><option value="">all</option>{kinds.map((kind) => <option key={kind}>{kind}</option>)}</select></label><label>relation <select value={relationType} onChange={(event) => onRelationType(event.target.value)}><option value="">all</option>{relations.map((relation) => <option key={relation}>{relation}</option>)}</select></label><span className="muted">{data.graph.nodes.length} nodes · {data.graph.edges.length} edges</span></div><div className="graph-legend"><span><i className="node-key node-hypothesis" /> hypothesis</span><span><i className="node-key node-observation" /> observation</span><span><i className="node-key node-experiment" /> experiment/stage</span><span>→ relation direction</span></div>{data.graph.svg ? <div className="graph-svg"><div className="graph-canvas" style={{ transform: `scale(${scale / 100})`, transformOrigin: "top left" }} dangerouslySetInnerHTML={{ __html: data.graph.svg }} /></div> : <div className="empty">No focused graph evidence is available.</div>}<div className="graph-node-list"><span className="eyebrow">SELECT A NODE FOR DETAILS</span>{data.graph.nodes.map((node) => <button key={node.id} onClick={() => onNodeSelect(node)}><span className={`node-key node-${node.kind}`} />{node.label}<small>{node.kind}</small></button>)}</div></Card>;
 }
 
-export function DetailDrawer({ detail, onClose }: { detail: { title: string; body: string } | null; onClose: () => void }) {
+function PrettyValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (value === null) return <span className="pretty-null">null</span>;
+  if (typeof value === "string") return <span className="pretty-string">{value}</span>;
+  if (typeof value === "number") return <span className="pretty-number">{formatNumber(value)}</span>;
+  if (typeof value === "boolean") return <span className="pretty-boolean">{String(value)}</span>;
+  if (Array.isArray(value)) {
+    return <div className="pretty-array">{value.length ? value.map((item, index) => <div className="pretty-array-item" key={index}><PrettyValue value={item} depth={depth + 1} /></div>) : <span className="pretty-null">empty list</span>}</div>;
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return <div className="pretty-object">{entries.length ? entries.map(([key, item]) => <div className={`pretty-field ${depth > 0 ? "pretty-nested-field" : ""}`} key={key}><strong>{key}</strong><span className="pretty-colon">:</span><PrettyValue value={item} depth={depth + 1} /></div>) : <span className="pretty-null">empty object</span>}</div>;
+  }
+  return <span>{String(value)}</span>;
+}
+
+export function DetailDrawer({ detail, onClose }: { detail: { title: string; value: unknown } | null; onClose: () => void }) {
+  const [rawJson, setRawJson] = useState(false);
+  useEffect(() => { setRawJson(false); }, [detail]);
   if (!detail) return null;
-  return <div className="drawer-backdrop" onClick={onClose}><aside className="drawer" onClick={(event) => event.stopPropagation()}><button className="close-button" onClick={onClose}>×</button><div className="eyebrow">DETAIL</div><h2>{detail.title}</h2><pre>{detail.body}</pre></aside></div>;
+  const raw = JSON.stringify(detail.value, null, 2) ?? String(detail.value);
+  return <div className="drawer-backdrop" onClick={onClose}><aside className="drawer" onClick={(event) => event.stopPropagation()}><button className="close-button" onClick={onClose}>×</button><div className="eyebrow">DETAIL</div><h2>{detail.title}</h2><div className="detail-view-toggle" role="group" aria-label="Detail rendering"><button className={!rawJson ? "selected" : ""} onClick={() => setRawJson(false)}>Pretty</button><button className={rawJson ? "selected" : ""} onClick={() => setRawJson(true)}>Original JSON</button></div>{rawJson ? <pre>{raw}</pre> : <div className="pretty-json"><PrettyValue value={detail.value} /></div>}</aside></div>;
 }

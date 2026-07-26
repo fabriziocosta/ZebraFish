@@ -49,6 +49,7 @@ NODE_COLORS = {
 }
 
 _DECIMAL_NUMBER = re.compile(r"(?<![A-Za-z_])[-+]?(?:\d+\.\d*|\.\d+)(?:[eE][-+]?\d+)?")
+_LLM_LABEL_CACHE: dict[str, tuple[str, str]] = {}
 
 
 def _short_id(value: Any, limit: int = 24) -> str:
@@ -125,6 +126,141 @@ def _format_score(value: Any) -> str:
     if not math.isfinite(number):
         return str(value)
     return f"{number:.3g}"
+
+
+def _label_entity_payload(collection: str, entity_id: str, entity: dict[str, Any]) -> dict[str, Any]:
+    """Select the semantic fields needed to explain a graph node.
+
+    Graph labels are presentation metadata.  Keep the LLM prompt compact and
+    avoid sending raw epoch histories, artifact paths, or unrelated state.
+    """
+
+    fields_by_collection = {
+        "trials": ("purpose", "status", "outcome", "stage_experiment_ids"),
+        "experiments": ("stage", "purpose", "status", "final_objective_score"),
+        "observations": ("type", "statement", "measurements", "detection"),
+        "hypotheses": ("title", "statement", "mechanism", "scope", "status"),
+        "beliefs": ("belief", "probability", "statement", "status"),
+        "questions": ("question", "statement", "purpose", "status"),
+        "candidate_experiments": ("title", "purpose", "expected_outcomes", "status"),
+        "components": ("title", "description", "status"),
+        "datasets": ("title", "description", "status"),
+    }
+    selected = {
+        key: entity[key]
+        for key in fields_by_collection.get(collection, ())
+        if entity.get(key) not in (None, "", [], {})
+    }
+    return {"key": f"{collection}:{entity_id}", "kind": ENTITY_LABELS.get(collection, collection), "fields": selected}
+
+
+def _label_schema() -> dict[str, Any]:
+    return {
+        "format": {
+            "type": "json_schema",
+            "name": "scientific_graph_labels",
+            "description": "Concise human-readable labels for scientific reasoning graph nodes.",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["labels"],
+                "properties": {
+                    "labels": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["key", "label"],
+                            "properties": {
+                                "key": {"type": "string"},
+                                "label": {"type": "string"},
+                            },
+                        },
+                    }
+                },
+            },
+        }
+    }
+
+
+def _normalise_llm_label(value: Any) -> str | None:
+    """Accept a short label and wrap it without dropping its meaning."""
+
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split())
+    if not text or len(text) > 90:
+        return None
+    lines = textwrap.wrap(text, width=30, break_long_words=False, break_on_hyphens=False)
+    if len(lines) > 3:
+        return None
+    return "\n".join(lines)
+
+
+def _llm_graph_labels(records: list[dict[str, Any]], *, client: Any | None = None) -> dict[str, str]:
+    """Ask the LLM for concise semantic labels, with a safe deterministic fallback.
+
+    The dashboard remains usable without credentials or during API failures.
+    Labels are cached in memory by node content, so refreshing the dashboard
+    does not repeatedly spend tokens for unchanged state.
+    """
+
+    if not records:
+        return {}
+    payload_by_key = {record["key"]: record for record in records}
+    uncached = []
+    for key, record in payload_by_key.items():
+        fingerprint = json.dumps(record, sort_keys=True, default=str)
+        cached = _LLM_LABEL_CACHE.get(key)
+        if cached and cached[0] == fingerprint:
+            continue
+        uncached.append(record)
+    if uncached:
+        if client is None:
+            enabled = os.environ.get("ZEBRAFISH_DASHBOARD_LLM_LABELS", "off").lower() in {"1", "true", "on", "yes"}
+            if not enabled or not os.environ.get("OPENAI_API_KEY"):
+                uncached = []
+            else:
+                try:
+                    from openai import OpenAI
+
+                    client = OpenAI(timeout=10.0)
+                except Exception:
+                    uncached = []
+        if client is not None and uncached:
+            prompt = "\n\n".join(
+                [
+                    "Create concise graph labels for a scientific experiment dashboard.",
+                    "Each label must tell a human what the item means, not merely repeat its identifier.",
+                    "Use 3 to 10 plain-language words, at most 90 characters, and do not use ellipses.",
+                    "Include the entity kind when useful (for example, 'Question:' or 'Observation:').",
+                    "For observations, name the scientific finding; for questions and hypotheses, name the testable claim; for trials and candidates, name the intervention or purpose.",
+                    "Return one label for every supplied key and do not invent facts.",
+                    json.dumps(uncached, indent=2, sort_keys=True, default=str),
+                ]
+            )
+            try:
+                response = client.responses.create(
+                    model=os.environ.get("ZEBRAFISH_DASHBOARD_LABEL_MODEL", "gpt-5.3-codex"),
+                    max_output_tokens=max(300, len(uncached) * 40),
+                    text=_label_schema(),
+                    input=prompt,
+                )
+                output_text = getattr(response, "output_text", None)
+                result = json.loads(output_text) if isinstance(output_text, str) else {}
+                for item in result.get("labels", []) if isinstance(result, dict) else []:
+                    if not isinstance(item, dict):
+                        continue
+                    key = str(item.get("key", ""))
+                    label = _normalise_llm_label(item.get("label"))
+                    if key in payload_by_key and label:
+                        fingerprint = json.dumps(payload_by_key[key], sort_keys=True, default=str)
+                        _LLM_LABEL_CACHE[key] = (fingerprint, label)
+            except Exception:
+                # Presentation labels must never break the read-only dashboard.
+                pass
+    return {key: cached[1] for key in payload_by_key if (cached := _LLM_LABEL_CACHE.get(key)) and cached[0] == json.dumps(payload_by_key[key], sort_keys=True, default=str)}
 
 
 def _node_display_label(
@@ -355,7 +491,7 @@ def _observation_linked_experiments(
     return linked
 
 
-def build_reasoning_graph(state: dict[str, Any], level: int = 3):
+def build_reasoning_graph(state: dict[str, Any], level: int = 3, *, label_client: Any | None = None):
     """Build a NetworkX graph at the requested detail level."""
 
     if nx is None:
@@ -390,6 +526,8 @@ def build_reasoning_graph(state: dict[str, Any], level: int = 3):
         trial_id: index
         for index, trial_id in enumerate(sorted(observed_trial_ids), start=1)
     }
+    graph_records: list[dict[str, Any]] = []
+    records_to_add: list[tuple[str, str, dict[str, Any]]] = []
     for collection in selected:
         records = list(state.get("entities", {}).get(collection, {}).items())
         if collection == "observations":
@@ -400,20 +538,24 @@ def build_reasoning_graph(state: dict[str, Any], level: int = 3):
             records = [(entity_id, entity) for entity_id, entity in records if entity_id in observed_trial_ids]
         for entity_id, entity in records:
             node_id = f"{collection}:{entity_id}"
-            label = ENTITY_LABELS.get(collection, collection)
-            graph.add_node(
-                node_id,
-                label=_node_display_label(
-                    collection,
-                    entity_id,
-                    entity,
-                    trial_number=trial_numbers.get(entity_id),
-                ),
-                tooltip=_node_tooltip(collection, entity_id, entity),
-                kind=label,
-                status=entity.get("status", ""),
-                color=NODE_COLORS.get(label, "#999999"),
-            )
+            records_to_add.append((collection, entity_id, entity))
+            graph_records.append(_label_entity_payload(collection, entity_id, entity))
+    llm_labels = _llm_graph_labels(graph_records, client=label_client)
+    for collection, entity_id, entity in records_to_add:
+        node_id = f"{collection}:{entity_id}"
+        label = ENTITY_LABELS.get(collection, collection)
+        semantic_label = entity.get("display_label") or entity.get("label_summary") or llm_labels.get(node_id)
+        if collection == "trials" and trial_numbers.get(entity_id) is not None and semantic_label:
+            semantic_label = f"TRIAL {trial_numbers[entity_id]}\n{semantic_label}"
+        graph.add_node(
+            node_id,
+            label=semantic_label or _node_display_label(collection, entity_id, entity, trial_number=trial_numbers.get(entity_id)),
+            label_source="entity" if entity.get("display_label") or entity.get("label_summary") else "llm" if node_id in llm_labels else "deterministic",
+            tooltip=_node_tooltip(collection, entity_id, entity),
+            kind=label,
+            status=entity.get("status", ""),
+            color=NODE_COLORS.get(label, "#999999"),
+        )
     for relation in state.get("relations", []):
         source = str(relation.get("source", ""))
         target = str(relation.get("target", ""))
