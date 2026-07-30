@@ -32,6 +32,7 @@ ENTITY_COLLECTIONS = (
     "beliefs",
     "questions",
     "candidate_experiments",
+    "meta_controller_runs",
 )
 RELATION_TYPES = {
     "supports",
@@ -55,7 +56,7 @@ RELATION_TYPES = {
     "evaluated_on",
     "modifies_parameter",
 }
-IMMUTABLE_COLLECTIONS = {"experiments", "observations"}
+IMMUTABLE_COLLECTIONS = {"experiments", "observations", "meta_controller_runs"}
 
 
 class ScientificStateError(ValueError):
@@ -209,7 +210,7 @@ def _record_audit(state: dict[str, Any], *, actor: str, operation: dict[str, Any
 
 
 def _validate_semantic_record(collection: str, record: dict[str, Any]) -> None:
-    if collection in {"hypotheses", "beliefs", "questions", "candidate_experiments"}:
+    if collection in {"hypotheses", "beliefs", "questions", "candidate_experiments", "meta_controller_runs"}:
         if not record.get("provenance"):
             raise ScientificStateError(f"{collection} records require provenance")
         if not record.get("created_at"):

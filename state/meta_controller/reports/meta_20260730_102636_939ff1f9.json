@@ -1,0 +1,75 @@
+{
+  "actions": [
+    {
+      "campaign_action": "stop",
+      "kind": "campaign_control",
+      "result": {
+        "action": "stop",
+        "detail": "campaign terminated campaign=cnn_pretrain_finetune trial=cnn_pretrain_finetune_20260725_174326_4f984d stage=13C pid=533638 pid_source=stage_state signal=SIGTERM\n",
+        "returncode": 0
+      },
+      "status": "recorded",
+      "summary": "Request deterministic campaign stop for the current trial to prevent further low-yield compute usage, then hand off to reconciliation/next-candidate selection flow."
+    }
+  ],
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-30T10:27:02+00:00",
+  "controller_status": {
+    "consecutive_failures": 0,
+    "last_run_at": "2026-07-30T10:27:02+00:00",
+    "last_run_id": "meta_20260730_102636_939ff1f9",
+    "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+    "next_run_at": null,
+    "status": "completed",
+    "summary": "The active trial appears scientifically stalled and likely unproductive: many train/validation metrics are plateaued within the deterministic threshold while multiple large generalization gaps persist. Continuing this run is likely to consume compute with low additional information gain."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "observations:obs_97ab1cf0ea84",
+      "observations:obs_f82995756ef7",
+      "observations:obs_47459ea7dc7b",
+      "observations:obs_7543bea8eb52",
+      "observations:obs_2d7c6ac5cd5c",
+      "observations:obs_0d13f3407ac7",
+      "campaign.status=running",
+      "campaign.trial_id=cnn_pretrain_finetune_20260725_174326_4f984d"
+    ],
+    "root_causes": [
+      "Optimization has plateaued across multiple loss terms over the last recorded window (5 points), indicating little short-horizon learning progress.",
+      "Generalization gaps are far above threshold (0.1), consistent with persistent overfitting or objective mismatch for this candidate configuration.",
+      "No bounded operational reliability fault is evidenced in controller/process status; the main issue is scientific productivity of the current run."
+    ],
+    "severity": "warning",
+    "summary": "The active trial appears scientifically stalled and likely unproductive: many train/validation metrics are plateaued within the deterministic threshold while multiple large generalization gaps persist. Continuing this run is likely to consume compute with low additional information gain."
+  },
+  "evidence_references": [
+    "observations:obs_97ab1cf0ea84",
+    "observations:obs_f82995756ef7",
+    "observations:obs_47459ea7dc7b",
+    "observations:obs_7543bea8eb52",
+    "observations:obs_2d7c6ac5cd5c",
+    "observations:obs_0d13f3407ac7",
+    "campaign.status=running",
+    "campaign.trial_id=cnn_pretrain_finetune_20260725_174326_4f984d"
+  ],
+  "id": "meta_20260730_102636_939ff1f9",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+  "proposal_only_changes": [
+    "Create a new campaign proposal version that introduces stronger generalization controls (e.g., regularization/early-stopping hyperparameters) without changing historical results.",
+    "Create a new campaign proposal version to reassess loss-weight hyperparameters where lambda terms are persistently zero, if scientifically intended to be active.",
+    "Create a new campaign proposal version to retune candidate hyperparameters for cross-probe losses showing sustained large train/validation gaps."
+  ],
+  "provenance": {
+    "created_by": "meta_controller",
+    "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No repository patch applied. If stop is judged premature, resume only through deterministic lifecycle control using campaign_action=continue.",
+  "started_at": "2026-07-30T10:26:36+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "Stopping now preserves compute but does not itself identify the best next hyperparameter region; reconciliation quality depends on existing deterministic policy.",
+    "Repository has extensive local modifications (including scientific state and dashboard files), which increases risk for future automated patch overlap; no code changes were attempted in this run."
+  ]
+}

@@ -36,6 +36,10 @@ class DashboardDataTests(unittest.TestCase):
                 self.assertEqual(payload["current_experiment"]["metric_display"]["display_metric"], "val_loss")
             self.assertTrue(payload["diagnostics"]["data_coverage"]["missing_metric"])
         self.assertIn("nodes", payload["graph"])
+        if payload["current_experiment"]["stage"] == "13C":
+            self.assertIn(payload["current_experiment"]["eta_status"], {"available", "warming_up", "not_applicable"})
+            if not payload["current_experiment"]["process_running"]:
+                self.assertEqual(payload["current_experiment"]["eta_status"], "not_applicable")
 
     def test_stale_safe_stop_metadata_is_not_reported_as_stopped_when_process_is_live(self) -> None:
         payload = build_investigation(Path.cwd(), "cnn")

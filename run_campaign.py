@@ -81,6 +81,7 @@ def command_help_text() -> str:
             "  ./run_campaign state [campaign]             print the scientific state",
             "  ./run_campaign observations [campaign]      print deterministic observations",
             "  ./run_campaign candidates [campaign]        print autonomous candidates",
+            "  ./run_campaign meta-controller <campaign>  run the daily supervisory controller",
             "  ./run_campaign rebuild-views <campaign>     rebuild compatibility views",
             "  ./run_campaign dashboard [campaign]         serve the read-only mission-control dashboard",
             "  ./run_campaign list                    list available campaigns",
@@ -285,6 +286,22 @@ def dashboard_command(argv: list[str]) -> int:
     return 0
 
 
+def meta_controller_command(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Run or control the daily supervisory meta-controller.")
+    parser.add_argument("campaign", help="Campaign alias, campaign id, or YAML path.")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--once", action="store_true", help="Run one bounded diagnosis/remediation pass.")
+    mode.add_argument("--start", action="store_true", help="Run the persistent daily loop.")
+    mode.add_argument("--continue", dest="continue_loop", action="store_true", help="Continue the persistent daily loop.")
+    mode.add_argument("--stop", action="store_true", help="Stop the persistent daily loop.")
+    args = parser.parse_args(argv)
+    from src.meta_controller import cli as meta_cli
+
+    forwarded = [resolve_campaign(args.campaign)]
+    forwarded.append("--once" if args.once else "--start" if args.start else "--continue" if args.continue_loop else "--stop")
+    return meta_cli(forwarded, root=Path(__file__).resolve().parent)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_arg_parser()
@@ -310,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
         return force_restart_command(argv[1:])
     if argv[0] == "dashboard":
         return dashboard_command(argv[1:])
+    if argv[0] == "meta-controller":
+        return meta_controller_command(argv[1:])
     if argv[0] in {"state", "observations", "candidates"}:
         target = resolve_campaign(argv[1]) if len(argv) > 1 else CAMPAIGNS["cnn"]["config"]
         config = load_campaign_config(target)

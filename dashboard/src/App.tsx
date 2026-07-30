@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchInvestigation } from "./api";
+import { controlController, fetchInvestigation } from "./api";
 import type { Candidate, Evidence } from "./model";
-import { ActiveHypothesisCard, AlertPanel, BeliefTimeline, CurrentExperimentCard, DecisionQueue, DetailDrawer, EvidencePanel, ExpectedOutcomes, FocusedGraph, InvestigationHeader } from "./components";
+import { ActiveHypothesisCard, AlertPanel, BeliefTimeline, CurrentExperimentCard, DecisionQueue, DetailDrawer, EvidencePanel, ExpectedOutcomes, FocusedGraph, InvestigationHeader, MetaControllerCard } from "./components";
 import "./styles.css";
 
 const campaignOptions = ["cnn", "transformer"];
@@ -23,6 +23,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<{ title: string; value: unknown } | null>(null);
+  const [controlMessage, setControlMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +45,16 @@ export default function App() {
   }, [dark]);
 
   const titleDetail = (title: string, value: unknown) => setDetail({ title, value });
+  const handleControl = async (controller: "meta" | "campaign", action: "start" | "stop" | "continue") => {
+    if (action === "stop" && !window.confirm(`Stop the ${controller} controller for ${campaign}?`)) return;
+    try {
+      const result = await controlController(campaign, controller, action);
+      setControlMessage(`${controller} ${action}: ${String(result.status || "requested")}`);
+      setTimeout(() => setControlMessage(null), 5000);
+    } catch (err) {
+      setControlMessage(err instanceof Error ? err.message : String(err));
+    }
+  };
   const theme = dark ? "theme-dark" : "theme-light";
   const hasData = Boolean(data);
   const diagnostics = useMemo(() => data?.diagnostics.errors || [], [data]);
@@ -55,6 +66,8 @@ export default function App() {
     {error && !hasData && <div className="page-state error-state"><h2>Dashboard unavailable</h2><p>{error}</p><p>Start the API with <code>./run_campaign dashboard {campaign}</code>.</p></div>}
     {data && <div className="page-shell">
       <InvestigationHeader data={data} />
+      {controlMessage && <div className="control-message">{controlMessage}</div>}
+      <MetaControllerCard data={data} onControl={handleControl} />
       {diagnostics.length > 0 && <div className="schema-strip"><strong>Degraded data:</strong> {diagnostics.join(" · ")}</div>}
       <div className="story-grid"><ActiveHypothesisCard data={data} onSelect={(id) => titleDetail("Hypothesis", data.active_hypothesis)} /><CurrentExperimentCard data={data} /></div>
       <div className="story-grid"><ExpectedOutcomes data={data} /><DecisionQueue data={data} onSelect={(candidate: Candidate) => titleDetail(candidate.title, candidate)} /></div>

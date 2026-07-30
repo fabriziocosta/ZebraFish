@@ -18,3 +18,16 @@ export async function fetchInvestigation(
   }
   return InvestigationSchema.parse(await response.json());
 }
+
+export async function controlController(
+  campaign: string,
+  controller: "meta" | "campaign",
+  action: "start" | "stop" | "continue",
+): Promise<{ status: string; [key: string]: unknown }> {
+  const response = await fetch(`/api/investigation/${encodeURIComponent(campaign)}/control/${controller}/${action}`, { method: "POST" });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Controller action returned ${response.status}: ${detail}`);
+  }
+  return response.json();
+}

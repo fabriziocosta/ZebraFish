@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
+from io import StringIO
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -10,7 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.dashboard_data import build_investigation, find_entity, find_observation
+from src.dashboard_data import build_investigation, find_entity, find_observation, resolve_campaign
+from src.agent_campaign_loop import load_campaign_config, campaign_live_status, terminate_campaign
+from src.meta_controller import _pid_running, stop_loop
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +24,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -99,6 +104,48 @@ def graph(
         filters={"entity_type": entity_type, "relation_type": relation_type},
     )
     return payload["graph"]
+
+
+def _campaign_config(campaign: str) -> tuple[str, dict[str, Any]]:
+    alias, config_path = resolve_campaign(ROOT, campaign)
+    return alias, load_campaign_config(config_path)
+
+
+def _spawn(command: list[str]) -> dict[str, Any]:
+    process = subprocess.Popen(command, cwd=ROOT, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {"status": "started", "pid": process.pid, "command": command}
+
+
+@app.post("/api/investigation/{campaign}/control/{controller}/{action}")
+def control(campaign: str, controller: str, action: str) -> dict[str, Any]:
+    if controller not in {"meta", "campaign"}:
+        raise HTTPException(status_code=400, detail="controller must be meta or campaign")
+    if action not in {"start", "stop", "continue"}:
+        raise HTTPException(status_code=400, detail="action must be start, stop, or continue")
+    try:
+        alias, config = _campaign_config(campaign)
+        campaign_id = str(config["campaign"]["id"])
+        if controller == "meta":
+            if action == "stop":
+                stopped = stop_loop(ROOT, config, reason="dashboard stop requested")
+                return {"status": "stopping" if stopped else "stopped", "controller": "meta", "campaign": campaign_id}
+            state_path = ROOT / str(config.get("scientific_state", {}).get("path", "state/scientific_state.yaml"))
+            if state_path.exists():
+                from src.scientific_state import load_state
+                meta_state = load_state(state_path).get("controller_state", {}).get("meta_controller", {})
+                if isinstance(meta_state, dict) and _pid_running(meta_state.get("pid")):
+                    return {"status": "already_running", "controller": "meta", "campaign": campaign_id, "pid": meta_state.get("pid")}
+            return _spawn([sys.executable, str(ROOT / "run_campaign.py"), "meta-controller", alias, "--start" if action == "start" else "--continue"])
+        live = campaign_live_status(config)
+        if action == "stop":
+            output = StringIO()
+            code = terminate_campaign(config, reason="dashboard stop requested", force_after=float(config.get("meta_controller", {}).get("stop_grace_seconds", 5)), stream=output)
+            return {"status": "stopped" if code == 0 else "not_stopped", "controller": "campaign", "campaign": campaign_id, "detail": output.getvalue()}
+        if live.get("running"):
+            return {"status": "already_running", "controller": "campaign", "campaign": campaign_id, "pid": live.get("pid")}
+        return _spawn([sys.executable, str(ROOT / "run_campaign.py"), alias])
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 DIST = ROOT / "dashboard" / "dist"

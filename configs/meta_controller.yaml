@@ -1,0 +1,42 @@
+meta_controller:
+  mandate_path: docs/meta_controller_mandate.md
+  interval_seconds: 86400
+  worktree_root: state/meta_controller/worktrees
+  report_root: state/meta_controller/reports
+  max_patch_bytes: 40000
+  max_changed_files: 8
+  max_consecutive_failures: 3
+  stop_grace_seconds: 5
+  objective_change_policy: proposal_only
+  default_verifications:
+    - meta-controller-python-tests
+    - scientific-state-tests
+    - dashboard-build
+  allowed_paths:
+    - src/autonomous_campaign.py
+    - src/agent_campaign_loop.py
+    - src/scientific_state.py
+    - src/observation_engine.py
+    - src/dashboard_data.py
+    - src/dashboard_api.py
+    - src/meta_controller.py
+    - run_campaign.py
+    - configs/meta_controller.yaml
+    - configs/experiment_campaigns/*.yaml
+    - tests/test_meta_controller.py
+  forbidden_prefixes:
+    - state/
+    - artifacts/
+    - notebooks/
+    - .env
+    - src/models/
+    - src/training/
+    - data/
+  verification:
+    - name: meta-controller-python-tests
+      argv: [.venv/bin/python, -m, pytest, tests/test_meta_controller.py, -q]
+    - name: scientific-state-tests
+      argv: [.venv/bin/python, -m, pytest, tests/test_scientific_state.py, -q]
+    - name: dashboard-build
+      argv: [npm, run, build]
+      cwd: dashboard

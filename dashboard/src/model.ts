@@ -96,6 +96,28 @@ export const MetricPlotSchema = z.object({
   interpretation: z.string().default(""),
 });
 
+export const MetaControllerSchema = z.object({
+  status: z.string().default("not_started"),
+  running: z.boolean().default(false),
+  pid: z.number().nullable().optional(),
+  last_run_at: z.string().nullable().optional(),
+  next_run_at: z.string().nullable().optional(),
+  mandate_version: z.string().nullable().optional(),
+  summary: z.string().default("No meta-controller run recorded."),
+  severity: z.string().default("info"),
+  findings: z.array(z.string()).default([]),
+  evidence_references: z.array(z.string()).default([]),
+  actions: z.array(AnyRecord).default([]),
+  verification: z.array(AnyRecord).default([]),
+  changed_files: z.array(z.string()).default([]),
+  rollback_plan: z.string().nullable().optional(),
+  rollback_available: z.boolean().default(false),
+  proposal_only_changes: z.array(z.string()).default([]),
+  unresolved_risks: z.array(z.string()).default([]),
+  latest_run: AnyRecord.nullable().optional(),
+  history: z.array(AnyRecord).default([]),
+});
+
 export const InvestigationSchema = z.object({
   schema_version: z.number(),
   campaign: z.object({ name: z.string(), id: z.string(), config_path: z.string() }),
@@ -127,6 +149,7 @@ export const InvestigationSchema = z.object({
     started_at: z.string().nullable().optional(),
     elapsed_seconds: Numeric,
     estimated_remaining_seconds: Numeric,
+    eta_status: z.string().default("not_applicable"),
     progress_fraction: Numeric,
     current_epoch: z.number().nullable().optional(),
     total_epochs: z.number().nullable().optional(),
@@ -169,6 +192,7 @@ export const InvestigationSchema = z.object({
   alerts: z.array(AlertSchema).default([]),
   health: z.object({ status: z.string(), process_live: z.boolean(), artifact_freshness: z.record(z.string(), z.unknown()), controller_metadata: z.string(), intervention_required: z.boolean() }),
   controller: AnyRecord.default({}),
+  meta_controller: MetaControllerSchema,
   graph: GraphSchema,
   diagnostics: z.object({ errors: z.array(z.string()).default([]), missing_fields: z.array(z.string()).default([]), reference_warnings: z.array(z.string()).default([]), data_coverage: z.record(z.string(), z.unknown()).default({}) }),
 });
@@ -178,3 +202,4 @@ export type Evidence = z.infer<typeof EvidenceSchema>;
 export type Candidate = z.infer<typeof CandidateSchema>;
 export type Alert = z.infer<typeof AlertSchema>;
 export type MetricPoint = z.infer<typeof MetricPointSchema>;
+export type MetaController = z.infer<typeof MetaControllerSchema>;

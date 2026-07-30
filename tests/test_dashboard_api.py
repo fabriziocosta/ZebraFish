@@ -30,6 +30,7 @@ class DashboardApiTests(unittest.TestCase):
         self.assertIn("unclassified", body["evidence"])
         self.assertIn("health", body)
         self.assertIn("graph", body)
+        self.assertIn("meta_controller", body)
 
     def test_unknown_campaign_and_entity_are_errors(self) -> None:
         self.assertEqual(self.client.get("/api/investigation/not-a-campaign").status_code, 404)
@@ -42,6 +43,10 @@ class DashboardApiTests(unittest.TestCase):
         self.assertIn("nodes", body)
         self.assertIn("edges", body)
         self.assertIn("svg", body)
+
+    def test_control_endpoint_rejects_unknown_operations(self) -> None:
+        self.assertEqual(self.client.post("/api/investigation/cnn/control/unknown/start").status_code, 400)
+        self.assertEqual(self.client.post("/api/investigation/cnn/control/meta/launch").status_code, 400)
 
 
 if __name__ == "__main__":

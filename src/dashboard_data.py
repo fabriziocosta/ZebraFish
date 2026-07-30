@@ -123,6 +123,40 @@ def _entity_text(entity: dict[str, Any]) -> str:
     return str(entity.get("statement") or entity.get("question") or entity.get("title") or entity.get("purpose") or "")
 
 
+def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[str, Any]:
+    controller = state.get("controller_state", {})
+    current = controller.get("meta_controller", {})
+    current = current if isinstance(current, dict) else {}
+    records = [
+        record for record in state.get("entities", {}).get("meta_controller_runs", {}).values()
+        if isinstance(record, dict) and (not record.get("campaign") or record.get("campaign") == campaign_id)
+    ]
+    records.sort(key=lambda item: str(item.get("completed_at") or item.get("created_at") or ""), reverse=True)
+    latest = records[0] if records else None
+    status = str(current.get("status") or (latest or {}).get("status") or "not_started")
+    return {
+        "status": status,
+        "running": status in {"running", "starting", "stopping"},
+        "pid": current.get("pid"),
+        "last_run_at": current.get("last_run_at") or (latest or {}).get("completed_at"),
+        "next_run_at": current.get("next_run_at"),
+        "mandate_version": current.get("mandate_version") or (latest or {}).get("mandate_version"),
+        "summary": current.get("summary") or (latest or {}).get("diagnosis", {}).get("summary", "No meta-controller run recorded."),
+        "severity": (latest or {}).get("diagnosis", {}).get("severity", "info"),
+        "findings": (latest or {}).get("diagnosis", {}).get("root_causes", []),
+        "evidence_references": (latest or {}).get("evidence_references", []),
+        "actions": (latest or {}).get("actions", []),
+        "verification": [item for action in (latest or {}).get("actions", []) for item in (action.get("result", {}).get("verification", []) if isinstance(action, dict) else [])],
+        "changed_files": sorted({path for action in (latest or {}).get("actions", []) for path in action.get("result", {}).get("paths", []) if isinstance(action, dict)}),
+        "rollback_plan": (latest or {}).get("rollback_plan"),
+        "rollback_available": any(action.get("result", {}).get("rollback_patch") for action in (latest or {}).get("actions", []) if isinstance(action, dict)),
+        "proposal_only_changes": (latest or {}).get("proposal_only_changes", []),
+        "unresolved_risks": (latest or {}).get("unresolved_risks", []),
+        "latest_run": latest,
+        "history": records[:8],
+    }
+
+
 def _file_mtime(path: Path | None) -> float | None:
     try:
         return path.stat().st_mtime if path and path.exists() else None
@@ -660,8 +694,30 @@ def build_investigation(
         configured_epochs = stage_config.get("optimization_config", {}).get("epochs") or stage_config.get("epochs")
     latest_epoch = len(history)
     process_running = _is_running(launch.get("pid"))
-    started_seconds = _timestamp_seconds(campaign_state.get("started_at") or launch.get("started_at"))
-    elapsed_seconds = max(0.0, _now().timestamp() - started_seconds) if started_seconds is not None else None
+    # Campaign timestamps describe the full trial. Use the active stage
+    # timestamp so 13C does not inherit 10C's elapsed time.
+    stage_started_value = (
+        run_status.get("started_at")
+        or stage_state.get("started_at")
+        or launch.get("started_at")
+        or campaign_state.get("started_at")
+    )
+    started_seconds = _timestamp_seconds(stage_started_value)
+    terminal_value = (
+        run_status.get("completed_at")
+        or run_status.get("terminated_at")
+        or run_status.get("failed_at")
+        or stage_state.get("completed_at")
+        or stage_state.get("terminated_at")
+        or stage_state.get("failed_at")
+    )
+    terminal_seconds = _timestamp_seconds(terminal_value)
+    end_seconds = terminal_seconds if not process_running and terminal_seconds is not None else _now().timestamp()
+    elapsed_seconds = max(0.0, end_seconds - started_seconds) if started_seconds is not None else None
+    eta_min_epochs = int(config.get("dashboard", {}).get("eta_min_epochs", 10))
+    eta_ready = bool(process_running and configured_epochs and latest_epoch >= eta_min_epochs and elapsed_seconds is not None and elapsed_seconds > 0)
+    eta_seconds = (max(0, int(configured_epochs) - latest_epoch) * elapsed_seconds / latest_epoch) if eta_ready else None
+    eta_status = "available" if eta_ready else "warming_up" if process_running and configured_epochs and latest_epoch < eta_min_epochs else "not_applicable"
     artifact_mtimes = [_file_mtime(path) for path in (history_path, summary_path, run_status_path, stage_state_path)]
     artifact_mtimes = [value for value in artifact_mtimes if value is not None]
     artifact_age = _now().timestamp() - max(artifact_mtimes) if artifact_mtimes else None
@@ -684,9 +740,10 @@ def build_investigation(
         "trial_id": campaign_state.get("current_trial_id"),
         "stage": stage,
         "purpose": _entity_text(campaign_state.get("purpose", {}) if isinstance(campaign_state.get("purpose"), dict) else active_hypothesis or {}),
-        "started_at": _iso(campaign_state.get("started_at") or launch.get("started_at")),
+        "started_at": _iso(stage_started_value),
         "elapsed_seconds": elapsed_seconds,
-        "estimated_remaining_seconds": (max(0, int(configured_epochs) - latest_epoch) * elapsed_seconds / latest_epoch) if configured_epochs and latest_epoch and elapsed_seconds is not None else None,
+        "estimated_remaining_seconds": eta_seconds,
+        "eta_status": eta_status,
         "progress_fraction": min(1.0, latest_epoch / float(configured_epochs)) if configured_epochs else None,
         "current_epoch": latest_epoch or None,
         "total_epochs": configured_epochs,
@@ -867,6 +924,7 @@ def build_investigation(
             "intervention_required": any(alert["severity"] == "critical" for alert in alerts),
         },
         "controller": state.get("controller_state", {}),
+        "meta_controller": _meta_controller_summary(state, campaign_id),
         "graph": focused_graph,
         "diagnostics": {
             "errors": errors,
