@@ -6,6 +6,7 @@ from unittest import mock
 
 from src.autonomous_campaign import _apply_decision
 from src.autonomous_campaign import _ensure_seed_knowledge
+from src.autonomous_campaign import parse_decision
 from src.scientific_state import empty_state
 
 
@@ -73,6 +74,14 @@ class AutonomousCampaignTests(unittest.TestCase):
         launch.assert_not_called()
         self.assertIn("rejected candidate", reason)
         self.assertIn("last_rejected_candidate", updated["controller_state"])
+
+    def test_empty_expected_old_is_treated_as_null(self) -> None:
+        decision = parse_decision(
+            '{"decision":"no_action","reason":"ok","evidence_references":[],'
+            '"operations":[{"operation":"update","path":"controller_state.status",'
+            '"value":"\\"running\\"","expected_old":""}],"candidate":null}'
+        )
+        self.assertIsNone(decision["operations"][0]["expected_old"])
 
 
 if __name__ == "__main__":

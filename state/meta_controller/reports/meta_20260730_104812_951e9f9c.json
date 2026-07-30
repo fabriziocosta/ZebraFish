@@ -1,0 +1,64 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Record evidence-limited state and wait for fresh, active-trial-aligned observations before issuing stop/continue/reconcile control again."
+    }
+  ],
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-30T10:48:24+00:00",
+  "controller_status": {
+    "consecutive_failures": 0,
+    "last_run_at": "2026-07-30T10:48:24+00:00",
+    "last_run_id": "meta_20260730_104812_951e9f9c",
+    "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+    "next_run_at": null,
+    "status": "completed",
+    "summary": "Deterministic observations remain stale relative to the active trial, so there is insufficient aligned evidence to justify lifecycle intervention or code repair in this run."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status=running",
+      "campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60",
+      "observations:obs_97ab1cf0ea84",
+      "observations:obs_7543bea8eb52",
+      "recent_meta_reports:meta_20260730_104030_005667ed",
+      "process.running=true",
+      "scientific_controller.status=running"
+    ],
+    "root_causes": [
+      "Observed metrics reference prior trial ids rather than the active trial, indicating evidence freshness/alignment lag.",
+      "A reconciliation was already requested in the prior meta-controller run and recorded as wait while process/artifacts were advancing, so repeating immediate control is unlikely to change state.",
+      "No bounded operational fault is evidenced in process/controller liveness that would justify an automatic repair patch."
+    ],
+    "severity": "warning",
+    "summary": "Deterministic observations remain stale relative to the active trial, so there is insufficient aligned evidence to justify lifecycle intervention or code repair in this run."
+  },
+  "evidence_references": [
+    "campaign.status=running",
+    "campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60",
+    "observations:obs_97ab1cf0ea84",
+    "observations:obs_7543bea8eb52",
+    "recent_meta_reports:meta_20260730_104030_005667ed",
+    "process.running=true",
+    "scientific_controller.status=running"
+  ],
+  "id": "meta_20260730_104812_951e9f9c",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+  "proposal_only_changes": [],
+  "provenance": {
+    "created_by": "meta_controller",
+    "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No patch or campaign lifecycle change applied; rollback is not required.",
+  "started_at": "2026-07-30T10:48:12+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "If observation alignment does not catch up to the active trial, future control decisions remain evidence-constrained.",
+    "Continuing execution without fresh observations may consume compute before productivity can be validly reassessed."
+  ]
+}

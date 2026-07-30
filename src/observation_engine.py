@@ -62,6 +62,11 @@ def read_summary_metrics(path: str | Path) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class DetectorConfig:
+    live_monitor_enabled: bool = True
+    live_trigger_types: tuple[str, ...] = ()
+    live_min_persistent_polls: int = 2
+    live_llm_cooldown_seconds: float = 3600.0
+    live_termination_force_after: float = 5.0
     plateau_window: int = 5
     plateau_min_delta: float = 0.002
     generalisation_gap_threshold: float = 0.10

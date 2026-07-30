@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from src.meta_controller import (
     MetaDecisionError,
@@ -11,6 +12,7 @@ from src.meta_controller import (
     parse_decision,
     read_mandate,
     run_once,
+    _execute_campaign_control,
     validate_patch,
     validate_verifications,
     apply_patch_in_worktree,
@@ -135,6 +137,19 @@ class MetaControllerTests(unittest.TestCase):
             snapshot = collect_snapshot(root, config)
             self.assertFalse(snapshot["process"]["running"])
             self.assertEqual(snapshot["campaign"]["id"], "test")
+
+    def test_stop_control_requires_replacement_launch(self) -> None:
+        import src.agent_campaign_loop as campaign_loop
+        import src.autonomous_campaign as autonomous
+
+        config = {"campaign": {"id": "test"}, "meta_controller": {"stop_grace_seconds": 1}}
+        with patch.object(campaign_loop, "terminate_campaign", return_value=0), patch.object(
+            autonomous, "run_autonomous_campaign", return_value=0
+        ) as recovery, patch.object(campaign_loop, "campaign_live_status", return_value={"running": True}):
+            result = _execute_campaign_control(Path.cwd(), config, "stop", {"stop_grace_seconds": 1}, client=object())
+        recovery.assert_called_once()
+        self.assertTrue(result["replacement_running"])
+        self.assertEqual(result["returncode"], 0)
 
 
 if __name__ == "__main__":

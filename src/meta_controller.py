@@ -425,7 +425,7 @@ def run_once(root: str | Path, campaign_config: dict[str, Any], *, client: Any |
                 action_result["result"] = apply_patch_in_worktree(root_path, config, action["patch"], run_id, verification_names=action["verification_names"])
                 action_result["status"] = action_result["result"]["status"]
             elif action["kind"] == "campaign_control" and action["campaign_action"] != "none":
-                action_result["result"] = _execute_campaign_control(root_path, campaign_config, action["campaign_action"], config)
+                action_result["result"] = _execute_campaign_control(root_path, campaign_config, action["campaign_action"], config, client=client)
                 action_result["status"] = "recorded" if action_result["result"].get("returncode", 1) == 0 else "control_failed"
             actions.append(action_result)
         failed = any(item.get("status") not in {"recorded", "applied"} for item in actions)
@@ -460,7 +460,7 @@ def run_once(root: str | Path, campaign_config: dict[str, Any], *, client: Any |
     return report
 
 
-def _execute_campaign_control(root: Path, campaign_config: dict[str, Any], action: str, config: dict[str, Any]) -> dict[str, Any]:
+def _execute_campaign_control(root: Path, campaign_config: dict[str, Any], action: str, config: dict[str, Any], *, client: Any | None = None) -> dict[str, Any]:
     """Execute only existing deterministic campaign lifecycle operations."""
 
     from src import autonomous_campaign, agent_campaign_loop
@@ -473,13 +473,53 @@ def _execute_campaign_control(root: Path, campaign_config: dict[str, Any], actio
             force_after=float(config.get("stop_grace_seconds", 5)),
             stream=output,
         )
+        recovery_code = None
+        recovery_detail = ""
+        recovery_running = False
+        if code == 0:
+            # A productive stop is not an endpoint. Re-enter the autonomous
+            # campaign initializer immediately so it can select and launch a
+            # bounded replacement trial using the same validated policy.
+            recovery_code = autonomous_campaign.run_autonomous_campaign(
+                campaign_config,
+                once=True,
+                new_trial=True,
+                client=client,
+                stream=output,
+            )
+            recovery_detail = output.getvalue()[-4000:]
+            recovery_running = bool(agent_campaign_loop.campaign_live_status(campaign_config).get("running"))
+            if not recovery_running and recovery_code == 0:
+                recovery_code = 2
+                recovery_detail += "\nautonomous recovery completed without launching a replacement stage"
     elif action == "continue":
         code = agent_campaign_loop.resume_suspended_campaign(campaign_config, stream=output)
+        recovery_code = None
+        recovery_detail = ""
+        recovery_running = bool(agent_campaign_loop.campaign_live_status(campaign_config).get("running"))
     elif action == "reconcile":
-        code = autonomous_campaign.run_autonomous_campaign(campaign_config, once=True, stream=output)
+        live_before = agent_campaign_loop.campaign_live_status(campaign_config).get("running")
+        code = autonomous_campaign.run_autonomous_campaign(
+            campaign_config,
+            once=True,
+            new_trial=not live_before,
+            client=client,
+            stream=output,
+        )
+        recovery_code = None
+        recovery_detail = ""
+        recovery_running = bool(agent_campaign_loop.campaign_live_status(campaign_config).get("running"))
     else:
         raise MetaControllerError(f"unsupported campaign control action: {action}")
-    return {"action": action, "returncode": int(code), "detail": output.getvalue()[-4000:]}
+    effective_code = recovery_code if action == "stop" and recovery_code is not None else code
+    return {
+        "action": action,
+        "returncode": int(effective_code),
+        "stop_returncode": int(code),
+        "recovery_returncode": recovery_code,
+        "replacement_running": recovery_running,
+        "detail": recovery_detail or output.getvalue()[-4000:],
+    }
 
 
 def _meta_state(root: Path, campaign_config: dict[str, Any]) -> dict[str, Any]:

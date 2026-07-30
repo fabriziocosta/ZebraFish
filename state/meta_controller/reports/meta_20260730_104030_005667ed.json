@@ -1,0 +1,72 @@
+{
+  "actions": [
+    {
+      "campaign_action": "reconcile",
+      "kind": "campaign_control",
+      "result": {
+        "action": "reconcile",
+        "detail": "[2026-07-30T11:40:46] autonomous campaign=cnn_pretrain_finetune trial=cnn_pretrain_finetune_20260730_113949_4d2c60 stage=10C controller=running_progress action=wait reason=process is running and artifacts advanced\n",
+        "recovery_returncode": null,
+        "replacement_running": true,
+        "returncode": 0,
+        "stop_returncode": 0
+      },
+      "status": "recorded",
+      "summary": "Request deterministic reconciliation to refresh campaign state and regenerate observations aligned to the active trial before taking further lifecycle actions."
+    }
+  ],
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-30T10:40:46+00:00",
+  "controller_status": {
+    "consecutive_failures": 0,
+    "last_run_at": "2026-07-30T10:40:46+00:00",
+    "last_run_id": "meta_20260730_104030_005667ed",
+    "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+    "next_run_at": null,
+    "status": "completed",
+    "summary": "Current deterministic observations are stale relative to the active trial, so scientific productivity of the running trial cannot be validly assessed from this snapshot. A reconciliation is needed to restore observation/state alignment before any stop/continue judgment."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status=running",
+      "campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60",
+      "observations:obs_97ab1cf0ea84",
+      "observations:obs_7543bea8eb52",
+      "recent_meta_reports:meta_20260730_102636_939ff1f9",
+      "process.running=true",
+      "scientific_controller.status=running"
+    ],
+    "root_causes": [
+      "Most observations in the snapshot reference prior trial ids (not the active cnn_pretrain_finetune_20260730_113949_4d2c60), indicating observation lag or unreconciled state.",
+      "The prior meta-controller run already stopped the previous unproductive trial; that evidence should not be reused to control the newly active trial without fresh measurements.",
+      "No bounded operational failure is evidenced for process/controller liveness; the immediate issue is evidence freshness/alignment."
+    ],
+    "severity": "warning",
+    "summary": "Current deterministic observations are stale relative to the active trial, so scientific productivity of the running trial cannot be validly assessed from this snapshot. A reconciliation is needed to restore observation/state alignment before any stop/continue judgment."
+  },
+  "evidence_references": [
+    "campaign.status=running",
+    "campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60",
+    "observations:obs_97ab1cf0ea84",
+    "observations:obs_7543bea8eb52",
+    "recent_meta_reports:meta_20260730_102636_939ff1f9",
+    "process.running=true",
+    "scientific_controller.status=running"
+  ],
+  "id": "meta_20260730_104030_005667ed",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+  "proposal_only_changes": [],
+  "provenance": {
+    "created_by": "meta_controller",
+    "mandate_version": "sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "If reconciliation is unnecessary or produces no new aligned observations, record outcome and leave campaign lifecycle unchanged (no stop).",
+  "started_at": "2026-07-30T10:40:30+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "If reconciliation does not produce fresh observations for the active trial, subsequent control decisions remain evidence-limited.",
+    "Repository has local modifications in controller-related files, increasing risk for future automatic patch overlap; no code patch is applied in this run."
+  ]
+}

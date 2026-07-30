@@ -181,6 +181,8 @@ def parse_decision(text: str) -> dict[str, Any]:
             raw = normalized.get(field, "null")
             if not isinstance(raw, str):
                 raise ValueError(f"operation {field} must be a JSON-encoded string")
+            if field == "expected_old" and not raw.strip():
+                raw = "null"
             try:
                 normalized[field] = json.loads(raw)
             except json.JSONDecodeError as exc:
@@ -294,17 +296,26 @@ def request_decision(
 
         client = OpenAI()
     agent = campaign_config.get("agent", {})
-    response = client.responses.create(
-        model=agent.get("model", "gpt-5.3-codex"),
-        reasoning={"effort": agent.get("reasoning_effort", "medium")},
-        max_output_tokens=int(agent.get("max_output_tokens", 6000)),
-        text=_decision_schema(),
-        input=_build_prompt(campaign_config, loop_config, state, summary, validation_error=validation_error),
-    )
-    output_text = getattr(response, "output_text", None)
-    if not isinstance(output_text, str):
-        raise ValueError("OpenAI response did not contain output_text")
-    return parse_decision(output_text)
+    attempts = max(1, min(3, int(campaign_config.get("campaign", {}).get("max_decision_retries", 3))))
+    last_error: Exception | None = None
+    current_validation_error = validation_error
+    for attempt in range(attempts):
+        response = client.responses.create(
+            model=agent.get("model", "gpt-5.3-codex"),
+            reasoning={"effort": agent.get("reasoning_effort", "medium")},
+            max_output_tokens=int(agent.get("max_output_tokens", 6000)),
+            text=_decision_schema(),
+            input=_build_prompt(campaign_config, loop_config, state, summary, validation_error=current_validation_error),
+        )
+        output_text = getattr(response, "output_text", None)
+        if not isinstance(output_text, str):
+            raise ValueError("OpenAI response did not contain output_text")
+        try:
+            return parse_decision(output_text)
+        except ValueError as exc:
+            last_error = exc
+            current_validation_error = f"Malformed decision on attempt {attempt + 1}: {exc}. Return valid JSON strings for value and expected_old; use the literal JSON string 'null' when no old value exists."
+    raise ValueError(f"autonomous decision remained invalid after {attempts} attempts: {last_error}")
 
 
 def _summary_for_state(campaign_config: dict[str, Any], legacy_state: dict[str, Any]) -> dict[str, Any]:
@@ -370,6 +381,153 @@ def _record_stage(
         if observation_id not in scientific_state["entities"]["observations"]:
             scientific_state = record_entity(scientific_state, "observations", observation_id, observation, actor="observation_engine")
     return scientific_state
+
+
+def _observation_fingerprint(observation: dict[str, Any]) -> str:
+    payload = {
+        "type": observation.get("type"),
+        "source_experiments": observation.get("source_experiments", []),
+        "measurements": observation.get("measurements", {}),
+    }
+    return json.dumps(payload, sort_keys=True, default=str)
+
+
+def _record_live_observations(
+    scientific_state: dict[str, Any],
+    campaign_config: dict[str, Any],
+    legacy_state: dict[str, Any],
+    stage_status: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Run cheap deterministic detectors against the newest live artifacts."""
+
+    trial_id = str(legacy_state.get("current_trial_id"))
+    stage = str(legacy_state.get("current_stage"))
+    experiment_id = f"{trial_id}:{stage}"
+    artifacts = stage_status.get("artifacts", {}) if isinstance(stage_status.get("artifacts", {}), dict) else {}
+    run_dir = artifacts.get("run_dir") or stage_status.get("run_dir")
+    if not run_dir:
+        return scientific_state, []
+    observations = generate_observations(
+        experiment_id,
+        run_dir=run_dir,
+        config=DetectorConfig(**campaign_config.get("observation", {})),
+    )
+    existing = {
+        _observation_fingerprint(record)
+        for record in scientific_state.get("entities", {}).get("observations", {}).values()
+        if isinstance(record, dict)
+    }
+    new_observations: list[dict[str, Any]] = []
+    for observation in observations:
+        fingerprint = _observation_fingerprint(observation)
+        if fingerprint in existing:
+            continue
+        existing.add(fingerprint)
+        scientific_state = record_entity(
+            scientific_state,
+            "observations",
+            observation["id"],
+            observation,
+            actor="live_observation_engine",
+        )
+        new_observations.append(observation)
+    # Return the current deterministic findings even when their immutable
+    # records already exist; persistence tracking and intervention triggering
+    # are separate concerns.
+    return scientific_state, observations
+
+
+def _live_intervention_ready(
+    scientific_state: dict[str, Any],
+    campaign_config: dict[str, Any],
+    observations: list[dict[str, Any]],
+) -> tuple[dict[str, Any], bool, list[dict[str, Any]]]:
+    """Track persistent deterministic triggers and enforce the LLM cooldown."""
+
+    observation_config = campaign_config.get("observation", {})
+    controller = scientific_state.get("controller_state", {})
+    trigger_types = set(observation_config.get("live_trigger_types", []))
+    triggered = [item for item in observations if item.get("type") in trigger_types]
+    previous_polls = int(controller.get("live_trigger_polls", 0))
+    polls = previous_polls + 1 if triggered else 0
+    now = datetime.now().timestamp()
+    last_call = controller.get("last_live_llm_intervention_at")
+    try:
+        last_call_seconds = datetime.fromisoformat(str(last_call).replace("Z", "+00:00")).timestamp() if last_call else None
+    except ValueError:
+        last_call_seconds = None
+    cooldown = float(observation_config.get("live_llm_cooldown_seconds", 3600))
+    ready = bool(
+        observation_config.get("live_monitor_enabled", True)
+        and triggered
+        and polls >= int(observation_config.get("live_min_persistent_polls", 2))
+        and (last_call_seconds is None or now - last_call_seconds >= cooldown)
+    )
+    updated = update_controller_state(
+        scientific_state,
+        {
+            "live_trigger_polls": polls,
+            "live_trigger_types": sorted({str(item.get("type")) for item in triggered}),
+            "last_live_observation_at": _now() if observations else controller.get("last_live_observation_at"),
+        },
+        actor="live_observation_engine",
+    )
+    return updated, ready, triggered
+
+
+def _request_live_intervention(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    scientific_state: dict[str, Any],
+    legacy_state: dict[str, Any],
+    stage_status: dict[str, Any],
+    controller_status: str,
+    controller_reason: str,
+    *,
+    client: Any | None,
+    stream: TextIO,
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Ask the LLM only after persistent deterministic live evidence."""
+
+    scientific_state, live_observations = _record_live_observations(
+        scientific_state, campaign_config, legacy_state, stage_status
+    )
+    scientific_state, ready, triggered = _live_intervention_ready(
+        scientific_state, campaign_config, live_observations
+    )
+    if not ready:
+        return scientific_state, legacy_state, controller_reason
+    summary = {
+        "status": "live_intervention_triggered",
+        "controller_status": controller_status,
+        "controller_reason": controller_reason,
+        "trial_id": legacy_state.get("current_trial_id"),
+        "stage": legacy_state.get("current_stage"),
+        "observations": triggered[-20:],
+        "instruction": "Decide whether to continue, terminate this low-yield trial, or propose one bounded replacement trial. Do not infer raw metrics beyond these deterministic observations.",
+    }
+    decision = request_decision(campaign_config, loop_config, scientific_state, summary, client=client)
+    scientific_state = update_controller_state(
+        scientific_state,
+        {"last_live_llm_intervention_at": _now(), "live_trigger_polls": 0, "last_live_decision": decision["decision"]},
+        actor="autonomous_controller",
+    )
+    scientific_state, legacy_state, reason = _apply_decision(
+        campaign_config, loop_config, scientific_state, legacy_state, decision, stream=stream
+    )
+    if decision["decision"] == "terminate_trial" and not legacy.campaign_live_status(campaign_config).get("running"):
+        followup = request_decision(
+            campaign_config,
+            loop_config,
+            scientific_state,
+            {**summary, "status": "post_termination_recovery", "termination_reason": reason},
+            client=client,
+        )
+        scientific_state, legacy_state, followup_reason = _apply_decision(
+            campaign_config, loop_config, scientific_state, legacy_state, followup, stream=stream
+        )
+        reason = f"{reason}; recovery: {followup_reason}"
+    return scientific_state, legacy_state, reason
 
 
 def _record_trial(
@@ -474,6 +632,27 @@ def _apply_decision(
                 {"status": "running", "active_trial_id": next_legacy.get("current_trial_id"), "last_decision": decision["decision"], "last_decision_at": _now(), "decision_rejections": 0, "last_rejection_reason": None, "safe_stop_reason": None},
             )
             return proposed_state, next_legacy, f"launched candidate {candidate['id']}"
+    if decision["decision"] == "terminate_trial":
+        force_after = float(campaign_config.get("observation", {}).get("live_termination_force_after", 5))
+        return_code = legacy.terminate_campaign(
+            campaign_config,
+            reason=decision.get("reason") or "deterministic live intervention requested termination",
+            force_after=force_after,
+            stream=stream,
+        )
+        refreshed_legacy = legacy._read_json(legacy._campaign_state_path(campaign_config))
+        proposed_state = update_controller_state(
+            proposed_state,
+            {
+                "status": "running" if return_code == 0 else "autonomous_safe_stop",
+                "last_decision": decision["decision"],
+                "last_decision_at": _now(),
+                "termination_returncode": return_code,
+            },
+        )
+        return proposed_state, refreshed_legacy or legacy_state, (
+            f"terminated live trial with returncode={return_code}: {decision.get('reason', 'no reason')}"
+        )
     if decision["decision"] == "stop_campaign":
         proposed_state = update_controller_state(
             proposed_state,
@@ -562,6 +741,37 @@ def run_autonomous_campaign(
             if controller_status in {"running_progress", "running_wait"}:
                 action = "wait"
                 reason = controller_reason
+                if not dry_run:
+                    try:
+                        scientific_state, legacy_state, live_reason = _request_live_intervention(
+                            campaign_config,
+                            loop_config,
+                            scientific_state,
+                            legacy_state,
+                            status,
+                            controller_status,
+                            controller_reason,
+                            client=client,
+                            stream=stream,
+                        )
+                        reason = live_reason
+                        if live_reason != controller_reason:
+                            action = "live_intervention"
+                    except Exception as exc:
+                        # A failed LLM intervention must not kill the training
+                        # process. Keep deterministic monitoring alive and let
+                        # the next cooldown window retry it.
+                        scientific_state = update_controller_state(
+                            scientific_state,
+                            {
+                                "status": "running",
+                                "last_live_intervention_error": f"{type(exc).__name__}: {exc}",
+                                "last_live_intervention_error_at": _now(),
+                            },
+                            actor="autonomous_controller",
+                        )
+                        action = "live_intervention_retry"
+                        reason = f"{controller_reason}; live LLM intervention deferred: {type(exc).__name__}: {exc}"
             elif controller_status == "completed":
                 scientific_state = _record_stage(scientific_state, campaign_config, legacy_state, status, controller_status)
                 legacy_state, action = legacy._advance_stage_or_complete_trial(campaign_config, loop_config, legacy_state, status, dry_run=dry_run)

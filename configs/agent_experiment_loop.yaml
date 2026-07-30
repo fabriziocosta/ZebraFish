@@ -12,6 +12,11 @@ state:
 scientific_state:
   path: state/scientific_state.yaml
 observation:
+  live_monitor_enabled: true
+  live_trigger_types: [loss_plateau, validation_plateau, generalisation_gap, non_finite_metric, unstable_metric, regression_against_baseline]
+  live_min_persistent_polls: 2
+  live_llm_cooldown_seconds: 3600
+  live_termination_force_after: 5
   plateau_window: 5
   plateau_min_delta: 0.002
   generalisation_gap_threshold: 0.10

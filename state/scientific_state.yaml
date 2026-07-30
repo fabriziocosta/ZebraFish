@@ -5441,6 +5441,45 @@ entities:
       - 15T confusion matrices
       - 15T UMAP PDF
       baseline_status: not_registered
+    cand_20260730_13c_rotation_regularization_v2:
+      id: cand_20260730_13c_rotation_regularization_v2
+      title: Terminate stalled 10C and run bounded 13C rotation regularization test
+      purpose: Directly test whether moderate 13C rotation augmentation improves compound
+        objective while preserving the action guardrail, without further spending
+        on stalled pretraining.
+      question_id: q_cnn_pretrain_finetune_objective
+      hypothesis_ids:
+      - hyp_cnn_pretrain_finetune_objective
+      base_experiment: cnn_pretrain_finetune_20260704_141700_197670:13C
+      configuration_patch:
+        13C:
+          train_num_random_rotations: 8
+          rotation_range_degrees: 20
+      fixed_variables:
+        10C: No new 10C run; terminate current stalled pretraining.
+        13C: All settings identical to base 13C experiment except train_num_random_rotations
+          and rotation_range_degrees.
+      expected_outcomes:
+      - compound.macro_f1 exceeds 0.25280931819393354
+      - action.accuracy remains >= 0.30
+      - 13C end-of-run train-validation gap indicators improve versus baseline
+      falsification_criteria:
+      - compound.macro_f1 <= 0.25280931819393354
+      - action.accuracy < 0.30
+      - generalisation-gap indicators do not improve or worsen versus baseline
+      estimated_gpu_hours: 14
+      estimated_wall_hours: 20
+      risks:
+      - augmentation intensity may still underfit and reduce objective
+      - improvement may appear in robustness-related losses without macro_f1 gain
+      allowed_stages:
+      - 13C
+      baseline: false
+      status: selected_for_execution
+      provenance:
+        created_by: llm
+        decision: terminate_trial
+      created_at: '2026-07-30T10:37:27+00:00'
   meta_controller_runs:
     meta_20260730_102636_939ff1f9:
       id: meta_20260730_102636_939ff1f9
@@ -5521,6 +5560,140 @@ entities:
         next_run_at: null
         consecutive_failures: 0
       created_at: '2026-07-30T10:27:03+00:00'
+    meta_20260730_104030_005667ed:
+      id: meta_20260730_104030_005667ed
+      campaign: cnn_pretrain_finetune
+      status: completed
+      mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      started_at: '2026-07-30T10:40:30+00:00'
+      completed_at: '2026-07-30T10:40:46+00:00'
+      diagnosis:
+        summary: Current deterministic observations are stale relative to the active
+          trial, so scientific productivity of the running trial cannot be validly
+          assessed from this snapshot. A reconciliation is needed to restore observation/state
+          alignment before any stop/continue judgment.
+        severity: warning
+        evidence_references: &id004
+        - campaign.status=running
+        - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
+        - observations:obs_97ab1cf0ea84
+        - observations:obs_7543bea8eb52
+        - recent_meta_reports:meta_20260730_102636_939ff1f9
+        - process.running=true
+        - scientific_controller.status=running
+        root_causes:
+        - Most observations in the snapshot reference prior trial ids (not the active
+          cnn_pretrain_finetune_20260730_113949_4d2c60), indicating observation lag
+          or unreconciled state.
+        - The prior meta-controller run already stopped the previous unproductive
+          trial; that evidence should not be reused to control the newly active trial
+          without fresh measurements.
+        - No bounded operational failure is evidenced for process/controller liveness;
+          the immediate issue is evidence freshness/alignment.
+      evidence_references: *id004
+      actions:
+      - kind: campaign_control
+        summary: Request deterministic reconciliation to refresh campaign state and
+          regenerate observations aligned to the active trial before taking further
+          lifecycle actions.
+        campaign_action: reconcile
+        status: recorded
+        result:
+          action: reconcile
+          returncode: 0
+          stop_returncode: 0
+          recovery_returncode: null
+          replacement_running: true
+          detail: '[2026-07-30T11:40:46] autonomous campaign=cnn_pretrain_finetune
+            trial=cnn_pretrain_finetune_20260730_113949_4d2c60 stage=10C controller=running_progress
+            action=wait reason=process is running and artifacts advanced
+
+            '
+      proposal_only_changes: []
+      rollback_plan: If reconciliation is unnecessary or produces no new aligned observations,
+        record outcome and leave campaign lifecycle unchanged (no stop).
+      unresolved_risks:
+      - If reconciliation does not produce fresh observations for the active trial,
+        subsequent control decisions remain evidence-limited.
+      - Repository has local modifications in controller-related files, increasing
+        risk for future automatic patch overlap; no code patch is applied in this
+        run.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        snapshot: compact
+      controller_status:
+        status: completed
+        last_run_id: meta_20260730_104030_005667ed
+        last_run_at: '2026-07-30T10:40:46+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Current deterministic observations are stale relative to the active
+          trial, so scientific productivity of the running trial cannot be validly
+          assessed from this snapshot. A reconciliation is needed to restore observation/state
+          alignment before any stop/continue judgment.
+        next_run_at: null
+        consecutive_failures: 0
+      created_at: '2026-07-30T10:40:48+00:00'
+    meta_20260730_104812_951e9f9c:
+      id: meta_20260730_104812_951e9f9c
+      campaign: cnn_pretrain_finetune
+      status: completed
+      mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      started_at: '2026-07-30T10:48:12+00:00'
+      completed_at: '2026-07-30T10:48:24+00:00'
+      diagnosis:
+        summary: Deterministic observations remain stale relative to the active trial,
+          so there is insufficient aligned evidence to justify lifecycle intervention
+          or code repair in this run.
+        severity: warning
+        evidence_references: &id005
+        - campaign.status=running
+        - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
+        - observations:obs_97ab1cf0ea84
+        - observations:obs_7543bea8eb52
+        - recent_meta_reports:meta_20260730_104030_005667ed
+        - process.running=true
+        - scientific_controller.status=running
+        root_causes:
+        - Observed metrics reference prior trial ids rather than the active trial,
+          indicating evidence freshness/alignment lag.
+        - A reconciliation was already requested in the prior meta-controller run
+          and recorded as wait while process/artifacts were advancing, so repeating
+          immediate control is unlikely to change state.
+        - No bounded operational fault is evidenced in process/controller liveness
+          that would justify an automatic repair patch.
+      evidence_references: *id005
+      actions:
+      - kind: no_action
+        summary: Record evidence-limited state and wait for fresh, active-trial-aligned
+          observations before issuing stop/continue/reconcile control again.
+        campaign_action: none
+        status: recorded
+      proposal_only_changes: []
+      rollback_plan: No patch or campaign lifecycle change applied; rollback is not
+        required.
+      unresolved_risks:
+      - If observation alignment does not catch up to the active trial, future control
+        decisions remain evidence-constrained.
+      - Continuing execution without fresh observations may consume compute before
+        productivity can be validly reassessed.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        snapshot: compact
+      controller_status:
+        status: completed
+        last_run_id: meta_20260730_104812_951e9f9c
+        last_run_at: '2026-07-30T10:48:24+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Deterministic observations remain stale relative to the active trial,
+          so there is insufficient aligned evidence to justify lifecycle intervention
+          or code repair in this run.
+        next_run_at: null
+        consecutive_failures: 0
+      created_at: '2026-07-30T10:48:25+00:00'
 relations:
 - type: reuses_checkpoint
   source: cnn_pretrain_finetune_20260625_115021_08a733:13C
@@ -5576,8 +5749,8 @@ relations:
   created_at: '2026-07-25T16:28:55+00:00'
 controller_state:
   status: running
-  active_trial_id: cnn_pretrain_finetune_20260725_174326_4f984d
-  active_stage: 13C
+  active_trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+  active_stage: 10C
   last_migration:
     campaign_id: cnn_pretrain_finetune
     imported_trials: 0
@@ -5626,11 +5799,11 @@ controller_state:
     - 'non-allowlisted parameter: 10C.13C.rotation_range_degrees'
     created_at: '2026-07-23T14:29:02'
   safe_stop_reason: null
-  last_poll_at: '2026-07-30T10:33:51'
-  last_controller_status: completed
+  last_poll_at: '2026-07-30T11:47:37'
+  last_controller_status: running_wait
   last_rejection_reason: null
   last_decision: propose_trial
-  last_decision_at: '2026-07-25T17:43:26'
+  last_decision_at: '2026-07-30T11:39:49'
   termination_reason: user_requested
   initialization:
     completed_at: '2026-07-25T16:28:55+00:00'
@@ -5644,15 +5817,17 @@ controller_state:
   restart_reason: Explicit user request to start a new autonomous trial with --new-trial.
   meta_controller:
     status: running
-    pid: 571482
-    last_run_id: meta_20260730_102636_939ff1f9
-    last_run_at: '2026-07-30T10:27:02+00:00'
-    next_run_at: '2026-07-31T10:27:03+00:00'
+    pid: 588370
+    last_run_id: meta_20260730_104812_951e9f9c
+    last_run_at: '2026-07-30T10:48:24+00:00'
+    next_run_at: '2026-07-31T10:48:26+00:00'
     mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
-    summary: 'The active trial appears scientifically stalled and likely unproductive:
-      many train/validation metrics are plateaued within the deterministic threshold
-      while multiple large generalization gaps persist. Continuing this run is likely
-      to consume compute with low additional information gain.'
+    summary: Deterministic observations remain stale relative to the active trial,
+      so there is insufficient aligned evidence to justify lifecycle intervention
+      or code repair in this run.
+  live_trigger_polls: 0
+  live_trigger_types: []
+  last_live_observation_at: null
 audit_log:
 - id: op_bd4dc5214365
   created_at: '2026-07-23T13:15:00+00:00'
@@ -11122,7 +11297,7 @@ audit_log:
       stage: 10C
       status: terminated
       configuration:
-        resolved_config_paths: &id004
+        resolved_config_paths: &id006
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -11132,7 +11307,7 @@ audit_log:
         artifacts:
           run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
           run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
-          latest_config_yamls: *id004
+          latest_config_yamls: *id006
           resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
         provenance:
           created_by: autonomous_controller
@@ -12613,7 +12788,7 @@ audit_log:
       stage: 10C
       status: completed
       configuration:
-        resolved_config_paths: &id005
+        resolved_config_paths: &id007
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -12895,7 +13070,7 @@ audit_log:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/epoch_140.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/10C_pretrain_commutative_cnn_20260725_174329_latest.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/latest.loss-curves.pdf
-          latest_config_yamls: *id005
+          latest_config_yamls: *id007
           latest_metrics:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_summary_metrics.csv
           checkpoints:
@@ -13481,7 +13656,7 @@ audit_log:
           while multiple large generalization gaps persist. Continuing this run is
           likely to consume compute with low additional information gain.'
         severity: warning
-        evidence_references: &id006
+        evidence_references: &id008
         - observations:obs_97ab1cf0ea84
         - observations:obs_f82995756ef7
         - observations:obs_47459ea7dc7b
@@ -13497,7 +13672,7 @@ audit_log:
           overfitting or objective mismatch for this candidate configuration.
         - No bounded operational reliability fault is evidenced in controller/process
           status; the main issue is scientific productivity of the current run.
-      evidence_references: *id006
+      evidence_references: *id008
       actions:
       - kind: campaign_control
         summary: Request deterministic campaign stop for the current trial to prevent
@@ -13580,6 +13755,414 @@ audit_log:
           many train/validation metrics are plateaued within the deterministic threshold
           while multiple large generalization gaps persist. Continuing this run is
           likely to consume compute with low additional information gain.'
+- id: op_4e38d1ea7c9d
+  created_at: '2026-07-30T10:37:27+00:00'
+  actor: llm
+  operation:
+    operation: create
+    path: entities.candidate_experiments.cand_20260730_13c_rotation_regularization_v2
+    value:
+      id: cand_20260730_13c_rotation_regularization_v2
+      title: Terminate stalled 10C and run bounded 13C rotation regularization test
+      purpose: Directly test whether moderate 13C rotation augmentation improves compound
+        objective while preserving the action guardrail, without further spending
+        on stalled pretraining.
+      question_id: q_cnn_pretrain_finetune_objective
+      hypothesis_ids:
+      - hyp_cnn_pretrain_finetune_objective
+      base_experiment: cnn_pretrain_finetune_20260704_141700_197670:13C
+      configuration_patch:
+        13C:
+          train_num_random_rotations: 8
+          rotation_range_degrees: 20
+      fixed_variables:
+        10C: No new 10C run; terminate current stalled pretraining.
+        13C: All settings identical to base 13C experiment except train_num_random_rotations
+          and rotation_range_degrees.
+      expected_outcomes:
+      - compound.macro_f1 exceeds 0.25280931819393354
+      - action.accuracy remains >= 0.30
+      - 13C end-of-run train-validation gap indicators improve versus baseline
+      falsification_criteria:
+      - compound.macro_f1 <= 0.25280931819393354
+      - action.accuracy < 0.30
+      - generalisation-gap indicators do not improve or worsen versus baseline
+      estimated_gpu_hours: 14
+      estimated_wall_hours: 20
+      risks:
+      - augmentation intensity may still underfit and reduce objective
+      - improvement may appear in robustness-related losses without macro_f1 gain
+      allowed_stages:
+      - 13C
+      baseline: false
+      status: proposed
+      provenance:
+        created_by: llm
+        decision: terminate_trial
+      created_at: '2026-07-30T10:37:27+00:00'
+- id: op_ef8acea97fb6
+  created_at: '2026-07-30T10:37:27+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      last_decision: terminate_trial
+      last_decision_at: '2026-07-30T11:37:27'
+      decision_rejections: 0
+      safe_stop_reason: null
+- id: op_c199a03c403f
+  created_at: '2026-07-30T10:39:49+00:00'
+  actor: llm
+  operation:
+    operation: transition
+    path: entities.candidate_experiments.cand_20260730_13c_rotation_regularization_v2.status
+    value: selected_for_execution
+    expected_old: proposed
+- id: op_3ec9ccddec2f
+  created_at: '2026-07-30T10:39:49+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      active_trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+      last_decision: propose_trial
+      last_decision_at: '2026-07-30T11:39:49'
+      decision_rejections: 0
+      last_rejection_reason: null
+      safe_stop_reason: null
+- id: op_fc4a2160932b
+  created_at: '2026-07-30T10:39:50+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+      active_stage: 10C
+      last_poll_at: '2026-07-30T11:39:49'
+      last_controller_status: running_wait
+- id: op_9136de6cf448
+  created_at: '2026-07-30T10:40:16+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: stopping
+        pid: 571482
+        last_run_id: meta_20260730_102636_939ff1f9
+        last_run_at: '2026-07-30T10:27:02+00:00'
+        next_run_at: '2026-07-31T10:27:03+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: 'The active trial appears scientifically stalled and likely unproductive:
+          many train/validation metrics are plateaued within the deterministic threshold
+          while multiple large generalization gaps persist. Continuing this run is
+          likely to consume compute with low additional information gain.'
+        stop_reason: dashboard stop requested
+- id: op_36b6a65747b3
+  created_at: '2026-07-30T10:40:18+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: stopped
+        pid: null
+        stopped_at: '2026-07-30T10:40:17+00:00'
+        stop_reason: stop requested
+- id: op_64eebf726072
+  created_at: '2026-07-30T10:40:29+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 581860
+        started_at: '2026-07-30T10:40:28+00:00'
+        interval_seconds: 86400
+- id: op_b97aa752cc5a
+  created_at: '2026-07-30T10:40:46+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+      active_stage: 10C
+      last_poll_at: '2026-07-30T11:40:46'
+      last_controller_status: running_progress
+- id: op_718c53f799e5
+  created_at: '2026-07-30T10:40:48+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260730_104030_005667ed
+    value:
+      id: meta_20260730_104030_005667ed
+      campaign: cnn_pretrain_finetune
+      status: completed
+      mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      started_at: '2026-07-30T10:40:30+00:00'
+      completed_at: '2026-07-30T10:40:46+00:00'
+      diagnosis:
+        summary: Current deterministic observations are stale relative to the active
+          trial, so scientific productivity of the running trial cannot be validly
+          assessed from this snapshot. A reconciliation is needed to restore observation/state
+          alignment before any stop/continue judgment.
+        severity: warning
+        evidence_references: &id009
+        - campaign.status=running
+        - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
+        - observations:obs_97ab1cf0ea84
+        - observations:obs_7543bea8eb52
+        - recent_meta_reports:meta_20260730_102636_939ff1f9
+        - process.running=true
+        - scientific_controller.status=running
+        root_causes:
+        - Most observations in the snapshot reference prior trial ids (not the active
+          cnn_pretrain_finetune_20260730_113949_4d2c60), indicating observation lag
+          or unreconciled state.
+        - The prior meta-controller run already stopped the previous unproductive
+          trial; that evidence should not be reused to control the newly active trial
+          without fresh measurements.
+        - No bounded operational failure is evidenced for process/controller liveness;
+          the immediate issue is evidence freshness/alignment.
+      evidence_references: *id009
+      actions:
+      - kind: campaign_control
+        summary: Request deterministic reconciliation to refresh campaign state and
+          regenerate observations aligned to the active trial before taking further
+          lifecycle actions.
+        campaign_action: reconcile
+        status: recorded
+        result:
+          action: reconcile
+          returncode: 0
+          stop_returncode: 0
+          recovery_returncode: null
+          replacement_running: true
+          detail: '[2026-07-30T11:40:46] autonomous campaign=cnn_pretrain_finetune
+            trial=cnn_pretrain_finetune_20260730_113949_4d2c60 stage=10C controller=running_progress
+            action=wait reason=process is running and artifacts advanced
+
+            '
+      proposal_only_changes: []
+      rollback_plan: If reconciliation is unnecessary or produces no new aligned observations,
+        record outcome and leave campaign lifecycle unchanged (no stop).
+      unresolved_risks:
+      - If reconciliation does not produce fresh observations for the active trial,
+        subsequent control decisions remain evidence-limited.
+      - Repository has local modifications in controller-related files, increasing
+        risk for future automatic patch overlap; no code patch is applied in this
+        run.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        snapshot: compact
+      controller_status:
+        status: completed
+        last_run_id: meta_20260730_104030_005667ed
+        last_run_at: '2026-07-30T10:40:46+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Current deterministic observations are stale relative to the active
+          trial, so scientific productivity of the running trial cannot be validly
+          assessed from this snapshot. A reconciliation is needed to restore observation/state
+          alignment before any stop/continue judgment.
+        next_run_at: null
+        consecutive_failures: 0
+      created_at: '2026-07-30T10:40:48+00:00'
+- id: op_3d7acb07f538
+  created_at: '2026-07-30T10:40:48+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: completed
+        last_run_id: meta_20260730_104030_005667ed
+        last_run_at: '2026-07-30T10:40:46+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Current deterministic observations are stale relative to the active
+          trial, so scientific productivity of the running trial cannot be validly
+          assessed from this snapshot. A reconciliation is needed to restore observation/state
+          alignment before any stop/continue judgment.
+        next_run_at: null
+        consecutive_failures: 0
+- id: op_06830a0b747b
+  created_at: '2026-07-30T10:40:49+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 581860
+        last_run_id: meta_20260730_104030_005667ed
+        last_run_at: '2026-07-30T10:40:46+00:00'
+        next_run_at: '2026-07-31T10:40:48+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Current deterministic observations are stale relative to the active
+          trial, so scientific productivity of the running trial cannot be validly
+          assessed from this snapshot. A reconciliation is needed to restore observation/state
+          alignment before any stop/continue judgment.
+- id: op_144daaf2b4e1
+  created_at: '2026-07-30T10:47:37+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 0
+      live_trigger_types: []
+      last_live_observation_at: null
+- id: op_228cdbbb52bf
+  created_at: '2026-07-30T10:47:37+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+      active_stage: 10C
+      last_poll_at: '2026-07-30T11:47:37'
+      last_controller_status: running_wait
+- id: op_3d87f0807484
+  created_at: '2026-07-30T10:47:57+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: stopping
+        pid: 581860
+        last_run_id: meta_20260730_104030_005667ed
+        last_run_at: '2026-07-30T10:40:46+00:00'
+        next_run_at: '2026-07-31T10:40:48+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Current deterministic observations are stale relative to the active
+          trial, so scientific productivity of the running trial cannot be validly
+          assessed from this snapshot. A reconciliation is needed to restore observation/state
+          alignment before any stop/continue judgment.
+        stop_reason: dashboard stop requested
+- id: op_6e047a3e7c70
+  created_at: '2026-07-30T10:47:59+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: stopped
+        pid: null
+        stopped_at: '2026-07-30T10:47:58+00:00'
+        stop_reason: stop requested
+- id: op_c20513b0bb65
+  created_at: '2026-07-30T10:48:12+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 588370
+        started_at: '2026-07-30T10:48:11+00:00'
+        interval_seconds: 86400
+- id: op_c36d6c5d2f6a
+  created_at: '2026-07-30T10:48:25+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260730_104812_951e9f9c
+    value:
+      id: meta_20260730_104812_951e9f9c
+      campaign: cnn_pretrain_finetune
+      status: completed
+      mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      started_at: '2026-07-30T10:48:12+00:00'
+      completed_at: '2026-07-30T10:48:24+00:00'
+      diagnosis:
+        summary: Deterministic observations remain stale relative to the active trial,
+          so there is insufficient aligned evidence to justify lifecycle intervention
+          or code repair in this run.
+        severity: warning
+        evidence_references: &id010
+        - campaign.status=running
+        - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
+        - observations:obs_97ab1cf0ea84
+        - observations:obs_7543bea8eb52
+        - recent_meta_reports:meta_20260730_104030_005667ed
+        - process.running=true
+        - scientific_controller.status=running
+        root_causes:
+        - Observed metrics reference prior trial ids rather than the active trial,
+          indicating evidence freshness/alignment lag.
+        - A reconciliation was already requested in the prior meta-controller run
+          and recorded as wait while process/artifacts were advancing, so repeating
+          immediate control is unlikely to change state.
+        - No bounded operational fault is evidenced in process/controller liveness
+          that would justify an automatic repair patch.
+      evidence_references: *id010
+      actions:
+      - kind: no_action
+        summary: Record evidence-limited state and wait for fresh, active-trial-aligned
+          observations before issuing stop/continue/reconcile control again.
+        campaign_action: none
+        status: recorded
+      proposal_only_changes: []
+      rollback_plan: No patch or campaign lifecycle change applied; rollback is not
+        required.
+      unresolved_risks:
+      - If observation alignment does not catch up to the active trial, future control
+        decisions remain evidence-constrained.
+      - Continuing execution without fresh observations may consume compute before
+        productivity can be validly reassessed.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        snapshot: compact
+      controller_status:
+        status: completed
+        last_run_id: meta_20260730_104812_951e9f9c
+        last_run_at: '2026-07-30T10:48:24+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Deterministic observations remain stale relative to the active trial,
+          so there is insufficient aligned evidence to justify lifecycle intervention
+          or code repair in this run.
+        next_run_at: null
+        consecutive_failures: 0
+      created_at: '2026-07-30T10:48:25+00:00'
+- id: op_ebfa2dad75da
+  created_at: '2026-07-30T10:48:25+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: completed
+        last_run_id: meta_20260730_104812_951e9f9c
+        last_run_at: '2026-07-30T10:48:24+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Deterministic observations remain stale relative to the active trial,
+          so there is insufficient aligned evidence to justify lifecycle intervention
+          or code repair in this run.
+        next_run_at: null
+        consecutive_failures: 0
+- id: op_77e241375c1a
+  created_at: '2026-07-30T10:48:27+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 588370
+        last_run_id: meta_20260730_104812_951e9f9c
+        last_run_at: '2026-07-30T10:48:24+00:00'
+        next_run_at: '2026-07-31T10:48:26+00:00'
+        mandate_version: sha256:304f993eccb6bef126fc943813a5c6023c413e71023f69b5464c52c790eaaf1e
+        summary: Deterministic observations remain stale relative to the active trial,
+          so there is insufficient aligned evidence to justify lifecycle intervention
+          or code repair in this run.
 /candidate_experiments/-:
   id: cand_20260723_augmentation_gap_test
   title: Increase 13C rotation augmentation to counter observed generalisation gaps
