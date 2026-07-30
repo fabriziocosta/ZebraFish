@@ -17,6 +17,8 @@ meta_controller:
     - src/agent_campaign_loop.py
     - src/scientific_state.py
     - src/observation_engine.py
+    - src/campaign_watchdog.py
+    - src/experiment_protocol.py
     - src/dashboard_data.py
     - src/dashboard_api.py
     - src/meta_controller.py
@@ -24,6 +26,7 @@ meta_controller:
     - configs/meta_controller.yaml
     - configs/experiment_campaigns/*.yaml
     - tests/test_meta_controller.py
+    - tests/test_observation_engine.py
   forbidden_prefixes:
     - state/
     - artifacts/

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime
 import json
 from pathlib import Path
@@ -38,6 +38,8 @@ class MultitaskExperimentData:
     y_true_holdout: dict[str, Any]
     label_maps: dict[str, dict[int, str]]
     class_labels: dict[str, list[int]]
+    y_true_lockbox: dict[str, Any] = field(default_factory=dict)
+    split_manifest: dict[str, Any] | None = None
 
 
 @dataclass
@@ -73,6 +75,8 @@ class ExperimentArtifacts:
     confusion_dir: str | None = None
     predictions_dir: str | None = None
     logbook_path: str | None = None
+    split_manifest_path: str | None = None
+    lockbox_summary_metrics_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -411,14 +415,19 @@ def prepare_multitask_experiment_data(
     *,
     holdout_fraction: float,
     validation_fraction_within_train: float,
+    lockbox_fraction: float = 0.0,
+    lockbox_evaluation: bool = False,
     train_num_random_rotations: int = 0,
     rotation_range_degrees: float = 5.0,
     random_state: int = 0,
+    split_random_state: int | None = None,
 ) -> MultitaskExperimentData:
     splits = split_labeled_tensor_dataset_by_instance(
         dataset,
         holdout_fraction=holdout_fraction,
         validation_fraction_within_train=validation_fraction_within_train,
+        lockbox_fraction=lockbox_fraction,
+        split_random_state=split_random_state,
         random_state=random_state,
     )
     X_train, y_train, train_metadata = augment_training_tensors_with_rotations(
@@ -471,6 +480,16 @@ def prepare_multitask_experiment_data(
         y_true_holdout=y_true_holdout,
         label_maps=label_maps,
         class_labels=class_labels,
+        y_true_lockbox=(
+            {
+                "action": splits.y_lockbox,
+                "compound": splits.compound_lockbox,
+                "concentration": splits.concentration_lockbox,
+            }
+            if lockbox_evaluation
+            else {}
+        ),
+        split_manifest=splits.split_manifest,
     )
 
 
@@ -893,6 +912,33 @@ def evaluate_multitask_estimator(
         label_maps=label_maps,
         class_labels=class_labels,
     )
+
+
+def persist_lockbox_evaluation(
+    *,
+    output_dir: str | Path,
+    estimator: Any,
+    experiment: MultitaskExperimentData,
+) -> Path:
+    """Evaluate the protected split into a separate, explicitly named artifact.
+
+    The file is never merged into ordinary validation summaries. Callers must
+    invoke this only after the exploratory replicate gate has frozen selection.
+    """
+
+    if not experiment.y_true_lockbox or len(experiment.splits.X_lockbox) == 0:
+        raise ValueError("lockbox evaluation requested but no protected split is available")
+    reports = evaluate_multitask_estimator(
+        estimator,
+        experiment.splits.X_lockbox,
+        experiment.y_true_lockbox,
+        label_maps=experiment.label_maps,
+        class_labels=experiment.class_labels,
+    )
+    path = Path(output_dir) / "lockbox_summary_metrics.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _summary_frames_from_reports(reports).to_csv(path, index=False)
+    return path
 
 
 def _renormalize_probabilities_without_control(

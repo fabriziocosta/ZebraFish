@@ -27,6 +27,7 @@ from src.scientific_state import (
     load_state,
     record_entity,
     save_state,
+    transactional_update,
     update_controller_state,
 )
 
@@ -152,6 +153,7 @@ def collect_snapshot(root: str | Path, campaign_config: dict[str, Any]) -> dict[
         },
         "meta_controller": meta_state,
         "observations": observations,
+        "known_evidence_ids": [str(item.get("id")) for item in observations if isinstance(item, dict) and item.get("id")],
         "recent_meta_reports": reports,
         "repository": {
             "revision": _git(root_path, ["rev-parse", "HEAD"]),
@@ -266,7 +268,99 @@ def validate_patch(patch: str, config: dict[str, Any]) -> tuple[str, ...]:
         raise PatchSafetyError(f"patch contains non-allowlisted paths: {', '.join(unsafe)}")
     if any(token in patch for token in (".env", "secrets", "artifacts/", "state/")):
         raise PatchSafetyError("patch contains a forbidden sensitive path")
+    added_lines = "\n".join(
+        line[1:] for line in patch.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    lowered = added_lines.lower()
+    unsafe_code_patterns = (
+        "os.system(",
+        "subprocess.popen(",
+        "subprocess.call(",
+        "subprocess.run(",
+        "shell=true",
+        "eval(",
+        "exec(",
+        "__import__(",
+        "openai_api_key",
+        "getenv(\"openai",
+    )
+    if any(pattern in lowered for pattern in unsafe_code_patterns):
+        raise PatchSafetyError("patch contains an unsafe subprocess, dynamic-code, or secret-access pattern")
+    # A repair may improve how the objective is observed, but it may not
+    # silently redefine what the campaign means.  Those changes are proposals.
+    protected_scientific_tokens = (
+        "primary_metric",
+        "optimization_direction",
+        "guardrail",
+        "minimums:",
+        "dataset_semantics",
+        "architecture",
+        "model_family",
+    )
+    config_paths = [path for path in paths if path.startswith("configs/experiment_campaigns/")]
+    if config_paths and any(token in lowered for token in protected_scientific_tokens):
+        raise PatchSafetyError("patch attempts to alter a protected scientific campaign field")
+    # Removing tests, skipping tests, or weakening assertions is never a
+    # permissible self-healing operation.
+    if any(path.startswith("tests/") for path in paths):
+        removed = [line for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
+        weakened = ("skip", "xfail", "assert true", "pass #", "return true")
+        if any(any(token in line.lower() for token in weakened) for line in removed):
+            raise PatchSafetyError("patch weakens or removes verification coverage")
+    if any(path in {"configs/meta_controller.yaml", "docs/meta_controller_mandate.md"} for path in paths):
+        raise PatchSafetyError("constitutional mandate and meta-controller policy are not autonomously mutable")
+    if any(
+        path.startswith("tests/")
+        and any(token in lowered for token in ("verification", "default_verifications", "pytest.skip", "pytestmark"))
+        for path in paths
+    ):
+        raise PatchSafetyError("meta-controller cannot alter its verification policy")
+    if "src/meta_controller.py" in paths and any(
+        token in lowered for token in ("subprocess", "eval(", "exec(", "__import__", "os.environ", "secrets")
+    ):
+        raise PatchSafetyError("meta-controller patch contains a forbidden self-modification construct")
     return tuple(paths)
+
+
+def required_verification_names(paths: Iterable[str], config: dict[str, Any]) -> tuple[str, ...]:
+    """Select verification deterministically from changed paths."""
+
+    configured = _verification_map(config)
+    names: list[str] = []
+    defaults = [str(name) for name in config.get("default_verifications", [])]
+    for path in paths:
+        if path.startswith(("src/scientific_state.py", "src/autonomous_campaign.py", "src/agent_campaign_loop.py")):
+            names.extend(defaults)
+            break
+    names.extend(defaults)
+    for path in paths:
+        if path.startswith("dashboard/") and "dashboard-build" in configured:
+            names.append("dashboard-build")
+        if path.startswith("src/observation_engine.py") and "observation-tests" in configured:
+            names.append("observation-tests")
+        if path.startswith("tests/") and "full-python-tests" in configured:
+            names.append("full-python-tests")
+    return tuple(dict.fromkeys(name for name in names if name in configured))
+
+
+def _reverse_unified_patch(patch: str) -> str:
+    """Generate a text reverse diff suitable for ``git apply``."""
+
+    lines = patch.splitlines(keepends=True)
+    result: list[str] = []
+    for line in lines:
+        if line.startswith("--- a/"):
+            result.append("+++ b/" + line[len("--- a/"):])
+        elif line.startswith("+++ b/"):
+            result.append("--- a/" + line[len("+++ b/"):])
+        elif line.startswith("+") and not line.startswith("+++"):
+            result.append("-" + line[1:])
+        elif line.startswith("-") and not line.startswith("---"):
+            result.append("+" + line[1:])
+        else:
+            result.append(line)
+    return "".join(result)
 
 
 def _verification_map(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -329,9 +423,11 @@ def _persist_report(root: Path, campaign_config: dict[str, Any], report: dict[st
         report["controller_status"]["status"] = "meta_controller_safe_stop"
         report["unresolved_risks"] = list(report.get("unresolved_risks", [])) + ["Repeated meta-controller failures exceeded the configured limit."]
     report["controller_status"]["consecutive_failures"] = consecutive_failures
-    state = record_entity(state, "meta_controller_runs", report["id"], report, actor="meta_controller")
-    state = update_controller_state(state, {"meta_controller": report["controller_status"]}, actor="meta_controller")
-    save_state(state_path, state)
+    def mutate(current: dict[str, Any]) -> dict[str, Any]:
+        if report["id"] not in current.get("entities", {}).get("meta_controller_runs", {}):
+            current = record_entity(current, "meta_controller_runs", report["id"], report, actor="meta_controller")
+        return update_controller_state(current, {"meta_controller": report["controller_status"]}, actor="meta_controller")
+    transactional_update(state_path, mutate)
     report_root = root / str(load_meta_config(root, campaign_config).get("report_root", "state/meta_controller/reports"))
     _write_json_atomic(report_root / f"{report['id']}.json", report)
 
@@ -368,16 +464,31 @@ def request_decision(root: Path, campaign_config: dict[str, Any], config: dict[s
     return decision
 
 
+def _validate_decision_evidence(decision: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    known = {str(value) for value in snapshot.get("known_evidence_ids", [])}
+    for reference in decision.get("diagnosis", {}).get("evidence_references", []):
+        if str(reference) in {"controller_state", "campaign_state", "process", "repository"}:
+            continue
+        if str(reference) not in known:
+            raise MetaDecisionError(f"diagnosis references unavailable evidence: {reference}")
+
+
 def apply_patch_in_worktree(root: Path, config: dict[str, Any], patch: str, run_id: str, *, verification_names: Iterable[str] | None = None, runner: Callable[..., Any] | None = None) -> dict[str, Any]:
     paths = validate_patch(patch, config)
-    names = list(verification_names or config.get("default_verifications", []))
+    deterministic_names = list(required_verification_names(paths, config))
+    requested_names = list(verification_names or [])
+    names = list(dict.fromkeys(deterministic_names + requested_names))
     if not names:
         raise PatchSafetyError("patch action must select at least one allowlisted verification")
     commands = validate_verifications([str(name) for name in names], config)
+    baseline_revision = _git(root, ["rev-parse", "HEAD"])
+    baseline_status = _git(root, ["status", "--short", "--", *paths])
+    if baseline_status:
+        raise PatchSafetyError(f"targeted files have pre-existing user changes: {baseline_status}")
     worktree = root / str(config.get("worktree_root", "state/meta_controller/worktrees")) / run_id
     worktree.parent.mkdir(parents=True, exist_ok=True)
     try:
-        created = subprocess.run(["git", "worktree", "add", "--detach", str(worktree), "HEAD"], cwd=root, capture_output=True, text=True, check=False)
+        created = subprocess.run(["git", "worktree", "add", "--detach", str(worktree), baseline_revision], cwd=root, capture_output=True, text=True, check=False)
         if created.returncode != 0:
             raise PatchSafetyError(f"could not create isolated worktree: {created.stderr.strip()}")
         checked = subprocess.run(["git", "apply", "--check", "-"], cwd=worktree, input=patch, capture_output=True, text=True, check=False)
@@ -398,12 +509,38 @@ def apply_patch_in_worktree(root: Path, config: dict[str, Any], patch: str, run_
         if any(item["returncode"] != 0 for item in verification):
             return {"status": "verification_failed", "paths": paths, "worktree": str(worktree), "verification": verification}
         status = _git(root, ["status", "--short", "--", *paths])
-        if status:
-            return {"status": "overlapping_user_changes", "paths": paths, "worktree": str(worktree), "verification": verification, "overlap": status}
+        if status != baseline_status:
+            return {
+                "status": "overlapping_user_changes",
+                "paths": paths,
+                "worktree": str(worktree),
+                "verification": verification,
+                "overlap": {"before": baseline_status, "after": status},
+                "baseline_revision": baseline_revision,
+            }
+        if _git(root, ["rev-parse", "HEAD"]) != baseline_revision:
+            return {"status": "main_revision_changed", "paths": paths, "worktree": str(worktree), "verification": verification, "baseline_revision": baseline_revision}
         apply_main = subprocess.run(["git", "apply", "-"], cwd=root, input=patch, capture_output=True, text=True, check=False)
         if apply_main.returncode != 0:
-            return {"status": "main_application_failed", "paths": paths, "worktree": str(worktree), "verification": verification, "error": apply_main.stderr.strip()}
-        return {"status": "applied", "paths": paths, "worktree": str(worktree), "verification": verification, "rollback_patch": patch}
+            return {"status": "main_application_failed", "paths": paths, "worktree": str(worktree), "verification": verification, "error": apply_main.stderr.strip(), "baseline_revision": baseline_revision}
+        post_health = _git(root, ["diff", "--check", "--", *paths])
+        if post_health:
+            reverse_patch = _reverse_unified_patch(patch)
+            subprocess.run(["git", "apply", "-R", "-"], cwd=root, input=patch, capture_output=True, text=True, check=False)
+            return {"status": "post_application_health_failed", "paths": paths, "worktree": str(worktree), "verification": verification, "error": post_health, "reverse_patch": reverse_patch, "baseline_revision": baseline_revision}
+        reverse_patch = _reverse_unified_patch(patch)
+        return {
+            "status": "applied",
+            "paths": paths,
+            "worktree": str(worktree),
+            "verification": verification,
+            "baseline_revision": baseline_revision,
+            "patch": patch,
+            "reverse_patch": reverse_patch,
+            "rollback_patch": reverse_patch,
+            "rollback_mode": "apply",
+            "post_application_health": "passed",
+        }
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(worktree)], cwd=root, capture_output=True, text=True, check=False)
 
@@ -418,6 +555,7 @@ def run_once(root: str | Path, campaign_config: dict[str, Any], *, client: Any |
         mandate, mandate_version, mandate_path = read_mandate(root_path, config)
         snapshot = collect_snapshot(root_path, campaign_config)
         decision = request_decision(root_path, campaign_config, config, mandate, mandate_version, snapshot, client=client)
+        _validate_decision_evidence(decision, snapshot)
         actions: list[dict[str, Any]] = []
         for action in decision["actions"]:
             action_result = {"kind": action["kind"], "summary": action["summary"], "campaign_action": action["campaign_action"], "status": "recorded"}
@@ -529,9 +667,10 @@ def _meta_state(root: Path, campaign_config: dict[str, Any]) -> dict[str, Any]:
 
 def _set_meta_status(root: Path, campaign_config: dict[str, Any], updates: dict[str, Any]) -> None:
     state_path = root / str(campaign_config.get("scientific_state", {}).get("path", "state/scientific_state.yaml"))
-    state = _meta_state(root, campaign_config)
-    state = update_controller_state(state, {"meta_controller": updates}, actor="meta_controller")
-    save_state(state_path, state)
+    transactional_update(
+        state_path,
+        lambda state: update_controller_state(state, {"meta_controller": updates}, actor="meta_controller"),
+    )
 
 
 def stop_loop(root: str | Path, campaign_config: dict[str, Any], *, reason: str = "dashboard stop requested") -> bool:

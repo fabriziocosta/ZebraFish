@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 
 from src.models.common import _ensure_labels_1d, _ensure_tensor_5d
+from src.experiment_protocol import split_manifest, stable_hash
 
 
 @dataclass
@@ -37,6 +38,14 @@ class TensorDatasetSplits:
     compound_holdout: np.ndarray | None
     concentration_holdout: np.ndarray | None
     metadata_holdout: pd.DataFrame
+    lockbox_indices: np.ndarray
+    lockbox_instance_ids: np.ndarray
+    X_lockbox: torch.Tensor
+    y_lockbox: np.ndarray
+    compound_lockbox: np.ndarray | None
+    concentration_lockbox: np.ndarray | None
+    metadata_lockbox: pd.DataFrame
+    split_manifest: dict[str, object] | None = None
 
 
 def augment_training_tensors_with_rotations(
@@ -124,6 +133,8 @@ def split_labeled_tensor_dataset_by_instance(
     *,
     holdout_fraction: float,
     validation_fraction_within_train: float,
+    lockbox_fraction: float = 0.0,
+    split_random_state: int | None = None,
     random_state: int = 0,
 ) -> TensorDatasetSplits:
     """Split a persisted labeled tensor dataset by source instance id.
@@ -149,43 +160,78 @@ def split_labeled_tensor_dataset_by_instance(
         .drop_duplicates(subset=["original_instance_id"])
         .reset_index(drop=True)
     )
+    partition_seed = int(random_state if split_random_state is None else split_random_state)
+    if not 0.0 <= float(holdout_fraction) < 1.0:
+        raise ValueError("holdout_fraction must be in [0, 1)")
+    if not 0.0 <= float(lockbox_fraction) < 1.0:
+        raise ValueError("lockbox_fraction must be in [0, 1)")
+    if float(holdout_fraction) + float(lockbox_fraction) >= 1.0:
+        raise ValueError("holdout_fraction and lockbox_fraction must leave training data")
+
     instance_ids = instance_df["original_instance_id"].to_numpy()
     instance_labels = instance_df["label"].to_numpy()
 
-    try:
-        train_val_instance_ids, holdout_instance_ids = train_test_split(
-            instance_ids,
-            test_size=holdout_fraction,
-            random_state=random_state,
-            stratify=instance_labels,
-        )
-    except ValueError:
-        train_val_instance_ids, holdout_instance_ids = train_test_split(
-            instance_ids,
-            test_size=holdout_fraction,
-            random_state=random_state,
-            stratify=None,
-        )
+    reserved_fraction = float(holdout_fraction) + float(lockbox_fraction)
+    if reserved_fraction == 0.0:
+        train_val_instance_ids = instance_ids
+        reserved_instance_ids = np.asarray([], dtype=instance_ids.dtype)
+    else:
+        try:
+            train_val_instance_ids, reserved_instance_ids = train_test_split(
+                instance_ids,
+                test_size=reserved_fraction,
+                random_state=partition_seed,
+                stratify=instance_labels,
+            )
+        except ValueError:
+            train_val_instance_ids, reserved_instance_ids = train_test_split(
+                instance_ids,
+                test_size=reserved_fraction,
+                random_state=partition_seed,
+                stratify=None,
+            )
+
+    if lockbox_fraction:
+        relative_lockbox_fraction = float(lockbox_fraction) / reserved_fraction
+        reserved_df = instance_df[instance_df["original_instance_id"].isin(reserved_instance_ids)]
+        try:
+            holdout_instance_ids, lockbox_instance_ids = train_test_split(
+                reserved_df["original_instance_id"].to_numpy(),
+                test_size=relative_lockbox_fraction,
+                random_state=partition_seed + 1,
+                stratify=reserved_df["label"].to_numpy(),
+            )
+        except ValueError:
+            holdout_instance_ids, lockbox_instance_ids = train_test_split(
+                reserved_df["original_instance_id"].to_numpy(),
+                test_size=relative_lockbox_fraction,
+                random_state=partition_seed + 1,
+                stratify=None,
+            )
+    else:
+        holdout_instance_ids = reserved_instance_ids
+        lockbox_instance_ids = np.asarray([], dtype=instance_ids.dtype)
 
     train_val_instance_df = instance_df[instance_df["original_instance_id"].isin(train_val_instance_ids)].reset_index(drop=True)
     try:
         train_instance_ids, val_instance_ids = train_test_split(
             train_val_instance_df["original_instance_id"].to_numpy(),
             test_size=validation_fraction_within_train,
-            random_state=random_state,
+            random_state=partition_seed,
             stratify=train_val_instance_df["label"].to_numpy(),
         )
     except ValueError:
         train_instance_ids, val_instance_ids = train_test_split(
             train_val_instance_df["original_instance_id"].to_numpy(),
             test_size=validation_fraction_within_train,
-            random_state=random_state,
+            random_state=partition_seed,
             stratify=None,
         )
 
     train_indices = metadata_all.index[metadata_all["original_instance_id"].isin(train_instance_ids)].to_numpy(dtype=np.int64, copy=True)
     val_indices = metadata_all.index[metadata_all["original_instance_id"].isin(val_instance_ids)].to_numpy(dtype=np.int64, copy=True)
     holdout_indices = metadata_all.index[metadata_all["original_instance_id"].isin(holdout_instance_ids)].to_numpy(dtype=np.int64, copy=True)
+    lockbox_indices = metadata_all.index[metadata_all["original_instance_id"].isin(lockbox_instance_ids)].to_numpy(dtype=np.int64, copy=True)
 
     tensors = dataset["tensors"]
     labels = dataset["labels"]
@@ -227,4 +273,22 @@ def split_labeled_tensor_dataset_by_instance(
         if concentration_labels is not None
         else None,
         metadata_holdout=metadata_all.iloc[holdout_indices].reset_index(drop=True),
+        lockbox_indices=lockbox_indices,
+        lockbox_instance_ids=np.asarray(lockbox_instance_ids),
+        X_lockbox=tensors[lockbox_indices],
+        y_lockbox=labels[lockbox_indices].detach().cpu().numpy(),
+        compound_lockbox=compound_labels[lockbox_indices].detach().cpu().numpy() if compound_labels is not None else None,
+        concentration_lockbox=concentration_labels[lockbox_indices].detach().cpu().numpy()
+        if concentration_labels is not None
+        else None,
+        metadata_lockbox=metadata_all.iloc[lockbox_indices].reset_index(drop=True),
+        split_manifest=split_manifest(
+            dataset_hash=stable_hash({"metadata": metadata_all.to_dict(orient="records"), "label_count": len(labels)}),
+            split_seed=partition_seed,
+            train_instance_ids=train_instance_ids,
+            validation_instance_ids=val_instance_ids,
+            holdout_instance_ids=holdout_instance_ids,
+            lockbox_instance_ids=lockbox_instance_ids,
+            fractions={"holdout": float(holdout_fraction), "lockbox": float(lockbox_fraction), "validation_within_train": float(validation_fraction_within_train)},
+        ),
     )

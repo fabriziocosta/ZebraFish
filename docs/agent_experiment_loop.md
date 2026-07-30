@@ -92,6 +92,11 @@ The model may request only these actions:
 
 Parameter patching is allowlisted per experiment in `configs/agent_experiment_loop.yaml`. This prevents model-proposed patches from changing incompatible architecture keys unless those paths are explicitly listed. Campaign configs also set `max_patch_leaf_count`, so the model cannot bundle a broad multi-change sweep into one trial. The current campaign configs allow up to four YAML leaf edits, enough for two schedule controls plus a paired loss-weight change. Proposed patches are validated before the logbook records them as the next trial.
 
+This lower-level interface is compatibility infrastructure. New scientific
+claims must go through the protocol-compliant autonomous campaign controller
+documented in `scientific_experiment_framework.md`; the legacy loop does not
+provide replicate, baseline, or lockbox validity by itself.
+
 ## Campaign Control
 
 The campaign layer treats a `next` chain as one optimization trial. For example, the CNN campaign is a trial sequence of `10C` pretraining followed by `13C` fine-tuning. The transformer campaign is `12T` followed by `15T`.

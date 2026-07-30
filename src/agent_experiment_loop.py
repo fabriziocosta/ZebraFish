@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
@@ -510,6 +511,14 @@ def launch_experiment(config: dict[str, Any], experiment: str, *, dry_run: bool 
             env=child_env,
         )
     state["pid"] = int(process.pid)
+    state["command"] = command
+    state["command_hash"] = hashlib.sha256("\0".join(command).encode("utf-8")).hexdigest()
+    proc_stat = Path(f"/proc/{process.pid}/stat")
+    if proc_stat.exists():
+        try:
+            state["process_start_ticks"] = proc_stat.read_text(encoding="utf-8").split()[21]
+        except (OSError, IndexError):
+            pass
     _write_json(state_path, state)
     return state
 

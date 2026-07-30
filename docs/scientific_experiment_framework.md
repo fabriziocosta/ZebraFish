@@ -59,7 +59,10 @@ UMAP files, and predictions remain in the existing artifact directories.
 The top-level structure is:
 
 ```yaml
-version: 1
+version: 2
+protocol_version: scientific-loop-v3
+writer_protocol: scientific-loop-v3
+state_revision: 0
 project: {}
 entities:
   components: {}
@@ -75,6 +78,53 @@ relations: []
 controller_state: {}
 audit_log: []
 ```
+
+All read-modify-write operations use the advisory state lock, revisioned
+atomic replacement, and a writer identity. A stale revision is never silently
+overwritten. Immutable trials, experiments, observations, replicate groups,
+lockbox confirmations, and belief updates are append-only; candidate status
+changes after selection are lifecycle events.
+
+## Validity protocol for new candidates
+
+Historical runs are labelled `legacy_single_seed`, `historical_only`, and
+`lockbox_status: not_evaluated`. They remain useful context but cannot support
+a new confirmatory claim. New candidates require one preregistered
+intervention, an exact paired baseline and checkpoint lineage, a fixed split
+manifest, three fixed training seeds, structured primary/guardrail/falsification
+rules, and a deterministic cost reservation.
+
+The split seed is independent of the training seed. Every replicate therefore
+uses the same train/validation/lockbox partition while changing only registered
+training randomness. A candidate is at most `replicate_supported` when all
+three replicates are valid, the primary metric is present, the action guardrail
+passes in every replicate, and the paired Student-t interval clears the
+preregistered minimum effect. Loss curves and loss gaps are diagnostic only.
+
+The lockbox is protected from candidate selection and LLM context. It is
+evaluated only after the exploratory replicate gate freezes the candidate, and
+its result is written to a separate immutable `lockbox_confirmations` record.
+Leaderboards distinguish legacy, exploratory, replicate-supported,
+statistically unresolved, guardrail-failed, and lockbox-confirmed evidence.
+
+## Recovery and supervision
+
+The low-cost watchdog checks process identity, artifact freshness, history
+advancement, checkpoint availability, non-finite metrics, and resource health
+without invoking an LLM. Persistent deterministic triggers may invite the
+scientific controller to terminate a run, but a healthy run continues when the
+LLM is unavailable. A termination finalizes partial evidence, settles its launch
+reservation, and searches for the already selected replicate or a new bounded
+candidate; it does not restart an unrelated prerequisite or silently fall back
+to a fresh checkpoint.
+
+The daily meta-controller reads [`meta_controller_mandate.md`](meta_controller_mandate.md)
+and may repair only allowlisted operational code. It works in an isolated git
+worktree, runs deterministic verification selected from changed paths, checks
+the main revision and dirty targeted paths before application, stores forward
+and reverse patches, and rolls back on post-application health failure.
+Objective, primary metric, guardrail meaning, architecture, dataset semantics,
+the mandate, and verification policy are proposal-only or protected.
 
 ### Immutable experiments
 

@@ -5147,6 +5147,136 @@ entities:
       provenance:
         created_by: observation_engine
         created_at: '2026-07-30T09:33:50+00:00'
+    obs_7c44a065a15b:
+      id: obs_7c44a065a15b
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_latent_alignment_weight changed by at most 0 over the last
+        5 recorded points.
+      measurements:
+        metric: train_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+    obs_c2ec2336cefd:
+      id: obs_c2ec2336cefd
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: val_latent_alignment_weight changed by at most 0 over the last 5
+        recorded points.
+      measurements:
+        metric: val_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+    obs_376d91e6875e:
+      id: obs_376d91e6875e
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_feature_alignment_loss and val_feature_alignment_loss differ
+        by 0.647057 at the final recorded point.
+      measurements:
+        train_metric: train_feature_alignment_loss
+        validation_metric: val_feature_alignment_loss
+        train: 1.682558810781865
+        validation: 2.3296154027893428
+        gap: 0.6470565920074778
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+    obs_5a8f86ec1106:
+      id: obs_5a8f86ec1106
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_latent_alignment_loss and val_latent_alignment_loss differ
+        by 0.647057 at the final recorded point.
+      measurements:
+        train_metric: train_latent_alignment_loss
+        validation_metric: val_latent_alignment_loss
+        train: 1.682558810781865
+        validation: 2.3296154027893428
+        gap: 0.6470565920074778
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+    obs_afbc011f1fee:
+      id: obs_afbc011f1fee
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_feature_alignment_loss and val_feature_alignment_loss differ
+        by 0.750087 at the final recorded point.
+      measurements:
+        train_metric: train_feature_alignment_loss
+        validation_metric: val_feature_alignment_loss
+        train: 2.0245430659128245
+        validation: 2.774629845505669
+        gap: 0.7500867795928445
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T13:03:12+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T13:03:12+00:00'
+    obs_51d39b24a02b:
+      id: obs_51d39b24a02b
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_latent_alignment_loss and val_latent_alignment_loss differ
+        by 0.750087 at the final recorded point.
+      measurements:
+        train_metric: train_latent_alignment_loss
+        validation_metric: val_latent_alignment_loss
+        train: 2.0245430659128245
+        validation: 2.774629845505669
+        gap: 0.7500867795928445
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T13:03:12+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T13:03:12+00:00'
   hypotheses:
     hyp_cnn_pretrain_finetune_objective:
       title: Moderate 13C rotation augmentation will improve CNN compound generalisation
@@ -5853,11 +5983,11 @@ controller_state:
     - 'non-allowlisted parameter: 10C.13C.rotation_range_degrees'
     created_at: '2026-07-23T14:29:02'
   safe_stop_reason: null
-  last_poll_at: '2026-07-30T12:03:10'
+  last_poll_at: '2026-07-30T14:03:21'
   last_controller_status: running_progress
   last_rejection_reason: null
-  last_decision: propose_trial
-  last_decision_at: '2026-07-30T12:02:54'
+  last_decision: no_action
+  last_decision_at: '2026-07-30T14:03:21'
   termination_reason: user_requested
   initialization:
     completed_at: '2026-07-25T16:28:55+00:00'
@@ -5880,8 +6010,12 @@ controller_state:
       so there is insufficient aligned evidence to justify lifecycle intervention
       or code repair in this run.
   live_trigger_polls: 0
-  live_trigger_types: []
-  last_live_observation_at: null
+  live_trigger_types:
+  - generalisation_gap
+  - validation_plateau
+  last_live_observation_at: '2026-07-30T14:03:12'
+  last_live_llm_intervention_at: '2026-07-30T14:03:21'
+  last_live_decision: no_action
 audit_log:
 - id: op_bd4dc5214365
   created_at: '2026-07-23T13:15:00+00:00'
@@ -14360,6 +14494,234 @@ audit_log:
       active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
       active_stage: 13C
       last_poll_at: '2026-07-30T12:03:10'
+      last_controller_status: running_progress
+- id: op_ff2aa334122b
+  created_at: '2026-07-30T12:03:11+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_7c44a065a15b
+    value:
+      id: obs_7c44a065a15b
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_latent_alignment_weight changed by at most 0 over the last
+        5 recorded points.
+      measurements:
+        metric: train_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+- id: op_54833b26454f
+  created_at: '2026-07-30T12:03:11+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_c2ec2336cefd
+    value:
+      id: obs_c2ec2336cefd
+      type: validation_plateau
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: val_latent_alignment_weight changed by at most 0 over the last 5
+        recorded points.
+      measurements:
+        metric: val_latent_alignment_weight
+        window: 5
+        spread: 0.0
+        last_value: 0.0
+      detection:
+        method: deterministic_rule
+        rule: metric_plateau
+        threshold: 0.002
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+- id: op_57f00a736e53
+  created_at: '2026-07-30T12:03:11+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_376d91e6875e
+    value:
+      id: obs_376d91e6875e
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_feature_alignment_loss and val_feature_alignment_loss differ
+        by 0.647057 at the final recorded point.
+      measurements:
+        train_metric: train_feature_alignment_loss
+        validation_metric: val_feature_alignment_loss
+        train: 1.682558810781865
+        validation: 2.3296154027893428
+        gap: 0.6470565920074778
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+- id: op_0b9f1d05f045
+  created_at: '2026-07-30T12:03:11+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_5a8f86ec1106
+    value:
+      id: obs_5a8f86ec1106
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_latent_alignment_loss and val_latent_alignment_loss differ
+        by 0.647057 at the final recorded point.
+      measurements:
+        train_metric: train_latent_alignment_loss
+        validation_metric: val_latent_alignment_loss
+        train: 1.682558810781865
+        validation: 2.3296154027893428
+        gap: 0.6470565920074778
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T12:03:11+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T12:03:11+00:00'
+- id: op_16b848ee1967
+  created_at: '2026-07-30T12:03:11+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 1
+      live_trigger_types:
+      - generalisation_gap
+      - validation_plateau
+      last_live_observation_at: '2026-07-30T13:03:11'
+- id: op_7b3f4e762dc7
+  created_at: '2026-07-30T12:03:11+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-30T13:03:11'
+      last_controller_status: running_progress
+- id: op_5081aa64f611
+  created_at: '2026-07-30T13:03:12+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_afbc011f1fee
+    value:
+      id: obs_afbc011f1fee
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_feature_alignment_loss and val_feature_alignment_loss differ
+        by 0.750087 at the final recorded point.
+      measurements:
+        train_metric: train_feature_alignment_loss
+        validation_metric: val_feature_alignment_loss
+        train: 2.0245430659128245
+        validation: 2.774629845505669
+        gap: 0.7500867795928445
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T13:03:12+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T13:03:12+00:00'
+- id: op_e5c4cea79d74
+  created_at: '2026-07-30T13:03:12+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_51d39b24a02b
+    value:
+      id: obs_51d39b24a02b
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_latent_alignment_loss and val_latent_alignment_loss differ
+        by 0.750087 at the final recorded point.
+      measurements:
+        train_metric: train_latent_alignment_loss
+        validation_metric: val_latent_alignment_loss
+        train: 2.0245430659128245
+        validation: 2.774629845505669
+        gap: 0.7500867795928445
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+      reliability: 0.9
+      created_at: '2026-07-30T13:03:12+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-30T13:03:12+00:00'
+- id: op_81af494d1264
+  created_at: '2026-07-30T13:03:12+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 2
+      live_trigger_types:
+      - generalisation_gap
+      - validation_plateau
+      last_live_observation_at: '2026-07-30T14:03:12'
+- id: op_bc6734b48fe7
+  created_at: '2026-07-30T13:03:21+00:00'
+  actor: autonomous_controller
+  operation:
+    operation: controller_update
+    value:
+      last_live_llm_intervention_at: '2026-07-30T14:03:21'
+      live_trigger_polls: 0
+      last_live_decision: no_action
+- id: op_30329300891c
+  created_at: '2026-07-30T13:03:21+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      last_decision: no_action
+      last_decision_at: '2026-07-30T14:03:21'
+      decision_rejections: 0
+      safe_stop_reason: null
+- id: op_61eb76928750
+  created_at: '2026-07-30T13:03:21+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-30T14:03:21'
       last_controller_status: running_progress
 /candidate_experiments/-:
   id: cand_20260723_augmentation_gap_test

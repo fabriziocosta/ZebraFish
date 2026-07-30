@@ -688,6 +688,7 @@ def build_investigation(
     metric_plot = _metric_plot(series, metric_display, state, run_status.get("experiment_id") or campaign_state.get("current_stage"))
     configured_epochs = None
     stage = campaign_state.get("current_stage")
+    stage_config: dict[str, Any] = {}
     if stage:
         stage_config_path = _resolve(root_path, campaign_state.get("trial_configs", {}).get(stage))
         stage_config, _ = _read_yaml(stage_config_path) if stage_config_path else ({}, None)
@@ -760,6 +761,7 @@ def build_investigation(
         "metric_series": series[-80:],
         "metric_plot": metric_plot,
         "artifact_updated_at": datetime.fromtimestamp(max(artifact_mtimes), tz=timezone.utc).isoformat(timespec="seconds") if artifact_mtimes else None,
+        "split_manifest": stage_state.get("split_manifest") or run_status.get("split_manifest"),
     }
     current["metric_plot"]["comparisons"] = _comparable_metric_series(state, stage, run_dir, primary_metric)
     filters = dict(filters or {})
@@ -777,11 +779,63 @@ def build_investigation(
         if isinstance(campaign_state.get("purpose"), dict)
         else ""
     ) or (primary_candidate.get("purpose", "") if primary_candidate else "") or _entity_text(stage_state.get("purpose", {})) or "Purpose not recorded for this stage."
+    active_experiment_record = state.get("entities", {}).get("experiments", {}).get(current.get("id"), {})
+    if isinstance(active_experiment_record, dict):
+        configuration_record = active_experiment_record.get("configuration", {})
+        if isinstance(configuration_record, dict):
+            current["split_manifest"] = configuration_record.get("split_manifest")
+            current["configuration_hash"] = configuration_record.get("resolved_configuration_hash")
+        execution_record = active_experiment_record.get("execution", {})
+        if isinstance(execution_record, dict):
+            current["checkpoint_manifest"] = execution_record.get("checkpoint_manifest")
     current["compute"] = {
         "consumed_gpu_hours": None,
         "expected_gpu_hours": primary_candidate.get("estimated_gpu_hours") if primary_candidate else None,
         "remaining_gpu_hours": campaign_config.get("remaining_gpu_hours"),
+        "reserved_gpu_hours": None,
+        "availability": "unknown",
         "available": bool(primary_candidate and primary_candidate.get("estimated_gpu_hours") is not None) or campaign_config.get("remaining_gpu_hours") is not None,
+    }
+    reservations = state.get("controller_state", {}).get("launch_reservations", {})
+    if isinstance(reservations, dict):
+        active_reservations = [
+            item for item in reservations.values()
+            if isinstance(item, dict) and item.get("status") in {"reserved", "launched"}
+        ]
+        current["compute"]["reserved_gpu_hours"] = sum(float(item.get("estimated_gpu_hours", 0.0)) for item in active_reservations)
+    active_trial = state.get("entities", {}).get("trials", {}).get(campaign_state.get("current_trial_id"), {})
+    if isinstance(active_trial, dict):
+        current["replicate_group_id"] = active_trial.get("replicate_group_id")
+        current["replicate_index"] = active_trial.get("replicate_index")
+        current["replicate_seed"] = active_trial.get("replicate_seed")
+        current["evaluation_protocol"] = active_trial.get("evaluation_protocol")
+    if not current.get("evaluation_protocol"):
+        current["evaluation_protocol"] = campaign_config.get("evaluation_protocol", "three_seed_replicate_lockbox_v1")
+    replicate_group = state.get("controller_state", {}).get("active_replicate_group", {})
+    configured_replicates = int(campaign_config.get("minimum_replicates", 3))
+    current["replicates"] = {
+        "required": max(1, len(replicate_group.get("seeds", []))) if isinstance(replicate_group, dict) and replicate_group.get("seeds") else configured_replicates,
+        "completed": len(replicate_group.get("completed_trial_ids", [])) if isinstance(replicate_group, dict) else 0,
+        "seeds": replicate_group.get("seeds", []) if isinstance(replicate_group, dict) else [],
+        "aggregate": state.get("controller_state", {}).get("last_replicate_aggregate"),
+        "status": (state.get("controller_state", {}).get("last_replicate_aggregate") or {}).get("score", {}).get("status", "not_started"),
+    }
+    active_candidate_id = primary_candidate.get("id") if primary_candidate else None
+    confirmations = state.get("entities", {}).get("lockbox_confirmations", {})
+    matching_confirmation = next(
+        (item for item in confirmations.values() if isinstance(item, dict) and item.get("candidate_id") == active_candidate_id),
+        None,
+    ) if isinstance(confirmations, dict) else None
+    lockbox_status = (
+        str(matching_confirmation.get("status"))
+        if matching_confirmation
+        else "protected_not_evaluated"
+        if stage_config.get("lockbox_fraction") or campaign_config.get("lockbox_required")
+        else "not_configured"
+    )
+    current["lockbox"] = {
+        "status": lockbox_status,
+        "fraction": stage_config.get("lockbox_fraction", 0.0),
     }
     current["baseline_comparison"] = {"available": False, "reason": "No directly comparable baseline metric is recorded for the active stage."}
     current["artifact_freshness"] = {"status": "fresh" if artifact_age is not None and artifact_age <= 7200 else "stale" if artifact_age is not None else "unknown", "age_seconds": artifact_age, "updated_at": current.get("artifact_updated_at")}
@@ -794,14 +848,14 @@ def build_investigation(
         "predictions": [
             {
                 "id": f"prediction-{index}",
-                "statement": statement,
+                "statement": statement if isinstance(statement, str) else json.dumps(statement, sort_keys=True),
                 "hypothesis_ids": primary_candidate.get("hypothesis_ids", [hypothesis_id]) if primary_candidate else [hypothesis_id],
                 "observed_status": "not_yet_observed",
                 "source": "pre_registered",
             }
             for index, statement in enumerate(raw_predictions, start=1)
         ],
-        "falsification_criteria": raw_falsification,
+        "falsification_criteria": [item if isinstance(item, str) else json.dumps(item, sort_keys=True) for item in raw_falsification],
         "missing_reason": "This experiment has no registered predictions and cannot currently distinguish competing hypotheses." if registration_status == "missing" else None,
     }
     errors = [error for error in (config_error, campaign_state_error, run_status_error, stage_state_error) if error]
@@ -921,9 +975,20 @@ def build_investigation(
             "process_live": process_running,
             "artifact_freshness": {"status": "fresh" if artifact_age is not None and artifact_age <= 7200 else "stale" if artifact_age is not None else "unknown", "age_seconds": artifact_age, "updated_at": current.get("artifact_updated_at")},
             "controller_metadata": "stale" if state.get("controller_state", {}).get("safe_stop_reason") and process_running else "consistent",
+            "protocol_skew": state.get("protocol_version") not in {None, "scientific-loop-v3"},
+            "state_revision": state.get("state_revision"),
+            "writer_protocol": state.get("writer_protocol"),
             "intervention_required": any(alert["severity"] == "critical" for alert in alerts),
+            "watchdog": state.get("controller_state", {}).get("watchdog", {}),
         },
         "controller": state.get("controller_state", {}),
+        "protocol": {
+            "state_version": state.get("version"),
+            "state_protocol": state.get("protocol_version"),
+            "campaign_protocol": campaign_config.get("evaluation_protocol", "legacy_single_seed"),
+            "evidence_classification": "legacy_single_seed" if str(state.get("protocol_version", "")).startswith("legacy") else "current_protocol",
+            "split_hash": (current.get("split_manifest") or {}).get("hash") if isinstance(current.get("split_manifest"), dict) else None,
+        },
         "meta_controller": _meta_controller_summary(state, campaign_id),
         "graph": focused_graph,
         "diagnostics": {
@@ -938,6 +1003,7 @@ def build_investigation(
                 "classified_observations": classified_count,
                 "missing_baseline": True,
                 "missing_metric": metric_display.get("role") != "primary",
+                "missing_lockbox_confirmation": current.get("lockbox", {}).get("status") != "confirmed",
             },
         },
     }

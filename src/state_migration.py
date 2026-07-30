@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 import csv
+import json
 from typing import Any
 
 from src.observation_engine import generate_observations
-from src.scientific_state import apply_operations, load_state, record_entity, save_state, update_controller_state
+from src.campaign_watchdog import inspect_campaign
+from src.scientific_state import apply_operations, load_state, merge_nonconflicting_states, record_entity, transactional_update, update_controller_state
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -33,6 +35,32 @@ def _iter_trial_dirs(root: Path) -> list[Path]:
     return sorted(result)
 
 
+def _read_ledger_rows(root: Path) -> list[dict[str, Any]]:
+    """Read legacy CSV/JSONL ledgers without treating them as canonical state."""
+
+    rows: list[dict[str, Any]] = []
+    csv_path = root / "trials.csv"
+    if csv_path.exists():
+        try:
+            with csv_path.open(newline="", encoding="utf-8") as handle:
+                rows.extend(dict(row) for row in csv.DictReader(handle))
+        except (OSError, csv.Error):
+            pass
+    jsonl_path = root / "trials.jsonl"
+    if jsonl_path.exists():
+        try:
+            for line in jsonl_path.read_text(encoding="utf-8").splitlines():
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(value, dict):
+                    rows.append(value)
+        except OSError:
+            pass
+    return rows
+
+
 def migrate_campaign(
     campaign_config: dict[str, Any],
     *,
@@ -47,6 +75,14 @@ def migrate_campaign(
     observations_added = 0
     relations_added = 0
     root = Path(campaign_config["artifacts"]["root"])
+    campaign_state_path = root / "campaign_state.json"
+    live_reconciliation = None
+    if campaign_state_path.exists():
+        live_reconciliation = inspect_campaign(
+            campaign_config,
+            campaign_state_path=campaign_state_path,
+            stale_after_seconds=float(campaign_config.get("observation", {}).get("watchdog_stale_after_seconds", 180.0)),
+        )
     for trial_dir in _iter_trial_dirs(root):
         manifest = _read_json(trial_dir / "trial_manifest.json")
         summary = _read_json(trial_dir / "trial_summary.json")
@@ -66,12 +102,21 @@ def migrate_campaign(
                     "trial_id": trial_id,
                     "stage": stage,
                     "status": "completed" if run_dir else "unknown",
+                    "evaluation_protocol": "legacy_single_seed",
+                    "objective_eligibility": "historical_only",
+                    "lockbox_status": "not_evaluated",
+                    "checkpoint_status": "legacy_unverified",
                     "configuration": {"trial_config": trial_configs.get(stage)},
                     "execution": {
                         "run_dir": run_dir,
+                        "protocol_version": "legacy_single_seed",
                         "provenance": {"created_by": "state_migration", "source": str(trial_dir / "trial_manifest.json")},
                     },
-                    "outcome": {"summary": summary if summary else None},
+                "outcome": {"summary": summary if summary else None},
+                "evaluation_protocol": "legacy_single_seed",
+                "objective_eligibility": "historical_only",
+                "lockbox_status": "not_evaluated",
+                "checkpoint_status": "legacy_unverified",
                     "provenance": {"created_by": "state_migration", "source": str(trial_dir)},
                 }
                 state = record_entity(state, "experiments", experiment_id, record, actor="state_migration")
@@ -115,14 +160,63 @@ def migrate_campaign(
             imported_trials += 1
         else:
             existing_trials += 1
+    # Some historical campaigns kept only ledgers, not per-trial manifests.
+    # Import those rows as immutable single-seed evidence with explicit
+    # migration provenance rather than silently dropping them.
+    for row in _read_ledger_rows(root):
+        trial_id = str(row.get("trial_id") or row.get("id") or "")
+        if not trial_id or trial_id in state["entities"]["trials"]:
+            continue
+        stages_for_trial = list(campaign_config["campaign"].get("stages", []))
+        stage_ids = [f"{trial_id}:{stage}" for stage in stages_for_trial]
+        for stage_id, stage in zip(stage_ids, stages_for_trial):
+            if stage_id not in state["entities"]["experiments"]:
+                state = record_entity(
+                    state,
+                    "experiments",
+                    stage_id,
+                    {
+                        "id": stage_id,
+                        "trial_id": trial_id,
+                        "stage": stage,
+                        "status": "imported",
+                        "outcome": {"legacy_ledger": row},
+                        "provenance": {"created_by": "state_migration", "source": str(root / "trials.csv" if (root / "trials.csv").exists() else root / "trials.jsonl")},
+                    },
+                    actor="state_migration",
+                )
+        state = record_entity(
+            state,
+            "trials",
+            trial_id,
+            {
+                "id": trial_id,
+                "status": row.get("status", "imported"),
+                "stage_experiment_ids": stage_ids,
+                "outcome": {"legacy_ledger": row},
+                "evaluation_protocol": "single_seed_historical",
+                "objective_eligibility": "historical_only",
+                "lockbox_status": "not_evaluated",
+                "checkpoint_status": "legacy_unverified",
+                "provenance": {"created_by": "state_migration", "source": str(root)},
+            },
+            actor="state_migration",
+        )
+        imported_trials += 1
     state = update_controller_state(
         state,
         {
             "last_migration": {"campaign_id": campaign_config["campaign"]["id"], "imported_trials": imported_trials, "imported_stages": imported_stages},
+            "protocol_reconciliation": {
+                "status": "live_legacy_run_observed" if live_reconciliation and live_reconciliation.get("process_running") else "historical_import",
+                "live_process": live_reconciliation,
+                "protocol_version": "legacy_single_seed",
+                "objective_eligibility": "historical_only",
+            },
         },
         actor="state_migration",
     )
-    save_state(target, state)
+    transactional_update(target, lambda current: merge_nonconflicting_states(current, state))
     return {
         "state_path": str(target),
         "imported_trials": imported_trials,

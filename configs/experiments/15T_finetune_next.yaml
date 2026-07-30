@@ -2,7 +2,10 @@ dataset_artifact_path: null
 pretraining_config_path: artifacts/pretrained_commutative_transformer/config.yaml
 experiment_output_dir: artifacts/nb15T_commutative_transformer_full_finetune
 holdout_fraction: 0.25
+lockbox_fraction: 0.1
+lockbox_evaluation: false
 validation_fraction_within_train: 0.2
+split_random_state: 0
 train_num_random_rotations: 6
 rotation_range_degrees: 12.0
 freeze_backbone: false

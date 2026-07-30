@@ -1,7 +1,7 @@
 agent:
   model: gpt-5.3-codex
   reasoning_effort: medium
-  poll_seconds: 3600
+  poll_seconds: 60
   max_output_tokens: 2000
   api_key_env: OPENAI_API_KEY
 controller:
@@ -12,6 +12,7 @@ state:
 scientific_state:
   path: state/scientific_state.yaml
 observation:
+  detector_version: observation-v2
   live_monitor_enabled: true
   live_trigger_types: [loss_plateau, validation_plateau, generalisation_gap, non_finite_metric, unstable_metric, regression_against_baseline]
   live_min_persistent_polls: 2
@@ -23,6 +24,42 @@ observation:
   instability_zscore: 3.0
   regression_tolerance: 0.05
   runtime_anomaly_factor: 2.0
+  watchdog_interval_seconds: 60
+  watchdog_stale_after_seconds: 180
+  metric_specs:
+    train_loss:
+      role: loss
+      direction: minimize
+      paired_validation: val_loss
+      early_stop_eligible: true
+    val_loss:
+      role: loss
+      direction: minimize
+      early_stop_eligible: true
+    train_self_probe_loss:
+      role: loss
+      direction: minimize
+      paired_validation: val_self_probe_loss
+      early_stop_eligible: true
+    val_self_probe_loss:
+      role: loss
+      direction: minimize
+      early_stop_eligible: true
+    compound.macro_f1:
+      role: primary
+      direction: maximize
+      early_stop_eligible: false
+    action.accuracy:
+      role: guardrail
+      direction: maximize
+      early_stop_eligible: true
+  minimum_epochs_before_termination: 12
+  insufficient_data_is_trigger: false
+  primary_metric: compound.macro_f1
+  required_primary_metric: true
+  guardrail_metric: action.accuracy
+  guardrail_minimum: 0.30
+  slope_confidence_z: 1.96
 logbook:
   path: EXPERIMENTS_LOGBOOK.md
 experiments:

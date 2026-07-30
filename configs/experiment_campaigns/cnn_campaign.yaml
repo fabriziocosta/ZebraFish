@@ -1,11 +1,26 @@
 campaign:
   id: cnn_pretrain_finetune
   loop_config: configs/agent_experiment_loop.yaml
-  poll_seconds: 3600
+  poll_seconds: 60
   trial_budget: 20
   max_patch_leaf_count: 5
   max_single_trial_gpu_hours: 20
+  compute_budget_gpu_hours: 60
   remaining_gpu_hours: null
+  replicate_seeds: [0, 1, 2]
+  minimum_replicates: 3
+  lockbox_required: true
+  lockbox_path: null
+  evaluation_protocol: three_seed_replicate_lockbox_v1
+  require_protocol_compliance: true
+  split_seed: 0
+  minimum_effect: 0.02
+  alpha: 0.05
+  max_candidate_family_size: 10
+  multiplicity_policy: preregistered_sequential_fdr
+  lockbox_confirmation_required: true
+  reservation_grace_fraction: 0.10
+  enforce_candidate_lineage: true
   max_decision_retries: 3
   scientific_state_path: state/scientific_state.yaml
   stages: ["10C", "13C"]

@@ -288,6 +288,7 @@ def _copy_stage_configs(
     trial_dir: Path,
     *,
     trial_patch: dict[str, Any] | None = None,
+    replicate_seed: int | None = None,
 ) -> dict[str, str]:
     trial_patch = trial_patch or {}
     config_dir = trial_dir / "configs"
@@ -301,6 +302,10 @@ def _copy_stage_configs(
             patched = merge_dicts(read_yaml_mapping(source), trial_patch[stage])
         else:
             patched = read_yaml_mapping(source)
+        if replicate_seed is not None:
+            optimization = patched.setdefault("optimization_config", {})
+            if isinstance(optimization, dict):
+                optimization["random_state"] = int(replicate_seed)
         patched["experiment_output_dir"] = str(_stage_output_root(trial_dir, stage))
         write_yaml_mapping(target, patched)
         copied[stage] = str(target)
@@ -525,6 +530,10 @@ def start_trial(
     checkpoint_config_path: str | Path | None = None,
     checkpoint_path: str | Path | None = None,
     checkpoint_source_experiment: str | None = None,
+    checkpoint_manifest: dict[str, Any] | None = None,
+    replicate_group_id: str | None = None,
+    replicate_index: int = 0,
+    replicate_seed: int | None = None,
     dry_run: bool = False,
     allow_existing_trial_dir: bool = False,
 ) -> dict[str, Any]:
@@ -569,7 +578,13 @@ def start_trial(
             dry_run=True,
         )
     else:
-        trial_configs = _copy_stage_configs(campaign_config, loop_config, trial_dir, trial_patch=trial_patch)
+        trial_configs = _copy_stage_configs(
+            campaign_config,
+            loop_config,
+            trial_dir,
+            trial_patch=trial_patch,
+            replicate_seed=replicate_seed,
+        )
         checkpoint_reuse = None
         if launch_stage_index > 0:
             wire_pretrain_checkpoint_into_finetune_config(
@@ -583,10 +598,13 @@ def start_trial(
                 "run_dir": str(checkpoint_run_dir),
                 "config_path": str(checkpoint_config_path),
                 "checkpoint_path": str(checkpoint_path),
+                "manifest": checkpoint_manifest,
             }
         else:
             checkpoint_reuse = None
     state = {
+        "protocol_version": str(campaign_config.get("campaign", {}).get("evaluation_protocol", "legacy_single_seed")),
+        "writer_protocol": "campaign-controller-v3",
         "campaign_id": campaign_id,
         "status": "dry_run" if dry_run else "launching",
         "phase": "running",
@@ -600,6 +618,11 @@ def start_trial(
         "planned_stages": stages,
         "executed_stages": [],
         "checkpoint_reuse": checkpoint_reuse,
+        "checkpoint_manifest": checkpoint_manifest,
+        "replicate_group_id": replicate_group_id,
+        "replicate_index": int(replicate_index),
+        "replicate_seed": replicate_seed,
+        "split_seed": campaign_config.get("campaign", {}).get("split_seed", 0),
         "started_at": _now_iso(),
         "updated_at": _now_iso(),
         "trials": [],
@@ -648,6 +671,10 @@ def _trial_manifest(campaign_config: dict[str, Any], state: dict[str, Any]) -> d
         "planned_stages": state.get("planned_stages", campaign_config["campaign"]["stages"]),
         "executed_stages": state.get("executed_stages", []),
         "checkpoint_reuse": state.get("checkpoint_reuse"),
+        "checkpoint_manifest": state.get("checkpoint_manifest"),
+        "replicate_group_id": state.get("replicate_group_id"),
+        "replicate_index": state.get("replicate_index", 0),
+        "replicate_seed": state.get("replicate_seed"),
         "updated_at": _now_iso(),
     }
 

@@ -47,6 +47,35 @@ def _patch_for_stage(candidate: dict[str, Any], stage: str) -> dict[str, Any]:
     return patch
 
 
+def _strict_protocol_enabled(campaign_config: dict[str, Any]) -> bool:
+    protocol = str(campaign_config.get("campaign", {}).get("evaluation_protocol", ""))
+    return bool(campaign_config.get("campaign", {}).get("require_protocol_compliance", False)) or protocol.startswith("three_seed")
+
+
+def _flatten_values(value: Any, *, prefix: str = "") -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {prefix: value}
+    result: dict[str, Any] = {}
+    for key, nested in value.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        result.update(_flatten_values(nested, prefix=path))
+    return result
+
+
+def _structured_rule(value: Any, *, field: str) -> bool:
+    if isinstance(value, dict):
+        return (
+            isinstance(value.get("metric"), str)
+            and isinstance(value.get("comparison"), str)
+            and isinstance(value.get("direction"), str)
+            and isinstance(value.get("minimum_effect"), (int, float))
+            and not isinstance(value.get("minimum_effect"), bool)
+        )
+    if isinstance(value, list):
+        return bool(value) and all(isinstance(item, dict) and _structured_rule(item, field=field) for item in value)
+    return False
+
+
 def validate_candidate(
     candidate: dict[str, Any],
     *,
@@ -56,6 +85,7 @@ def validate_candidate(
     active_process: bool = False,
 ) -> CandidateValidation:
     reasons: list[str] = []
+    strict_protocol = _strict_protocol_enabled(campaign_config)
     if not isinstance(candidate, dict):
         return CandidateValidation(False, ("candidate must be a mapping",))
     stages = list(campaign_config.get("campaign", {}).get("stages", []))
@@ -81,10 +111,62 @@ def validate_candidate(
     for hypothesis_id in hypothesis_ids:
         if hypothesis_id not in state.get("entities", {}).get("hypotheses", {}):
             reasons.append(f"unknown hypothesis: {hypothesis_id}")
+    configured_seeds = campaign_config.get("campaign", {}).get("replicate_seeds", [0, 1, 2])
+    try:
+        configured_seeds = [int(value) for value in configured_seeds]
+    except (TypeError, ValueError):
+        configured_seeds = [0, 1, 2]
+    candidate_seeds = candidate.get("replicate_seeds", configured_seeds)
+    if not isinstance(candidate_seeds, list) or len(candidate_seeds) != len(set(candidate_seeds)):
+        reasons.append("replicate_seeds must be a list of unique seed values")
+    elif len(candidate_seeds) < int(campaign_config.get("campaign", {}).get("minimum_replicates", 3)):
+        reasons.append("candidate does not contain the required number of fixed-seed replicates")
+    elif [int(value) for value in candidate_seeds] != configured_seeds:
+        reasons.append("candidate replicate seeds must match the campaign protocol")
     if active_process:
         reasons.append("another process is active")
     if len(stages) != len(set(stages)):
         reasons.append("campaign stages must be unique")
+    allowed_stages = candidate.get("allowed_stages")
+    if allowed_stages is not None:
+        if not isinstance(allowed_stages, list) or not allowed_stages:
+            reasons.append("allowed_stages must be a non-empty list")
+        else:
+            unknown_allowed = [stage for stage in allowed_stages if stage not in stages]
+            if unknown_allowed:
+                reasons.append(f"candidate allowed_stages are not campaign stages: {', '.join(map(str, unknown_allowed))}")
+            if len(allowed_stages) != len(set(allowed_stages)):
+                reasons.append("candidate allowed_stages must be unique")
+    if campaign_config.get("campaign", {}).get("enforce_candidate_lineage", False):
+        base_experiment = candidate.get("base_experiment")
+        if not base_experiment:
+            reasons.append("candidate requires base_experiment")
+        elif not (
+            base_experiment in state.get("entities", {}).get("experiments", {})
+            or base_experiment in state.get("entities", {}).get("trials", {})
+        ):
+            reasons.append(f"unknown base_experiment: {base_experiment}")
+    if strict_protocol:
+        if not candidate.get("base_experiment"):
+            reasons.append("protocol candidate requires exact base_experiment")
+        if not candidate.get("base_stage"):
+            reasons.append("protocol candidate requires exact base_stage")
+        elif candidate.get("base_stage") not in stages:
+            reasons.append("protocol candidate base_stage is not a campaign stage")
+        if not isinstance(candidate.get("fixed_variables"), dict):
+            reasons.append("protocol candidate requires fixed_variables mapping")
+        if not isinstance(candidate.get("varied_variables"), dict) or not candidate.get("varied_variables"):
+            reasons.append("protocol candidate requires varied_variables mapping")
+        if not _structured_rule(candidate.get("expected_outcomes"), field="expected_outcomes"):
+            reasons.append("expected_outcomes must contain structured metric rules")
+        if not _structured_rule(candidate.get("falsification_criteria"), field="falsification_criteria"):
+            reasons.append("falsification_criteria must contain structured metric rules")
+        if not candidate.get("resolved_base_configuration_hash"):
+            reasons.append("protocol candidate requires resolved_base_configuration_hash")
+        if not candidate.get("source_checkpoint") and not candidate.get("source_checkpoint_id"):
+            reasons.append("protocol candidate requires an exact source checkpoint")
+        if not isinstance(candidate.get("baseline"), str) or not candidate.get("baseline"):
+            reasons.append("protocol candidate requires an exact paired baseline reference")
 
     total_leaves: list[str] = []
     patch = candidate.get("configuration_patch", candidate.get("trial_patch", {}))
@@ -111,6 +193,8 @@ def validate_candidate(
                 ranges = stage_cfg.get("parameter_ranges", {})
             range_spec = _lookup(ranges, leaf)
             value = _lookup(stage_patch, leaf)
+            if strict_protocol and range_spec is None:
+                reasons.append(f"parameter has no explicit range/allowlist leaf: {stage}.{leaf}")
             if isinstance(range_spec, dict) and value is not None:
                 minimum = range_spec.get("min")
                 maximum = range_spec.get("max")
@@ -127,7 +211,8 @@ def validate_candidate(
     if len(total_leaves) > max_leaves:
         reasons.append(f"patch changes {len(total_leaves)} leaves; maximum is {max_leaves}")
 
-    estimated_cost = candidate.get("cost", {}).get("estimated_gpu_hours", candidate.get("estimated_gpu_hours"))
+    cost = candidate.get("cost") if isinstance(candidate.get("cost"), dict) else {}
+    estimated_cost = cost.get("estimated_gpu_hours", candidate.get("estimated_gpu_hours"))
     if estimated_cost is None:
         reasons.append("candidate requires estimated_gpu_hours")
     else:
@@ -140,11 +225,51 @@ def validate_candidate(
             if maximum is not None and estimated_cost > float(maximum):
                 reasons.append("candidate exceeds maximum single-trial GPU budget")
             remaining = campaign_config.get("campaign", {}).get("remaining_gpu_hours")
-            if remaining is not None and estimated_cost > float(remaining):
+            replicate_count = len(candidate_seeds) if isinstance(candidate_seeds, list) else 1
+            total_estimated = estimated_cost * replicate_count
+            reservations = state.get("controller_state", {}).get("launch_reservations", {})
+            reserved = sum(
+                float(item.get("estimated_gpu_hours", 0.0))
+                for item in reservations.values()
+                if isinstance(item, dict) and item.get("status") in {"reserved", "launched"}
+            )
+            consumed = 0.0
+            for experiment in state.get("entities", {}).get("experiments", {}).values():
+                if not isinstance(experiment, dict):
+                    continue
+                resources = experiment.get("execution", {}).get("resources", {}) if isinstance(experiment.get("execution"), dict) else {}
+                value = resources.get("actual_gpu_hours")
+                if isinstance(value, (int, float)) and float(value) >= 0:
+                    consumed += float(value)
+            total_budget = remaining
+            if total_budget is None:
+                total_budget = campaign_config.get("campaign", {}).get("compute_budget_gpu_hours")
+            if total_budget is not None and consumed + reserved + total_estimated > float(total_budget):
                 reasons.append("candidate exceeds remaining GPU budget")
 
     required = ("expected_outcomes", "falsification_criteria", "risks")
     for field in required:
         if not candidate.get(field):
             reasons.append(f"candidate requires {field}")
+    if strict_protocol and isinstance(candidate.get("fixed_variables"), dict):
+        base_id = candidate.get("base_experiment")
+        base = state.get("entities", {}).get("experiments", {}).get(base_id, {})
+        resolved = base.get("configuration", {}).get("resolved_configuration", {}) if isinstance(base, dict) else {}
+        if not isinstance(resolved, dict) or not resolved:
+            reasons.append("base experiment lacks a resolved configuration for protocol comparison")
+        else:
+            from src.experiment_protocol import config_hash
+            if candidate.get("resolved_base_configuration_hash") != config_hash(resolved):
+                reasons.append("resolved_base_configuration_hash does not match the immutable base configuration")
+            fixed = _flatten_values(candidate["fixed_variables"])
+            resolved_flat = _flatten_values(resolved)
+            for path, expected in fixed.items():
+                if path not in resolved_flat:
+                    reasons.append(f"fixed variable is absent from base configuration: {path}")
+                elif resolved_flat[path] != expected:
+                    reasons.append(f"fixed variable does not match base configuration: {path}")
+        varied = _flatten_values(candidate.get("varied_variables", {})) if isinstance(candidate.get("varied_variables"), dict) else {}
+        patch_leaves = {path.split(".", 1)[1] for path in total_leaves if "." in path}
+        if varied and set(varied) != patch_leaves:
+            reasons.append("varied_variables must exactly describe every changed configuration leaf")
     return CandidateValidation(not reasons, tuple(dict.fromkeys(reasons)), tuple(total_leaves))

@@ -3,7 +3,10 @@ unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_
 pretraining_config_path: artifacts/pretrained_commutative_cnn/config.yaml
 experiment_output_dir: artifacts/nb13C_commutative_cnn_full_finetune
 holdout_fraction: 0.25
+lockbox_fraction: 0.1
+lockbox_evaluation: false
 validation_fraction_within_train: 0.2
+split_random_state: 0
 train_num_random_rotations: 8
 rotation_range_degrees: 10.0
 freeze_backbone: false

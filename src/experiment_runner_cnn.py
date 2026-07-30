@@ -29,6 +29,7 @@ from src.training.workflow import (
     fit_estimator_on_experiment,
     persist_experiment_artifacts,
     persist_pretraining_artifacts,
+    persist_lockbox_evaluation,
     prepare_multitask_experiment_data,
 )
 from src.training.checkpointing import TrainingSuspended, install_training_signal_handlers
@@ -158,7 +159,10 @@ def default_13c_config() -> dict[str, Any]:
         "pretraining_config_path": "artifacts/pretrained_commutative_cnn/config.yaml",
         "experiment_output_dir": "artifacts/nb13C_commutative_cnn_full_finetune",
         "holdout_fraction": 0.25,
+        "lockbox_fraction": 0.0,
+        "lockbox_evaluation": False,
         "validation_fraction_within_train": 0.20,
+        "split_random_state": 0,
         "train_num_random_rotations": 8,
         "rotation_range_degrees": 10.0,
         "freeze_backbone": False,
@@ -415,11 +419,16 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
     experiment = prepare_multitask_experiment_data(
         dataset,
         holdout_fraction=float(raw_config["holdout_fraction"]),
+        lockbox_fraction=float(raw_config.get("lockbox_fraction", 0.0)),
+        lockbox_evaluation=bool(raw_config.get("lockbox_evaluation", False)),
         validation_fraction_within_train=float(raw_config["validation_fraction_within_train"]),
         train_num_random_rotations=int(raw_config["train_num_random_rotations"]),
         rotation_range_degrees=float(raw_config["rotation_range_degrees"]),
+        split_random_state=int(raw_config.get("split_random_state", 0)),
         random_state=optimization_config.random_state,
     )
+    if experiment.split_manifest is not None:
+        write_yaml_mapping(run_dir / "split_manifest.yaml", to_yamlable(experiment.split_manifest))
 
     model = CommutativeCNNClassifier(
         model_config=pretraining_config.model_config,
@@ -442,10 +451,14 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
         model.training_plot_title = "Water-vs-other hot-start loss curves"
         model.learning_rate = float(raw_config["binary_learning_rate"])
         model.weight_decay = float(raw_config["binary_weight_decay"])
+        excluded_metadata = pd.concat(
+            [experiment.splits.metadata_holdout, experiment.splits.metadata_lockbox],
+            ignore_index=True,
+        )
         binary_pretraining_data = fit_chunked_water_vs_other_hot_start(
             model,
             raw_config["unlabeled_dataset_path"],
-            holdout_metadata=experiment.splits.metadata_holdout,
+            holdout_metadata=excluded_metadata,
             validation_fraction=float(raw_config["validation_fraction_within_train"]),
             epochs=int(raw_config["binary_pretraining_epochs"]),
             random_state=optimization_config.random_state,
@@ -496,6 +509,8 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
         probabilities_excluding_control=probabilities_excluding_control,
         y_true_excluding_control=y_true_excluding_control,
     )
+    if bool(raw_config.get("lockbox_evaluation", False)):
+        persist_lockbox_evaluation(output_dir=run_dir, estimator=model, experiment=experiment)
 
     holdout_embedding_projection = build_tensor_embedding_2d(
         model.transform(experiment.splits.X_holdout),
