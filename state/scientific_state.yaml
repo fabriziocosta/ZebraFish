@@ -1439,6 +1439,60 @@ entities:
         created_by: autonomous_controller
         source: campaign_stage_status
       created_at: '2026-07-30T09:33:50+00:00'
+    cnn_pretrain_finetune_20260730_113949_4d2c60:10C:
+      id: cnn_pretrain_finetune_20260730_113949_4d2c60:10C
+      trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+      stage: 10C
+      status: failed
+      configuration:
+        resolved_config_paths: &id003
+        - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/10C_pretrain_commutative_cnn_20260730_113952_config.yaml
+        trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/configs/10C_10C_pretrain_next.yaml
+      execution:
+        run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952
+        started_at: '2026-07-30T11:39:49'
+        completed_at: '2026-07-30T12:01:20'
+        artifacts:
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952
+          run_dir_source: state
+          latest_history_csvs: []
+          latest_history_tail: null
+          latest_pdfs: []
+          latest_config_yamls: *id003
+          latest_metrics: []
+          checkpoints: []
+          confusion_matrices: []
+          umap_pdfs: []
+          artifact_max_mtime: 1785407992.7943861
+          has_history: false
+          has_metrics: false
+          has_checkpoint: false
+          has_confusion_matrices: false
+          has_umap_pdf: false
+        provenance:
+          created_by: autonomous_controller
+          legacy_state: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/stage_state/10C.json
+      outcome:
+        controller_status: failed
+        run_status:
+          experiment: 10C
+          experiment_id: 10C_pretrain_commutative_cnn_20260730_113952
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/resume/10C_pretrain_commutative_cnn_20260730_113952_training_resume.pt
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952
+          status: terminated
+          suspend_marker_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/control/10C_pretrain_commutative_cnn_20260730_113952.suspend
+          terminated_at: '2026-07-30T12:00:38'
+          terminated_pid: 581330
+          terminating_at: '2026-07-30T12:00:38'
+          terminating_pid: 581330
+          termination_reason: replaced redundant 10C restart with direct 13C checkpoint-reuse
+            trial
+          termination_signal: SIGTERM
+          updated_at: '2026-07-30T11:39:52'
+      provenance:
+        created_by: autonomous_controller
+        source: campaign_stage_status
+      created_at: '2026-07-30T11:01:20+00:00'
   observations:
     obs_c57136a4ce8e:
       id: obs_c57136a4ce8e
@@ -5495,7 +5549,7 @@ entities:
           while multiple large generalization gaps persist. Continuing this run is
           likely to consume compute with low additional information gain.'
         severity: warning
-        evidence_references: &id003
+        evidence_references: &id004
         - observations:obs_97ab1cf0ea84
         - observations:obs_f82995756ef7
         - observations:obs_47459ea7dc7b
@@ -5511,7 +5565,7 @@ entities:
           overfitting or objective mismatch for this candidate configuration.
         - No bounded operational reliability fault is evidenced in controller/process
           status; the main issue is scientific productivity of the current run.
-      evidence_references: *id003
+      evidence_references: *id004
       actions:
       - kind: campaign_control
         summary: Request deterministic campaign stop for the current trial to prevent
@@ -5574,7 +5628,7 @@ entities:
           assessed from this snapshot. A reconciliation is needed to restore observation/state
           alignment before any stop/continue judgment.
         severity: warning
-        evidence_references: &id004
+        evidence_references: &id005
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -5591,7 +5645,7 @@ entities:
           without fresh measurements.
         - No bounded operational failure is evidenced for process/controller liveness;
           the immediate issue is evidence freshness/alignment.
-      evidence_references: *id004
+      evidence_references: *id005
       actions:
       - kind: campaign_control
         summary: Request deterministic reconciliation to refresh campaign state and
@@ -5648,7 +5702,7 @@ entities:
           so there is insufficient aligned evidence to justify lifecycle intervention
           or code repair in this run.
         severity: warning
-        evidence_references: &id005
+        evidence_references: &id006
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -5664,7 +5718,7 @@ entities:
           immediate control is unlikely to change state.
         - No bounded operational fault is evidenced in process/controller liveness
           that would justify an automatic repair patch.
-      evidence_references: *id005
+      evidence_references: *id006
       actions:
       - kind: no_action
         summary: Record evidence-limited state and wait for fresh, active-trial-aligned
@@ -5749,8 +5803,8 @@ relations:
   created_at: '2026-07-25T16:28:55+00:00'
 controller_state:
   status: running
-  active_trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
-  active_stage: 10C
+  active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+  active_stage: 13C
   last_migration:
     campaign_id: cnn_pretrain_finetune
     imported_trials: 0
@@ -5799,11 +5853,11 @@ controller_state:
     - 'non-allowlisted parameter: 10C.13C.rotation_range_degrees'
     created_at: '2026-07-23T14:29:02'
   safe_stop_reason: null
-  last_poll_at: '2026-07-30T11:47:37'
-  last_controller_status: running_wait
+  last_poll_at: '2026-07-30T12:03:10'
+  last_controller_status: running_progress
   last_rejection_reason: null
   last_decision: propose_trial
-  last_decision_at: '2026-07-30T11:39:49'
+  last_decision_at: '2026-07-30T12:02:54'
   termination_reason: user_requested
   initialization:
     completed_at: '2026-07-25T16:28:55+00:00'
@@ -11297,7 +11351,7 @@ audit_log:
       stage: 10C
       status: terminated
       configuration:
-        resolved_config_paths: &id006
+        resolved_config_paths: &id007
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -11307,7 +11361,7 @@ audit_log:
         artifacts:
           run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
           run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
-          latest_config_yamls: *id006
+          latest_config_yamls: *id007
           resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
         provenance:
           created_by: autonomous_controller
@@ -12788,7 +12842,7 @@ audit_log:
       stage: 10C
       status: completed
       configuration:
-        resolved_config_paths: &id007
+        resolved_config_paths: &id008
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -13070,7 +13124,7 @@ audit_log:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/epoch_140.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/10C_pretrain_commutative_cnn_20260725_174329_latest.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/latest.loss-curves.pdf
-          latest_config_yamls: *id007
+          latest_config_yamls: *id008
           latest_metrics:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_summary_metrics.csv
           checkpoints:
@@ -13656,7 +13710,7 @@ audit_log:
           while multiple large generalization gaps persist. Continuing this run is
           likely to consume compute with low additional information gain.'
         severity: warning
-        evidence_references: &id008
+        evidence_references: &id009
         - observations:obs_97ab1cf0ea84
         - observations:obs_f82995756ef7
         - observations:obs_47459ea7dc7b
@@ -13672,7 +13726,7 @@ audit_log:
           overfitting or objective mismatch for this candidate configuration.
         - No bounded operational reliability fault is evidenced in controller/process
           status; the main issue is scientific productivity of the current run.
-      evidence_references: *id008
+      evidence_references: *id009
       actions:
       - kind: campaign_control
         summary: Request deterministic campaign stop for the current trial to prevent
@@ -13912,7 +13966,7 @@ audit_log:
           assessed from this snapshot. A reconciliation is needed to restore observation/state
           alignment before any stop/continue judgment.
         severity: warning
-        evidence_references: &id009
+        evidence_references: &id010
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -13929,7 +13983,7 @@ audit_log:
           without fresh measurements.
         - No bounded operational failure is evidenced for process/controller liveness;
           the immediate issue is evidence freshness/alignment.
-      evidence_references: *id009
+      evidence_references: *id010
       actions:
       - kind: campaign_control
         summary: Request deterministic reconciliation to refresh campaign state and
@@ -14085,7 +14139,7 @@ audit_log:
           so there is insufficient aligned evidence to justify lifecycle intervention
           or code repair in this run.
         severity: warning
-        evidence_references: &id010
+        evidence_references: &id011
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -14101,7 +14155,7 @@ audit_log:
           immediate control is unlikely to change state.
         - No bounded operational fault is evidenced in process/controller liveness
           that would justify an automatic repair patch.
-      evidence_references: *id010
+      evidence_references: *id011
       actions:
       - kind: no_action
         summary: Record evidence-limited state and wait for fresh, active-trial-aligned
@@ -14163,6 +14217,150 @@ audit_log:
         summary: Deterministic observations remain stale relative to the active trial,
           so there is insufficient aligned evidence to justify lifecycle intervention
           or code repair in this run.
+- id: op_a114584a7fce
+  created_at: '2026-07-30T11:01:20+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      last_decision: no_action
+      last_decision_at: '2026-07-30T12:01:20'
+      decision_rejections: 0
+      safe_stop_reason: null
+- id: op_955627df00bc
+  created_at: '2026-07-30T11:01:20+00:00'
+  actor: autonomous_controller
+  operation:
+    operation: create
+    path: entities.experiments.cnn_pretrain_finetune_20260730_113949_4d2c60:10C
+    value:
+      id: cnn_pretrain_finetune_20260730_113949_4d2c60:10C
+      trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+      stage: 10C
+      status: failed
+      configuration:
+        resolved_config_paths: &id012
+        - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/10C_pretrain_commutative_cnn_20260730_113952_config.yaml
+        trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/configs/10C_10C_pretrain_next.yaml
+      execution:
+        run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952
+        started_at: '2026-07-30T11:39:49'
+        completed_at: '2026-07-30T12:01:20'
+        artifacts:
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952
+          run_dir_source: state
+          latest_history_csvs: []
+          latest_history_tail: null
+          latest_pdfs: []
+          latest_config_yamls: *id012
+          latest_metrics: []
+          checkpoints: []
+          confusion_matrices: []
+          umap_pdfs: []
+          artifact_max_mtime: 1785407992.7943861
+          has_history: false
+          has_metrics: false
+          has_checkpoint: false
+          has_confusion_matrices: false
+          has_umap_pdf: false
+        provenance:
+          created_by: autonomous_controller
+          legacy_state: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/stage_state/10C.json
+      outcome:
+        controller_status: failed
+        run_status:
+          experiment: 10C
+          experiment_id: 10C_pretrain_commutative_cnn_20260730_113952
+          resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/resume/10C_pretrain_commutative_cnn_20260730_113952_training_resume.pt
+          run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952
+          status: terminated
+          suspend_marker_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/control/10C_pretrain_commutative_cnn_20260730_113952.suspend
+          terminated_at: '2026-07-30T12:00:38'
+          terminated_pid: 581330
+          terminating_at: '2026-07-30T12:00:38'
+          terminating_pid: 581330
+          termination_reason: replaced redundant 10C restart with direct 13C checkpoint-reuse
+            trial
+          termination_signal: SIGTERM
+          updated_at: '2026-07-30T11:39:52'
+      provenance:
+        created_by: autonomous_controller
+        source: campaign_stage_status
+      created_at: '2026-07-30T11:01:20+00:00'
+- id: op_190fc7ded164
+  created_at: '2026-07-30T11:01:38+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: autonomous_safe_stop
+      safe_stop_reason: No new downstream 13C evidence is available yet, and the latest
+        controller/meta-controller state indicates stale or insufficient live evidence
+        for a safe lifecycle intervention at this poll.
+      last_decision: no_action
+      last_decision_at: '2026-07-30T12:01:38'
+- id: op_9d585fd2e659
+  created_at: '2026-07-30T11:01:38+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_113949_4d2c60
+      active_stage: 10C
+      last_poll_at: '2026-07-30T12:01:38'
+      last_controller_status: failed
+- id: op_035e266c17de
+  created_at: '2026-07-30T11:02:54+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: running
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      last_decision: propose_trial
+      last_decision_at: '2026-07-30T12:02:54'
+      decision_rejections: 0
+      last_rejection_reason: null
+      safe_stop_reason: null
+- id: op_12d862f3dedf
+  created_at: '2026-07-30T11:02:55+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 0
+      live_trigger_types: []
+      last_live_observation_at: null
+- id: op_dc225eefcb84
+  created_at: '2026-07-30T11:02:55+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-30T12:02:55'
+      last_controller_status: running_wait
+- id: op_ac4010ddc6d4
+  created_at: '2026-07-30T11:03:10+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 0
+      live_trigger_types: []
+      last_live_observation_at: null
+- id: op_851b74e816b6
+  created_at: '2026-07-30T11:03:10+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-30T12:03:10'
+      last_controller_status: running_progress
 /candidate_experiments/-:
   id: cand_20260723_augmentation_gap_test
   title: Increase 13C rotation augmentation to counter observed generalisation gaps

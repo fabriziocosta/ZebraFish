@@ -61,7 +61,7 @@ def validate_candidate(
     stages = list(campaign_config.get("campaign", {}).get("stages", []))
     if len(stages) < 1:
         reasons.append("campaign has no stages")
-    if candidate.get("status") not in {None, "proposed", "validated"}:
+    if candidate.get("status") not in {None, "proposed", "validated", "selected_for_execution"}:
         reasons.append(f"candidate status is not launchable: {candidate.get('status')!r}")
     if not candidate.get("id") and not candidate.get("candidate_id"):
         reasons.append("candidate requires id")

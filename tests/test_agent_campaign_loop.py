@@ -1313,6 +1313,41 @@ prompts:
                 start_trial(campaign_config, loop_config, start_trial="same_trial", dry_run=False)
             launch.assert_not_called()
 
+    def test_start_trial_can_launch_13c_with_reused_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            loop_path = self._write_loop_config(root)
+            campaign_path = self._write_campaign_config(root, loop_path)
+            campaign_config = load_campaign_config(campaign_path)
+            loop_config = load_loop_config(loop_path)
+            loop_config["experiments"]["13C"]["allowed_patch_paths"] = ["optimization_config"]
+            source_run = root / "source_run"
+            source_run.mkdir()
+            checkpoint = source_run / "encoder.pt"
+            checkpoint.write_bytes(b"checkpoint")
+            source_config = source_run / "resolved_config.yaml"
+            source_config.write_text(f"pretrained_encoder_path: {checkpoint}\n", encoding="utf-8")
+            with mock.patch("src.agent_experiment_loop.launch_experiment") as launch:
+                launch.return_value = {"active_experiment": "13C", "pid": 321}
+                state = start_trial(
+                    campaign_config,
+                    loop_config,
+                    start_trial="direct_13c",
+                    trial_patch={"13C": {"optimization_config": {"epochs": 6}}},
+                    start_stage="13C",
+                    checkpoint_run_dir=source_run,
+                    checkpoint_config_path=source_config,
+                    checkpoint_path=checkpoint,
+                    checkpoint_source_experiment="old_trial:10C",
+                )
+            self.assertEqual(state["current_stage"], "13C")
+            self.assertEqual(state["current_stage_index"], 1)
+            self.assertEqual(state["executed_stages"], [])
+            self.assertEqual(state["checkpoint_reuse"]["source_experiment"], "old_trial:10C")
+            self.assertEqual(launch.call_args.args[1], "13C")
+            config_text = Path(state["trial_configs"]["13C"]).read_text(encoding="utf-8")
+            self.assertIn(str(source_config), config_text)
+
     def test_write_trial_outputs_uses_auc_tie_breaker_in_leaderboard(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

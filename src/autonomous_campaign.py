@@ -788,6 +788,27 @@ def _apply_decision(
     return proposed_state, legacy_state, decision.get("reason") or decision["decision"]
 
 
+def _selected_recovery_candidate(scientific_state: dict[str, Any]) -> dict[str, Any] | None:
+    """Return an explicitly selected candidate after an interrupted launch.
+
+    This is a deterministic recovery path, not a new scientific decision: the
+    candidate was already selected and recorded before the previous process
+    ended.  It prevents a transient LLM no_action response from stranding the
+    campaign between trials.
+    """
+
+    candidates = scientific_state.get("entities", {}).get("candidate_experiments", {})
+    selected = [
+        value
+        for value in candidates.values()
+        if isinstance(value, dict) and value.get("status") == "selected_for_execution"
+    ]
+    if not selected:
+        return None
+    selected.sort(key=lambda value: str(value.get("created_at", "")), reverse=True)
+    return dict(selected[0])
+
+
 def run_autonomous_campaign(
     campaign_config: dict[str, Any],
     *,
@@ -817,6 +838,16 @@ def run_autonomous_campaign(
             return 0
         summary = {"status": "initializing", "trial_id": start_trial_id or "pending"}
         decision = request_decision(campaign_config, loop_config, scientific_state, summary, client=client)
+        if decision["decision"] in {"no_action", "continue"}:
+            recovery_candidate = _selected_recovery_candidate(scientific_state)
+            if recovery_candidate is not None:
+                decision = {
+                    "decision": "propose_trial",
+                    "reason": "deterministically recovering the previously selected candidate after interruption",
+                    "operations": [],
+                    "candidate": recovery_candidate,
+                    "evidence_references": [],
+                }
         scientific_state, legacy_state, reason = _apply_decision(
             campaign_config, loop_config, scientific_state, legacy_state, decision, stream=stream
         )
