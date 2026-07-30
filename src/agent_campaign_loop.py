@@ -520,6 +520,11 @@ def start_trial(
     *,
     start_trial: str | None = None,
     trial_patch: dict[str, Any] | None = None,
+    start_stage: str | None = None,
+    checkpoint_run_dir: str | Path | None = None,
+    checkpoint_config_path: str | Path | None = None,
+    checkpoint_path: str | Path | None = None,
+    checkpoint_source_experiment: str | None = None,
     dry_run: bool = False,
     allow_existing_trial_dir: bool = False,
 ) -> dict[str, Any]:
@@ -537,29 +542,64 @@ def start_trial(
     if not dry_run and trial_dir.exists() and not allow_existing_trial_dir:
         raise FileExistsError(f"Campaign trial folder already exists: {trial_dir}")
     stages = list(campaign_config["campaign"]["stages"])
+    launch_stage = str(start_stage or stages[0])
+    if launch_stage not in stages:
+        raise ValueError(f"start_stage {launch_stage!r} is not configured for this campaign")
+    launch_stage_index = stages.index(launch_stage)
+    if launch_stage_index > 0:
+        if not checkpoint_run_dir or not checkpoint_config_path or not checkpoint_path:
+            raise ValueError(
+                f"starting at {launch_stage} requires a reusable checkpoint, its run directory, and its resolved config"
+            )
+        if not Path(str(checkpoint_run_dir)).exists():
+            raise FileNotFoundError(f"checkpoint source run directory does not exist: {checkpoint_run_dir}")
+        if not Path(str(checkpoint_config_path)).exists():
+            raise FileNotFoundError(f"checkpoint source config does not exist: {checkpoint_config_path}")
+        if not Path(str(checkpoint_path)).exists():
+            raise FileNotFoundError(f"checkpoint does not exist: {checkpoint_path}")
+    checkpoint_reuse = None
     if dry_run:
         trial_configs = {
             stage: str(trial_dir / "configs" / f"{stage}_{Path(loop_config['experiments'][stage]['params_yaml']).name}")
             for stage in stages
         }
         launched = experiment_loop.launch_experiment(
-            _loop_config_for_stage(loop_config, trial_dir, stages[0], trial_configs),
-            stages[0],
+            _loop_config_for_stage(loop_config, trial_dir, launch_stage, trial_configs),
+            launch_stage,
             dry_run=True,
         )
     else:
         trial_configs = _copy_stage_configs(campaign_config, loop_config, trial_dir, trial_patch=trial_patch)
+        checkpoint_reuse = None
+        if launch_stage_index > 0:
+            wire_pretrain_checkpoint_into_finetune_config(
+                trial_configs[launch_stage],
+                checkpoint_run_dir,
+                pretrain_config_path=checkpoint_config_path,
+            )
+            checkpoint_reuse = {
+                "source_experiment": checkpoint_source_experiment,
+                "source_stage": stages[launch_stage_index - 1],
+                "run_dir": str(checkpoint_run_dir),
+                "config_path": str(checkpoint_config_path),
+                "checkpoint_path": str(checkpoint_path),
+            }
+        else:
+            checkpoint_reuse = None
     state = {
         "campaign_id": campaign_id,
         "status": "dry_run" if dry_run else "launching",
         "phase": "running",
         "current_trial_id": trial_id,
         "current_trial_dir": str(trial_dir),
-        "current_stage_index": 0,
-        "current_stage": stages[0],
-        "stage_state_path": str(_stage_state_path(trial_dir, stages[0])),
+        "current_stage_index": launch_stage_index,
+        "current_stage": launch_stage,
+        "stage_state_path": str(_stage_state_path(trial_dir, launch_stage)),
         "trial_configs": trial_configs,
         "trial_patch": trial_patch or {},
+        "planned_stages": stages,
+        "executed_stages": [],
+        "checkpoint_reuse": checkpoint_reuse,
         "started_at": _now_iso(),
         "updated_at": _now_iso(),
         "trials": [],
@@ -573,8 +613,8 @@ def start_trial(
     _write_json(trial_dir / "trial_manifest.json", _trial_manifest(campaign_config, state))
     try:
         launched = experiment_loop.launch_experiment(
-            _loop_config_for_stage(loop_config, trial_dir, stages[0], trial_configs),
-            stages[0],
+            _loop_config_for_stage(loop_config, trial_dir, launch_stage, trial_configs),
+            launch_stage,
             dry_run=False,
         )
     except Exception as exc:
@@ -605,6 +645,9 @@ def _trial_manifest(campaign_config: dict[str, Any], state: dict[str, Any]) -> d
         "trial_configs": state.get("trial_configs", {}),
         "stage_runs": state.get("stage_runs", {}),
         "trial_patch": state.get("trial_patch", {}),
+        "planned_stages": state.get("planned_stages", campaign_config["campaign"]["stages"]),
+        "executed_stages": state.get("executed_stages", []),
+        "checkpoint_reuse": state.get("checkpoint_reuse"),
         "updated_at": _now_iso(),
     }
 
@@ -723,6 +766,10 @@ def _advance_stage_or_complete_trial(
 ) -> tuple[dict[str, Any], str]:
     stages = list(campaign_config["campaign"]["stages"])
     stage = str(state["current_stage"])
+    executed_stages = list(state.get("executed_stages", []))
+    if stage not in executed_stages:
+        executed_stages.append(stage)
+    state["executed_stages"] = executed_stages
     stage_runs = dict(state.get("stage_runs", {}))
     run_dir = status.get("artifacts", {}).get("run_dir")
     if run_dir:

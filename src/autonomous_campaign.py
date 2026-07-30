@@ -358,7 +358,8 @@ def _record_stage(
     scientific_state = record_entity(scientific_state, "experiments", experiment_id, record, actor="autonomous_controller")
     stages = list(campaign_config["campaign"].get("stages", []))
     if stage in stages and stages.index(stage) > 0:
-        previous_id = f"{trial_id}:{stages[stages.index(stage) - 1]}"
+        checkpoint_reuse = legacy_state.get("checkpoint_reuse", {})
+        previous_id = str(checkpoint_reuse.get("source_experiment") or f"{trial_id}:{stages[stages.index(stage) - 1]}")
         relation = {"type": "reuses_checkpoint", "source": experiment_id, "target": previous_id}
         if not any(
             item.get("type") == relation["type"]
@@ -539,16 +540,115 @@ def _record_trial(
     trial_id = str(legacy_state.get("current_trial_id"))
     if trial_id in scientific_state["entities"]["trials"]:
         return scientific_state
+    executed_stages = list(legacy_state.get("executed_stages", []))
+    if not executed_stages and legacy_state.get("current_stage"):
+        executed_stages = [str(legacy_state["current_stage"])]
     trial = {
         "id": trial_id,
         "status": summary.get("status", "completed"),
-        "stage_experiment_ids": [f"{trial_id}:{stage}" for stage in campaign_config["campaign"]["stages"]],
+        "stage_experiment_ids": [f"{trial_id}:{stage}" for stage in executed_stages],
         "purpose": {"question_id": f"q_{campaign_config['campaign']['id']}_objective", "hypothesis_ids": [f"hyp_{campaign_config['campaign']['id']}_objective"]},
         "configuration": legacy_state.get("trial_configs", {}),
+        "checkpoint_reuse": legacy_state.get("checkpoint_reuse"),
         "outcome": summary,
         "provenance": {"created_by": "autonomous_controller", "source": "campaign_trial_summary"},
     }
     return record_entity(scientific_state, "trials", trial_id, trial, actor="autonomous_controller")
+
+
+def _candidate_start_stage(candidate: dict[str, Any], campaign_config: dict[str, Any]) -> str | None:
+    """Return the stage to launch when a candidate explicitly targets one stage.
+
+    A one-stage candidate is the scientific declaration that earlier stages are
+    fixed prerequisites, not new variables.  We only skip stages for that
+    explicit form; ordinary full-chain candidates retain the legacy lifecycle.
+    """
+
+    allowed_stages = candidate.get("allowed_stages")
+    stages = list(campaign_config.get("campaign", {}).get("stages", []))
+    if not isinstance(allowed_stages, list) or len(allowed_stages) != 1:
+        return None
+    target = str(allowed_stages[0])
+    if target not in stages or stages.index(target) == 0:
+        return None
+    patch = candidate.get("configuration_patch", candidate.get("trial_patch", {}))
+    if not isinstance(patch, dict):
+        return None
+    # Do not skip a prerequisite when the candidate also changes it.
+    if any(str(key) != target for key in patch):
+        return None
+    return target
+
+
+def _reusable_checkpoint(
+    scientific_state: dict[str, Any],
+    campaign_config: dict[str, Any],
+    target_stage: str,
+) -> dict[str, str] | None:
+    """Find the newest completed predecessor checkpoint for a stage."""
+
+    stages = list(campaign_config.get("campaign", {}).get("stages", []))
+    if target_stage not in stages or stages.index(target_stage) == 0:
+        return None
+    predecessor = stages[stages.index(target_stage) - 1]
+    candidates: list[tuple[str, str, dict[str, Any]]] = []
+    for experiment_id, record in scientific_state.get("entities", {}).get("experiments", {}).items():
+        if not isinstance(record, dict) or str(record.get("stage")) != predecessor:
+            continue
+        if str(record.get("status")) != "completed":
+            continue
+        execution = record.get("execution", {}) if isinstance(record.get("execution", {}), dict) else {}
+        artifacts = execution.get("artifacts", {}) if isinstance(execution.get("artifacts", {}), dict) else {}
+        outcome = record.get("outcome", {}) if isinstance(record.get("outcome", {}), dict) else {}
+        run_status = outcome.get("run_status", {}) if isinstance(outcome.get("run_status", {}), dict) else {}
+        checkpoint_values = []
+        if run_status.get("checkpoint_path"):
+            checkpoint_values.append(run_status["checkpoint_path"])
+        checkpoint_values.extend(artifacts.get("checkpoints", []) if isinstance(artifacts.get("checkpoints", []), list) else [])
+        config_values = []
+        config_values.extend(
+            record.get("configuration", {}).get("resolved_config_paths", [])
+            if isinstance(record.get("configuration", {}), dict)
+            else []
+        )
+        run_dir = execution.get("run_dir") or artifacts.get("run_dir")
+        if not run_dir:
+            continue
+        checkpoint = next((str(path) for path in checkpoint_values if Path(str(path)).exists()), None)
+        config_path = next((str(path) for path in config_values if Path(str(path)).exists()), None)
+        if checkpoint and config_path and Path(str(run_dir)).exists():
+            timestamp = str(execution.get("completed_at") or record.get("created_at") or "")
+            candidates.append((timestamp, str(experiment_id), {
+                "source_experiment": str(experiment_id),
+                "source_stage": predecessor,
+                "run_dir": str(run_dir),
+                "config_path": config_path,
+                "checkpoint_path": checkpoint,
+            }))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return candidates[0][2]
+
+
+def _reject_candidate(
+    state: dict[str, Any],
+    candidate: dict[str, Any],
+    reasons: list[str],
+    campaign_config: dict[str, Any],
+) -> tuple[dict[str, Any], str]:
+    failures = int(state.get("controller_state", {}).get("decision_rejections", 0)) + 1
+    safe_stop = failures >= int(campaign_config.get("campaign", {}).get("max_decision_retries", 3))
+    updated = update_controller_state(
+        state,
+        {
+            "decision_rejections": failures,
+            "last_rejected_candidate": {"candidate": candidate, "reasons": reasons, "created_at": _now()},
+            "status": "autonomous_safe_stop" if safe_stop else "running",
+            "safe_stop_reason": "repeated invalid candidates" if safe_stop else None,
+        },
+    )
+    return updated, "rejected candidate: " + "; ".join(reasons)
 
 
 def _apply_decision(
@@ -604,29 +704,40 @@ def _apply_decision(
             active_process=False,
         )
         if not validation.valid:
-            failures = int(proposed_state.get("controller_state", {}).get("decision_rejections", 0)) + 1
-            safe_stop = failures >= int(campaign_config.get("campaign", {}).get("max_decision_retries", 3))
-            proposed_state = update_controller_state(
-                proposed_state,
-                {
-                    "decision_rejections": failures,
-                    "last_rejected_candidate": {
-                        "candidate": candidate,
-                        "reasons": list(validation.reasons),
-                        "created_at": _now(),
-                    },
-                    "status": "autonomous_safe_stop" if safe_stop else "running",
-                    "safe_stop_reason": "repeated invalid candidates" if safe_stop else None,
-                },
+            proposed_state, reason = _reject_candidate(
+                proposed_state, candidate, list(validation.reasons), campaign_config
             )
-            return proposed_state, legacy_state, "rejected candidate: " + "; ".join(validation.reasons)
+            return proposed_state, legacy_state, reason
+        start_stage = _candidate_start_stage(candidate, campaign_config)
+        checkpoint = _reusable_checkpoint(proposed_state, campaign_config, start_stage) if start_stage else None
+        if start_stage and checkpoint is None:
+            proposed_state, reason = _reject_candidate(
+                proposed_state,
+                candidate,
+                [
+                    f"no completed compatible {campaign_config['campaign']['stages'][campaign_config['campaign']['stages'].index(start_stage) - 1]} checkpoint is available for direct {start_stage} launch"
+                ],
+                campaign_config,
+            )
+            return proposed_state, legacy_state, reason
         # Candidate records are semantic state and therefore get provenance.
         candidate.setdefault("provenance", {"created_by": "llm", "decision": decision["decision"]})
         if candidate["id"] not in proposed_state["entities"]["candidate_experiments"]:
             proposed_state = record_entity(proposed_state, "candidate_experiments", candidate["id"], candidate, actor="llm")
         if decision["decision"] == "propose_trial":
             patch = candidate.get("configuration_patch", candidate.get("trial_patch", {}))
-            next_legacy = legacy.start_trial(campaign_config, loop_config, trial_patch=patch, dry_run=False)
+            launch_kwargs: dict[str, Any] = {"trial_patch": patch, "dry_run": False}
+            if start_stage and checkpoint:
+                launch_kwargs.update(
+                    {
+                        "start_stage": start_stage,
+                        "checkpoint_run_dir": checkpoint["run_dir"],
+                        "checkpoint_config_path": checkpoint["config_path"],
+                        "checkpoint_path": checkpoint["checkpoint_path"],
+                        "checkpoint_source_experiment": checkpoint["source_experiment"],
+                    }
+                )
+            next_legacy = legacy.start_trial(campaign_config, loop_config, **launch_kwargs)
             proposed_state = update_controller_state(
                 proposed_state,
                 {"status": "running", "active_trial_id": next_legacy.get("current_trial_id"), "last_decision": decision["decision"], "last_decision_at": _now(), "decision_rejections": 0, "last_rejection_reason": None, "safe_stop_reason": None},
