@@ -1,0 +1,76 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Record evidence-limited scientific risk state and continue monitoring until another observation window clarifies whether validation trend improves or deterioration justifies deterministic lifecycle intervention."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-31T11:20:49+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "dashboard_user",
+    "last_run_at": "2026-07-31T11:20:49+00:00",
+    "last_run_id": "meta_20260731_112021_69f55e74",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "once",
+    "next_run_at": null,
+    "pid": null,
+    "run_now_supported": false,
+    "status": "completed",
+    "summary": "Active-trial observations are fresh and aligned, showing persistent generalization gaps across multiple losses while short-window train-loss trend is improving and val-loss trend remains uncertain. This indicates scientific risk but not a clear, evidence-sufficient trigger for immediate stop/reconcile or an unverified code repair in this cycle."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "obs_7f545173f7c4bba3",
+      "obs_20d19af6f55a",
+      "obs_dbf597e9533e",
+      "obs_162dcbff765e",
+      "obs_04aa7fc79d4e",
+      "obs_572e28eb11be955a",
+      "obs_85554d5c8bba6a7f"
+    ],
+    "root_causes": [
+      "Deterministic generalization-gap detections remain above threshold for key metrics (train vs validation losses), indicating continued generalization weakness.",
+      "Recent trajectory evidence shows train_loss improving but val_loss direction uncertain, so productivity is ambiguous rather than conclusively stalled.",
+      "Current snapshot does not provide bounded, verified evidence for a safe automatic operational patch; prior lock-related failures are historical and not directly reproducible from this bounded snapshot."
+    ],
+    "severity": "warning",
+    "summary": "Active-trial observations are fresh and aligned, showing persistent generalization gaps across multiple losses while short-window train-loss trend is improving and val-loss trend remains uncertain. This indicates scientific risk but not a clear, evidence-sufficient trigger for immediate stop/reconcile or an unverified code repair in this cycle."
+  },
+  "evidence_references": [
+    "obs_7f545173f7c4bba3",
+    "obs_20d19af6f55a",
+    "obs_dbf597e9533e",
+    "obs_162dcbff765e",
+    "obs_04aa7fc79d4e",
+    "obs_572e28eb11be955a",
+    "obs_85554d5c8bba6a7f"
+  ],
+  "id": "meta_20260731_112021_69f55e74",
+  "invocation_source": "dashboard_user",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [
+    "Create a new campaign proposal version to test stronger generalization controls (regularization/early-stopping/loss-weight retuning) while preserving the current campaign objective semantics and immutable history."
+  ],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "dashboard_user",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No patch or lifecycle control change applied; rollback is not required.",
+  "started_at": "2026-07-31T11:20:21+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "If large generalization gaps persist while val trend remains uncertain, continued runtime may yield low information gain per compute unit.",
+    "Recent historical failures referencing campaign lock contention may recur and degrade supervisory reliability if lock-handling behavior is not addressed in a separately verified repair cycle."
+  ]
+}

@@ -1268,6 +1268,45 @@ prompts:
             finally:
                 _release_campaign_lock(lock)
 
+    def test_campaign_lock_reclaims_live_supervisor_with_terminal_child_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            campaign_path = self._write_campaign_config(root, self._write_loop_config(root))
+            campaign_config = load_campaign_config(campaign_path)
+            state_path = Path(campaign_config["artifacts"]["state_path"])
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "status": "terminated",
+                        "active_launch_state": {"pid": 999},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            lock_path = Path(campaign_config["artifacts"]["root"]) / "campaign.lock"
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path.write_text(json.dumps({"pid": 888}), encoding="utf-8")
+            supervisor_alive = {"value": True}
+
+            def is_running(pid):
+                return False if int(pid) == 999 else supervisor_alive["value"]
+
+            def kill_supervisor(_pid, _signal):
+                supervisor_alive["value"] = False
+
+            with mock.patch(
+                "src.agent_campaign_loop.experiment_loop._is_process_running",
+                side_effect=is_running,
+            ), mock.patch("src.agent_campaign_loop.os.kill", side_effect=kill_supervisor) as kill:
+                acquired = _acquire_campaign_lock(campaign_config)
+            try:
+                self.assertEqual(acquired, lock_path)
+                kill.assert_called_once_with(888, signal.SIGTERM)
+                self.assertEqual(json.loads(lock_path.read_text(encoding="utf-8"))["pid"], os.getpid())
+            finally:
+                _release_campaign_lock(acquired)
+
     def test_apply_campaign_propose_trial_returns_new_state_for_caller(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

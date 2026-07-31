@@ -13,6 +13,11 @@ bounded and testable repairs when it has authority to do so, and records what
 it found and changed. It does not replace the deterministic campaign policy
 or the scientific state manager.
 
+Before acting, it reads and hashes [the system architecture](system_architecture.md)
+as orientation for ownership, lifecycle, and recovery boundaries. The
+architecture document is explanatory only; code, validated configuration, and
+scientific state remain authoritative.
+
 ## Constitutional priorities
 
 When priorities conflict, use this order:
@@ -54,6 +59,7 @@ active campaign automatically:
 - architecture dimensions or model structure;
 - training/model implementation;
 - dataset semantics or labeling assumptions.
+- domain-evaluation contracts, constraint roles, or frozen calibration thresholds.
 
 Such a recommendation creates a versioned proposal for a new campaign
 configuration. It must not rewrite historical results or silently change the
@@ -70,12 +76,14 @@ The controller must never:
 - weaken tests merely to make a repair pass;
 - alter secrets, artifacts, notebooks, datasets, or model implementation code;
 - silently change the active scientific objective;
+- use UMAP or another display projection as quantitative decision evidence;
 - claim a repair succeeded before verification completed.
 
 ## Operating procedure
 
-At each scheduled run the controller reads this mandate, records its version
-and hash, and builds a compact snapshot of campaign health, active processes,
+At each scheduled run the controller reads this mandate and the system
+architecture, records both versions and hashes, and builds a compact snapshot
+of campaign health, active processes,
 artifact freshness, deterministic observations, recent audits, test status,
 and repository changes. It asks the LLM for a structured diagnosis. The
 response is validated before any action is considered.
@@ -93,5 +101,8 @@ Every run produces an immutable state record containing the mandate hash,
 diagnosis, evidence references, actions, changed files, verification results,
 rollback information, proposal-only changes, and provenance. The dashboard
 shows a concise summary and links to the durable record. Dashboard operational
-controls may start, stop, or continue controllers, but never approve a
-scientific candidate or directly edit scientific state.
+controls may start, stop, continue, or explicitly invoke one immediate
+supervisory cycle. An immediate invocation wakes a compatible scheduler or
+starts one bounded cycle, with duplicate cycles rejected and the user
+invocation recorded. These controls never approve a scientific candidate or
+directly edit scientific state.

@@ -9,8 +9,11 @@ from src.meta_controller import (
     MetaDecisionError,
     PatchSafetyError,
     collect_snapshot,
+    compact_architecture_summary,
     parse_decision,
+    read_architecture,
     read_mandate,
+    request_run_now,
     run_once,
     _execute_campaign_control,
     validate_patch,
@@ -23,6 +26,7 @@ from src.scientific_state import empty_state, load_state, record_entity, save_st
 def valid_decision(version: str = "sha256:test") -> dict:
     return {
         "mandate_version": version,
+        "architecture_version": "sha256:architecture-test",
         "decision": "no_action",
         "diagnosis": {
             "summary": "The controller is healthy.",
@@ -66,6 +70,23 @@ class MetaControllerTests(unittest.TestCase):
             self.assertTrue(version.startswith("sha256:"))
             self.assertEqual(path, str(mandate))
 
+    def test_system_architecture_is_read_hashed_and_summarized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            architecture = root / "docs/system_architecture.md"
+            architecture.parent.mkdir()
+            architecture.write_text(
+                "# Architecture\n\n## Compact supervisory summary\n\n- State is canonical.\n- Artifacts are evidence.\n\n## Other\n\nprivate detail\n",
+                encoding="utf-8",
+            )
+            content, version, path = read_architecture(root, {"architecture_path": "docs/system_architecture.md"})
+            self.assertEqual(content, architecture.read_text(encoding="utf-8"))
+            self.assertTrue(version.startswith("sha256:"))
+            self.assertEqual(path, str(architecture))
+            summary = compact_architecture_summary(content)
+            self.assertIn("State is canonical", summary)
+            self.assertNotIn("private detail", summary)
+
     def test_strict_decision_rejects_missing_fields(self) -> None:
         with self.assertRaises(MetaDecisionError):
             parse_decision({"decision": "no_action"})
@@ -81,6 +102,32 @@ class MetaControllerTests(unittest.TestCase):
         self.assertEqual(validate_patch(patch, config), ("src/meta_controller.py",))
         with self.assertRaises(PatchSafetyError):
             validate_patch(patch.replace("src/meta_controller.py", "src/training/loop.py"), config)
+
+    def test_domain_contract_and_campaign_guidance_are_protected(self) -> None:
+        config = {
+            "allowed_paths": ["configs/experiment_campaigns/*.yaml"],
+            "forbidden_prefixes": ["configs/domain_guidance/"],
+            "max_patch_bytes": 4000,
+            "max_changed_files": 2,
+        }
+        campaign_patch = (
+            "--- a/configs/experiment_campaigns/cnn_campaign.yaml\n"
+            "+++ b/configs/experiment_campaigns/cnn_campaign.yaml\n"
+            "@@ -1 +1,2 @@\n"
+            " campaign:\n"
+            "+domain_guidance: disabled\n"
+        )
+        with self.assertRaises(PatchSafetyError):
+            validate_patch(campaign_patch, config)
+        contract_patch = (
+            "--- a/configs/domain_guidance/cnn_action_domain_v1.yaml\n"
+            "+++ b/configs/domain_guidance/cnn_action_domain_v1.yaml\n"
+            "@@ -1 +1 @@\n"
+            "-version: 1\n"
+            "+version: 2\n"
+        )
+        with self.assertRaises(PatchSafetyError):
+            validate_patch(contract_patch, config)
 
     def test_verification_commands_are_allowlisted(self) -> None:
         config = {"verification": [{"name": "tests", "argv": ["python", "-m", "pytest"]}]}
@@ -109,6 +156,7 @@ class MetaControllerTests(unittest.TestCase):
             root = Path(directory)
             (root / "docs").mkdir()
             (root / "docs/meta_controller_mandate.md").write_text("# mandate\n", encoding="utf-8")
+            (root / "docs/system_architecture.md").write_text("# architecture\n\n## Compact supervisory summary\n\n- State is canonical.\n", encoding="utf-8")
             (root / "state").mkdir()
             save_state(root / "state/scientific_state.yaml", empty_state())
             config = {
@@ -123,8 +171,11 @@ class MetaControllerTests(unittest.TestCase):
             # fake client return it after the controller has loaded it.
             _, version, _ = read_mandate(root, config["meta_controller"])
             first["mandate_version"] = version
+            _, architecture_version, _ = read_architecture(root, config["meta_controller"])
+            first["architecture_version"] = architecture_version
             report = run_once(root, config, client=_Client(__import__("json").dumps(first)))
             self.assertEqual(report["status"], "completed")
+            self.assertEqual(report["architecture_version"], architecture_version)
             loaded = load_state(root / "state/scientific_state.yaml")
             self.assertIn(report["id"], loaded["entities"]["meta_controller_runs"])
             self.assertEqual(loaded["controller_state"]["meta_controller"]["last_run_id"], report["id"])
@@ -150,6 +201,31 @@ class MetaControllerTests(unittest.TestCase):
         recovery.assert_called_once()
         self.assertTrue(result["replacement_running"])
         self.assertEqual(result["returncode"], 0)
+
+    def test_run_now_wakes_scheduler_without_spawning_duplicate_cycle(self) -> None:
+        config = {"campaign": {"id": "test"}}
+        meta = {
+            "pid": 1234,
+            "mode": "loop",
+            "run_now_supported": True,
+            "status": "running",
+        }
+        with patch("src.meta_controller._meta_state", return_value={"controller_state": {"meta_controller": meta}}), patch(
+            "src.meta_controller._pid_running", return_value=True
+        ), patch("src.meta_controller.os.kill") as kill, patch("src.meta_controller._set_meta_status") as set_status:
+            result = request_run_now(Path.cwd(), config)
+        self.assertEqual(result["status"], "requested")
+        kill.assert_called_once()
+        set_status.assert_called_once()
+
+    def test_run_now_reports_busy_for_existing_one_shot(self) -> None:
+        config = {"campaign": {"id": "test"}}
+        with patch(
+            "src.meta_controller._meta_state",
+            return_value={"controller_state": {"meta_controller": {"pid": 1234, "mode": "once"}}},
+        ), patch("src.meta_controller._pid_running", return_value=True):
+            result = request_run_now(Path.cwd(), config)
+        self.assertEqual(result["status"], "already_running")
 
 
 if __name__ == "__main__":

@@ -34,6 +34,9 @@ ENTITY_LABELS = {
     "candidate_experiments": "candidate",
     "components": "component",
     "datasets": "dataset",
+    "domain_constraints": "domain constraint",
+    "domain_calibrations": "domain calibration",
+    "domain_evaluations": "domain evaluation",
 }
 
 NODE_COLORS = {
@@ -46,6 +49,9 @@ NODE_COLORS = {
     "candidate": "#54a24b",
     "component": "#9d9d9d",
     "dataset": "#79706e",
+    "domain constraint": "#7259a3",
+    "domain calibration": "#8c78b5",
+    "domain evaluation": "#3b8f9e",
 }
 
 RELATION_COLORS = {
@@ -59,6 +65,7 @@ RELATION_COLORS = {
     "reuses_checkpoint": "#3b9caa",
     "alternative_to": "#8b6f47",
     "derived_from": "#6f88a8",
+    "evaluates_constraint": "#7259a3",
 }
 
 _DECIMAL_NUMBER = re.compile(r"(?<![A-Za-z_])[-+]?(?:\d+\.\d*|\.\d+)(?:[eE][-+]?\d+)?")
@@ -158,6 +165,9 @@ def _label_entity_payload(collection: str, entity_id: str, entity: dict[str, Any
         "candidate_experiments": ("title", "purpose", "expected_outcomes", "status"),
         "components": ("title", "description", "status"),
         "datasets": ("title", "description", "status"),
+        "domain_constraints": ("title", "kind", "role", "labels", "status"),
+        "domain_calibrations": ("contract_id", "candidate_family_id", "replicate_count", "status"),
+        "domain_evaluations": ("contract_id", "objective_eligibility", "constraints", "status"),
     }
     selected = {
         key: entity[key]

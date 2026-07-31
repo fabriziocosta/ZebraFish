@@ -323,6 +323,27 @@ def _maybe_save_live_best_checkpoint(
     estimator.live_checkpoint_path_ = str(output_path)
 
 
+def _maybe_run_epoch_evaluation_callback(estimator, *, epoch: int, row: dict[str, object]) -> None:
+    callback = getattr(estimator, "epoch_evaluation_callback", None)
+    if not callable(callback):
+        return
+    every = max(1, int(getattr(estimator, "epoch_evaluation_every_n_epochs", 1) or 1))
+    minimum = max(1, int(getattr(estimator, "epoch_evaluation_minimum_epoch", 1) or 1))
+    if int(epoch) < minimum or int(epoch) % every != 0:
+        return
+    try:
+        callback(estimator=estimator, epoch=int(epoch), history_row=dict(row))
+    except Exception as exc:  # diagnostics must not invalidate otherwise healthy training
+        errors = list(getattr(estimator, "epoch_evaluation_errors_", []))
+        errors.append({"epoch": int(epoch), "error": f"{type(exc).__name__}: {exc}"})
+        estimator.epoch_evaluation_errors_ = errors[-20:]
+        if getattr(estimator, "verbose", False):
+            print(
+                f"live domain diagnostic failed at epoch={int(epoch):03d}: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+
+
 def _fit_multitask_estimator(estimator, prepared: _PreparedData):
     hot_start_state = None
     if getattr(estimator, "hot_start", False) and hasattr(estimator, "model_"):
@@ -525,6 +546,7 @@ def _fit_multitask_estimator(estimator, prepared: _PreparedData):
             stage="supervised",
         )
         _maybe_save_training_history_pdfs(estimator, history_rows, epoch)
+        _maybe_run_epoch_evaluation_callback(estimator, epoch=epoch, row=row)
         if estimator.verbose:
             elapsed = time.perf_counter() - training_start
             completed_since_resume = max(1, epoch - start_epoch + 1)

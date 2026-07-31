@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,14 @@ from src.commutative_cnn_pretraining_config import (
     write_commutative_cnn_pretraining_config,
 )
 from src.dataset_config import load_current_dataset_artifact_path
+from src.domain_guidance import (
+    aligned_evaluation_metadata,
+    build_live_domain_diagnostic,
+    evaluate_domain_guidance,
+    load_domain_contract,
+    persist_domain_evaluation,
+    persist_live_domain_diagnostic,
+)
 from src.experiment_runner_shared import merge_dicts, read_yaml_mapping, to_yamlable, update_agent_run_status, write_yaml_mapping
 from src.models.configs import CommutativeCNNConfig, LossWeightConfig, OptimizationConfig
 from src.models.estimators import CommutativeCNNClassifier
@@ -172,6 +181,10 @@ def default_13c_config() -> dict[str, Any]:
         "binary_learning_rate": 1e-5,
         "binary_weight_decay": 7.5e-4,
         "binary_class_weighting": None,
+        "domain_guidance_contract": "configs/domain_guidance/cnn_action_domain_v1.yaml",
+        "domain_guidance_calibration": None,
+        "evaluation_protocol": "legacy_single_seed",
+        "domain_guidance_live_enabled": True,
         "optimization_config": asdict(
             OptimizationConfig(
                 batch_size=8,
@@ -439,6 +452,41 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
         hot_start=bool(raw_config["hot_start"]),
     )
     model.live_checkpoint_path = run_dir / f"{experiment_run.experiment_id}_model_state.pt"
+    live_contract = None
+    live_contract_path = raw_config.get("domain_guidance_contract")
+    if bool(raw_config.get("domain_guidance_live_enabled", True)) and live_contract_path:
+        live_contract = load_domain_contract(live_contract_path)
+        live_monitoring = live_contract.get("evaluation", {}).get("live_monitoring", {})
+        if bool(live_monitoring.get("enabled", False)):
+            action_label_map = experiment.label_maps["action"]
+            validation_true = [
+                action_label_map.get(int(label), str(int(label)))
+                for label in experiment.splits.y_val
+            ]
+
+            def _live_domain_callback(*, estimator, epoch: int, history_row: dict[str, Any]) -> None:
+                del history_row
+                validation_predictions = estimator.predict(experiment.splits.X_val)
+                validation_latent = estimator.transform(experiment.splits.X_val)
+                validation_predicted_names = [
+                    action_label_map.get(int(label), str(int(label)))
+                    for label in validation_predictions["action"]
+                ]
+                report = build_live_domain_diagnostic(
+                    experiment_id=experiment_run.experiment_id,
+                    epoch=epoch,
+                    latent_features=validation_latent,
+                    metadata=experiment.splits.metadata_val,
+                    y_true=validation_true,
+                    y_pred=validation_predicted_names,
+                    contract=live_contract,
+                    split_hash=(experiment.split_manifest or {}).get("hash"),
+                )
+                persist_live_domain_diagnostic(run_dir=run_dir, report=report)
+
+            model.epoch_evaluation_callback = _live_domain_callback
+            model.epoch_evaluation_every_n_epochs = int(live_monitoring.get("cadence_epochs", 10))
+            model.epoch_evaluation_minimum_epoch = int(live_monitoring.get("minimum_epoch", 20))
     install_training_signal_handlers(model)
 
     binary_pretraining_data = None
@@ -512,8 +560,9 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
     if bool(raw_config.get("lockbox_evaluation", False)):
         persist_lockbox_evaluation(output_dir=run_dir, estimator=model, experiment=experiment)
 
+    holdout_latent_features = model.transform(experiment.splits.X_holdout)
     holdout_embedding_projection = build_tensor_embedding_2d(
-        model.transform(experiment.splits.X_holdout),
+        holdout_latent_features,
         experiment.y_true_holdout["action"],
         label_map=experiment.label_maps["action"],
         metadata=experiment.splits.metadata_holdout,
@@ -572,12 +621,78 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
         output_path=figure_dir / f"{experiment_run.experiment_id}_all_labeled_embedding_umap_controls_hidden.pdf",
     )
 
+    domain_artifacts = None
+    contract_path = raw_config.get("domain_guidance_contract")
+    if contract_path:
+        contract = load_domain_contract(contract_path)
+        calibration = None
+        calibration_path = raw_config.get("domain_guidance_calibration")
+        if calibration_path and Path(str(calibration_path)).exists():
+            calibration = json.loads(Path(str(calibration_path)).read_text(encoding="utf-8"))
+        action_labels = [
+            experiment.label_maps["action"].get(int(label), str(int(label)))
+            for label in experiment.class_labels["action"]
+        ]
+        action_true = [
+            experiment.label_maps["action"].get(int(label), str(int(label)))
+            for label in experiment.y_true_holdout["action"]
+        ]
+        action_pred = [
+            experiment.label_maps["action"].get(int(label), str(int(label)))
+            for label in predictions["action"]
+        ]
+        aligned_metadata = aligned_evaluation_metadata(
+            experiment.splits.metadata_holdout,
+            y_true=action_true,
+            y_pred=action_pred,
+            probabilities=probabilities.get("action"),
+            probability_labels=action_labels,
+        )
+        aligned_metadata["dataset_split"] = str(contract["evaluation"]["split"])
+        domain_report = evaluate_domain_guidance(
+            experiment_id=experiment_run.experiment_id,
+            latent_features=holdout_latent_features,
+            metadata=aligned_metadata,
+            y_true=action_true,
+            y_pred=action_pred,
+            contract=contract,
+            split_hash=(experiment.split_manifest or {}).get("hash"),
+            evaluation_protocol=str(raw_config.get("evaluation_protocol", "legacy_single_seed")),
+            calibration_profile=calibration,
+            training_seed=(
+                None
+                if optimization_config.random_state is None
+                else int(optimization_config.random_state)
+            ),
+        )
+        domain_artifacts = persist_domain_evaluation(
+            run_dir=run_dir,
+            report=domain_report,
+            latent_features=holdout_latent_features,
+            aligned_metadata=aligned_metadata,
+            projection_paths=[
+                figure_dir / f"{experiment_run.experiment_id}_holdout_embedding_umap.csv",
+                figure_dir / f"{experiment_run.experiment_id}_holdout_embedding_umap.pdf",
+                figure_dir / f"{experiment_run.experiment_id}_all_labeled_embedding_umap.csv",
+                figure_dir / f"{experiment_run.experiment_id}_all_labeled_embedding_umap_controls_hidden.pdf",
+            ],
+            diagnostic_paths=sorted(
+                (run_dir / "confusion_matrices").glob("*action_confusion*.csv")
+            ),
+        )
+
     run_config = {
         **resolved_yaml_config,
         "binary_pretraining_excluded_holdout_count": None if binary_pretraining_data is None else binary_pretraining_data.excluded_holdout_count,
         "binary_pretraining_label_map": None if binary_pretraining_data is None else binary_pretraining_data.label_map,
         "binary_pretraining_train_count": None if binary_pretraining_data is None else binary_pretraining_data.train_count,
         "binary_pretraining_val_count": None if binary_pretraining_data is None else binary_pretraining_data.val_count,
+        "domain_guidance": None if domain_artifacts is None else {
+            "report_path": domain_artifacts["report_path"],
+            "report_hash": domain_artifacts["report_hash"],
+            "objective_eligibility": domain_artifacts["report"].get("objective_eligibility"),
+            "contract_hash": domain_artifacts["report"].get("contract_hash"),
+        },
     }
     persist_experiment_artifacts(
         output_dir=experiment_output_dir,

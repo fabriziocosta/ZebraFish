@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { controlController, fetchInvestigation } from "./api";
+import { controlController, fetchInvestigation, runMetaControllerNow } from "./api";
 import type { Candidate, Evidence } from "./model";
-import { ActiveHypothesisCard, AlertPanel, BeliefTimeline, CurrentExperimentCard, DecisionQueue, DetailDrawer, EvidencePanel, ExpectedOutcomes, FocusedGraph, InvestigationHeader, MetaControllerCard } from "./components";
+import { ActiveHypothesisCard, AlertPanel, BeliefTimeline, CurrentExperimentCard, DecisionQueue, DetailDrawer, DomainGuidanceCard, EvidencePanel, ExpectedOutcomes, FocusedGraph, InvestigationHeader, MetaControllerCard } from "./components";
 import "./styles.css";
 
 const campaignOptions = ["cnn", "transformer"];
@@ -55,6 +55,15 @@ export default function App() {
       setControlMessage(err instanceof Error ? err.message : String(err));
     }
   };
+  const handleMetaRunNow = async () => {
+    try {
+      const result = await runMetaControllerNow(campaign);
+      setControlMessage(`meta-controller run now: ${String(result.status || "requested")}`);
+      setTimeout(() => setControlMessage(null), 5000);
+    } catch (err) {
+      setControlMessage(err instanceof Error ? err.message : String(err));
+    }
+  };
   const theme = dark ? "theme-dark" : "theme-light";
   const hasData = Boolean(data);
   const diagnostics = useMemo(() => data?.diagnostics.errors || [], [data]);
@@ -67,9 +76,10 @@ export default function App() {
     {data && <div className="page-shell">
       <InvestigationHeader data={data} />
       {controlMessage && <div className="control-message">{controlMessage}</div>}
-      <MetaControllerCard data={data} onControl={handleControl} />
+      <MetaControllerCard data={data} onControl={handleControl} onRunNow={handleMetaRunNow} />
       {diagnostics.length > 0 && <div className="schema-strip"><strong>Degraded data:</strong> {diagnostics.join(" · ")}</div>}
       <div className="story-grid"><ActiveHypothesisCard data={data} onSelect={(id) => titleDetail("Hypothesis", data.active_hypothesis)} /><CurrentExperimentCard data={data} /></div>
+      <DomainGuidanceCard data={data} onSelect={titleDetail} />
       <div className="story-grid"><ExpectedOutcomes data={data} /><DecisionQueue data={data} onSelect={(candidate: Candidate) => titleDetail(candidate.title, candidate)} /></div>
       <EvidencePanel data={data} onSelect={(item: Evidence) => titleDetail(item.type.replaceAll("_", " "), item)} />
       <div className="two-column"><BeliefTimeline data={data} onSelect={(event) => titleDetail("Belief update", event)} /><AlertPanel data={data} acknowledged={acknowledged} onAcknowledge={(id) => setAcknowledged((current) => new Set(current).add(id))} /></div>

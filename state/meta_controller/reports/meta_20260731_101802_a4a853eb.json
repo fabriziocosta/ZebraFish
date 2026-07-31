@@ -1,0 +1,46 @@
+{
+  "actions": [],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-31T10:18:32+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 1,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-07-31T10:18:32+00:00",
+    "last_run_id": "meta_20260731_101802_a4a853eb",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 1208416,
+    "run_now_supported": true,
+    "status": "failed",
+    "summary": "Campaign lock already exists at artifacts/campaigns/cnn_pretrain_finetune/campaign.lock. pid=607044"
+  },
+  "diagnosis": {
+    "evidence_references": [],
+    "root_causes": [],
+    "severity": "critical",
+    "summary": "Meta-controller could not complete: RuntimeError: Campaign lock already exists at artifacts/campaigns/cnn_pretrain_finetune/campaign.lock. pid=607044"
+  },
+  "evidence_references": [],
+  "id": "meta_20260731_101802_a4a853eb",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "error": "RuntimeError",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea"
+  },
+  "rollback_plan": "No patch was applied.",
+  "started_at": "2026-07-31T10:18:02+00:00",
+  "status": "failed",
+  "unresolved_risks": [
+    "Campaign lock already exists at artifacts/campaigns/cnn_pretrain_finetune/campaign.lock. pid=607044"
+  ]
+}

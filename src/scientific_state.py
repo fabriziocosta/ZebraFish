@@ -45,6 +45,9 @@ ENTITY_COLLECTIONS = (
     "lockbox_confirmations",
     "split_manifests",
     "launch_events",
+    "domain_constraints",
+    "domain_calibrations",
+    "domain_evaluations",
 )
 RELATION_TYPES = {
     "supports",
@@ -67,6 +70,7 @@ RELATION_TYPES = {
     "trained_on",
     "evaluated_on",
     "modifies_parameter",
+    "evaluates_constraint",
 }
 IMMUTABLE_COLLECTIONS = {
     "experiments",
@@ -80,6 +84,9 @@ IMMUTABLE_COLLECTIONS = {
     "lockbox_confirmations",
     "split_manifests",
     "launch_events",
+    "domain_constraints",
+    "domain_calibrations",
+    "domain_evaluations",
 }
 
 
@@ -745,6 +752,37 @@ def compact_context(state: dict[str, Any], *, limit: int = 8) -> dict[str, Any]:
             for entity_id, record in list(entities.get(collection, {}).items())[-limit:]
         ]
 
+    domain_evaluations = []
+    for entity_id, record in list(entities.get("domain_evaluations", {}).items())[-limit:]:
+        domain_evaluations.append(
+            {
+                "id": entity_id,
+                "experiment_id": record.get("stage_experiment_id") or record.get("experiment_id"),
+                "contract_id": record.get("contract_id"),
+                "contract_hash": record.get("contract_hash"),
+                "objective_eligibility": record.get("objective_eligibility"),
+                "umap_used_for_decision": False,
+                "constraints": [
+                    {
+                        "id": constraint.get("id"),
+                        "title": constraint.get("title"),
+                        "role": constraint.get("role"),
+                        "status": constraint.get("status"),
+                        "checks": [
+                            {
+                                "metric": check.get("metric"),
+                                "status": check.get("status"),
+                                "delta": check.get("delta"),
+                                "reason": check.get("reason"),
+                            }
+                            for check in constraint.get("checks", [])
+                        ],
+                    }
+                    for constraint in record.get("constraints", [])
+                ],
+            }
+        )
+
     return {
         "project": state.get("project", {}),
         "controller_state": state.get("controller_state", {}),
@@ -752,6 +790,12 @@ def compact_context(state: dict[str, Any], *, limit: int = 8) -> dict[str, Any]:
         "beliefs": recent("beliefs"),
         "questions": recent("questions"),
         "observations": recent("observations"),
+        "domain_guidance": {
+            "constraints": recent("domain_constraints"),
+            "calibrations": recent("domain_calibrations"),
+            "evaluations": domain_evaluations,
+            "decision_policy": "hard identifiability guardrails, then secondary biological geometry; UMAP is visualization only",
+        },
         "candidate_experiments": recent("candidate_experiments"),
         "trials": recent("trials"),
     }

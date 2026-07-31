@@ -24,6 +24,11 @@ The LLM interprets evidence and proposes state operations. It does not read
 epoch curves as a substitute for numerical analysis, execute shell commands,
 or directly edit historical records.
 
+System ownership, dependencies, recovery boundaries, and change-impact rules
+are documented in [`system_architecture.md`](system_architecture.md). The
+constitutional authority for supervisory behavior remains in
+[`meta_controller_mandate.md`](meta_controller_mandate.md).
+
 ## Campaigns and trials
 
 The current campaigns are sequential pretraining-to-fine-tuning chains:
@@ -200,6 +205,50 @@ The configured detectors are:
 Detector thresholds live in configuration, not in the prompt. This makes the
 same raw evidence produce the same observation when reanalysed.
 
+## Campaign-specific domain guidance
+
+A campaign may register a protected contract under `configs/domain_guidance/`
+to convert expert scientific expectations into deterministic measurements.
+The CNN contract registers non-control action identifiability, local
+AChE–mAChR separability, and the expected related geometry of GABAAR–NMDAR
+and AChE–mAChR.
+
+Class identifiability and prediction collapse are hard guardrails. Biological
+geometry is secondary evidence and cannot compensate for a failed primary
+metric or guardrail. Geometry is calculated in the original standardized
+latent space; UMAP coordinates and plots are explicitly `visualization_only`.
+
+Each completed 13C run writes aligned latent vectors, compound/run metadata,
+prediction probabilities, and `domain_evaluation.json`. Compound is the outer
+independent unit, experimental runs are nested within compounds, and frame
+rows are not treated as independent replicates. Sparse support produces an
+`unresolved` result.
+
+Baseline-relative thresholds require an explicit `baseline_calibration`
+candidate containing three fixed-seed repetitions of the unchanged reference
+configuration. The resulting profile is frozen, hashed, and recorded in
+scientific state. Later intervention candidates must preregister every active
+constraint through `domain_expectations`.
+
+The calibration is tied to a named candidate family. Intervention candidates
+are rejected until a matching profile exists, and reports with a different
+contract hash, split hash, protocol, or seed set cannot be paired with it.
+Catastrophic classification checks also retain protected absolute floors or
+ceilings. These must pass in every replicate before baseline-relative paired
+changes are interpreted.
+
+The controller evaluates primary and action metrics first, hard domain
+guardrails second, replicated domain changes third, secondary geometry fourth,
+and compute efficiency last. The dashboard shows each measurement, baseline,
+confidence interval, role, evaluation unit, and artifact source. The
+meta-controller may repair extraction and display code but cannot alter the
+contract, label semantics, roles, or frozen thresholds.
+
+At the contract cadence, validation-only live diagnostics check severe class
+coverage, prediction collapse, and worst-class recall. They can trigger an LLM
+review after persistent polls but are not termination-eligible in the initial
+contract. Holdout and lockbox labels remain outside live controller context.
+
 ## LLM protocol
 
 The autonomous controller sends a bounded context containing:
@@ -342,6 +391,7 @@ Useful commands are:
 ./run_campaign candidates cnn
 ./run_campaign rebuild-views cnn
 ./run_campaign terminate cnn
+./run_campaign meta-controller cnn --once
 ```
 
 ## Dashboard
@@ -360,8 +410,11 @@ Graphviz reasoning graph. Its detail slider ranges from 0 (trial-level
 overview) to 5 (all available entity metadata and labelled relations). The
 graph omits trials and stages that have no deterministic observation link.
 Hovering over a node reveals its complete untruncated scientific text.
-The dashboard does not mutate state or launch experiments; it is safe to leave
-open while a campaign runs.
+The dashboard does not approve candidates or directly mutate scientific state.
+Its operational `run now` button requests one immediate meta-controller cycle:
+a running scheduler is woken ahead of its timed poll, while an absent
+scheduler gets one bounded `--once` process. Duplicate supervisory cycles are
+rejected and the invocation source is recorded in the audit/state report.
 
 ## Migration
 

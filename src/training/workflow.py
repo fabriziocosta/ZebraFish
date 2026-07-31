@@ -333,6 +333,12 @@ def _save_multitask_prediction_tables(
                 "pred_name": [label_map.get(int(label), str(int(label))) for label in y_pred_arr],
             }
         )
+        metadata = experiment.splits.metadata_holdout.reset_index(drop=True)
+        if len(metadata) != len(table):
+            raise ValueError("holdout prediction rows are not aligned with holdout metadata")
+        for column in metadata.columns:
+            if column not in table:
+                table[column] = metadata[column].to_numpy()
         probabilities = evaluation.probabilities.get(target)
         class_labels = experiment.class_labels.get(target, [])
         if probabilities is not None:

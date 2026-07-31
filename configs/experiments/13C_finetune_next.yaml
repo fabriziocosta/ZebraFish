@@ -16,6 +16,10 @@ binary_pretraining_epochs: 2
 binary_learning_rate: 1.0e-05
 binary_weight_decay: 0.00075
 binary_class_weighting: null
+domain_guidance_contract: configs/domain_guidance/cnn_action_domain_v1.yaml
+domain_guidance_calibration: null
+evaluation_protocol: legacy_single_seed
+domain_guidance_live_enabled: true
 optimization_config:
   batch_size: 8
   epochs: 120

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.domain_guidance import DomainGuidanceError, load_domain_contract
+
 
 @dataclass(frozen=True)
 class CandidateValidation:
@@ -76,6 +78,62 @@ def _structured_rule(value: Any, *, field: str) -> bool:
     return False
 
 
+def _validate_domain_expectations(
+    candidate: dict[str, Any],
+    campaign_config: dict[str, Any],
+    state: dict[str, Any],
+) -> list[str]:
+    guidance = campaign_config.get("domain_guidance", {})
+    if not isinstance(guidance, dict) or not guidance.get("enabled"):
+        return []
+    expectations = candidate.get("domain_expectations")
+    if not isinstance(expectations, list) or not expectations:
+        return ["candidate requires domain_expectations for the active domain contract"]
+    contract_path = guidance.get("contract_path")
+    try:
+        contract = load_domain_contract(contract_path)
+    except (DomainGuidanceError, OSError, TypeError) as exc:
+        return [f"active domain contract is unavailable: {exc}"]
+    constraints = {str(item["id"]): item for item in contract["constraints"]}
+    candidate_family_id = str(guidance.get("candidate_family_id") or contract["id"])
+    reasons: list[str] = []
+    seen: set[str] = set()
+    for expectation in expectations:
+        if not isinstance(expectation, dict):
+            reasons.append("domain expectations must be mappings")
+            continue
+        constraint_id = str(expectation.get("constraint_id", ""))
+        if constraint_id not in constraints:
+            reasons.append(f"unknown domain constraint: {constraint_id or '<missing>'}")
+            continue
+        if constraint_id in seen:
+            reasons.append(f"duplicate domain expectation: {constraint_id}")
+        seen.add(constraint_id)
+        if expectation.get("comparison") != "paired_baseline":
+            reasons.append(f"domain expectation {constraint_id} must use paired_baseline")
+        if expectation.get("direction") not in {"increase", "decrease", "preserve_or_improve"}:
+            reasons.append(f"domain expectation {constraint_id} has invalid direction")
+        if expectation.get("role") != constraints[constraint_id].get("role"):
+            reasons.append(f"domain expectation {constraint_id} role does not match the protected contract")
+    missing = sorted(set(constraints) - seen)
+    if missing:
+        reasons.append(f"candidate omits active domain constraints: {', '.join(missing)}")
+    compatible_calibrations = [
+        calibration
+        for calibration in state.get("entities", {}).get("domain_calibrations", {}).values()
+        if isinstance(calibration, dict)
+        and calibration.get("status") == "frozen"
+        and calibration.get("contract_hash") == contract.get("_hash")
+        and calibration.get("candidate_family_id") == candidate_family_id
+    ]
+    candidate_kind = str(candidate.get("candidate_kind", "intervention"))
+    if candidate_kind == "intervention" and not compatible_calibrations:
+        reasons.append("a frozen domain baseline calibration is required before an intervention candidate")
+    if candidate_kind == "baseline_calibration" and compatible_calibrations:
+        reasons.append("a frozen calibration already exists for the active domain contract")
+    return reasons
+
+
 def validate_candidate(
     candidate: dict[str, Any],
     *,
@@ -88,6 +146,9 @@ def validate_candidate(
     strict_protocol = _strict_protocol_enabled(campaign_config)
     if not isinstance(candidate, dict):
         return CandidateValidation(False, ("candidate must be a mapping",))
+    candidate_kind = str(candidate.get("candidate_kind", "intervention"))
+    if candidate_kind not in {"intervention", "baseline_calibration"}:
+        reasons.append(f"unsupported candidate_kind: {candidate_kind}")
     stages = list(campaign_config.get("campaign", {}).get("stages", []))
     if len(stages) < 1:
         reasons.append("campaign has no stages")
@@ -155,8 +216,10 @@ def validate_candidate(
             reasons.append("protocol candidate base_stage is not a campaign stage")
         if not isinstance(candidate.get("fixed_variables"), dict):
             reasons.append("protocol candidate requires fixed_variables mapping")
-        if not isinstance(candidate.get("varied_variables"), dict) or not candidate.get("varied_variables"):
+        if not isinstance(candidate.get("varied_variables"), dict):
             reasons.append("protocol candidate requires varied_variables mapping")
+        elif candidate_kind == "intervention" and not candidate.get("varied_variables"):
+            reasons.append("intervention candidate requires at least one varied variable")
         if not _structured_rule(candidate.get("expected_outcomes"), field="expected_outcomes"):
             reasons.append("expected_outcomes must contain structured metric rules")
         if not _structured_rule(candidate.get("falsification_criteria"), field="falsification_criteria"):
@@ -167,6 +230,7 @@ def validate_candidate(
             reasons.append("protocol candidate requires an exact source checkpoint")
         if not isinstance(candidate.get("baseline"), str) or not candidate.get("baseline"):
             reasons.append("protocol candidate requires an exact paired baseline reference")
+        reasons.extend(_validate_domain_expectations(candidate, campaign_config, state))
 
     total_leaves: list[str] = []
     patch = candidate.get("configuration_patch", candidate.get("trial_patch", {}))
@@ -272,4 +336,6 @@ def validate_candidate(
         patch_leaves = {path.split(".", 1)[1] for path in total_leaves if "." in path}
         if varied and set(varied) != patch_leaves:
             reasons.append("varied_variables must exactly describe every changed configuration leaf")
+        if candidate_kind == "baseline_calibration" and (varied or patch_leaves):
+            reasons.append("baseline calibration candidate cannot change configuration leaves")
     return CandidateValidation(not reasons, tuple(dict.fromkeys(reasons)), tuple(total_leaves))

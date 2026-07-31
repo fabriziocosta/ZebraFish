@@ -59,6 +59,37 @@ class ScientificStateTests(unittest.TestCase):
                 [{"operation": "relation", "value": {"type": "invented", "source": "a", "target": "b"}}],
             )
 
+    def test_domain_contract_records_are_immutable_and_relational(self) -> None:
+        state = record_entity(
+            empty_state(),
+            "domain_constraints",
+            "contract:constraint",
+            {"title": "Protected constraint", "status": "registered", "provenance": {"created_by": "test"}},
+        )
+        state = record_entity(
+            state,
+            "domain_evaluations",
+            "evaluation",
+            {"status": "completed", "contract_id": "contract", "provenance": {"created_by": "test"}},
+        )
+        state = apply_operations(
+            state,
+            [{
+                "operation": "relation",
+                "value": {
+                    "type": "evaluates_constraint",
+                    "source": "evaluation",
+                    "target": "contract:constraint",
+                },
+            }],
+        )
+        self.assertEqual(state["relations"][-1]["source_type"], "domain_evaluations")
+        with self.assertRaises(ImmutableEntityError):
+            apply_operations(
+                state,
+                [{"operation": "update", "path": "entities.domain_constraints.contract:constraint.title", "value": "Changed"}],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

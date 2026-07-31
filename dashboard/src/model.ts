@@ -26,6 +26,7 @@ export const CandidateSchema = z.object({
   title: z.string().default("Untitled candidate"),
   purpose: z.string().default(""),
   status: z.string().default("proposed"),
+  candidate_kind: z.string().default("intervention"),
   question_id: z.string().nullable().optional(),
   base_experiment: z.string().nullable().optional(),
   base_stage: z.string().nullable().optional(),
@@ -46,6 +47,7 @@ export const CandidateSchema = z.object({
   configuration_patch: AnyRecord.default({}),
   expected_outcomes: z.array(z.union([z.string(), AnyRecord])).default([]),
   falsification_criteria: z.array(z.union([z.string(), AnyRecord])).default([]),
+  domain_expectations: z.array(AnyRecord).default([]),
   risks: z.array(z.string()).default([]),
   validation_reasons: z.array(z.string()).default([]),
   created_at: z.string().nullable().optional(),
@@ -109,9 +111,15 @@ export const MetaControllerSchema = z.object({
   pid: z.number().nullable().optional(),
   last_run_at: z.string().nullable().optional(),
   next_run_at: z.string().nullable().optional(),
+  last_invocation_source: z.string().nullable().optional(),
+  run_now_supported: z.boolean().default(false),
   mandate_version: z.string().nullable().optional(),
+  architecture_version: z.string().nullable().optional(),
+  architecture_path: z.string().nullable().optional(),
   summary: z.string().default("No meta-controller run recorded."),
   severity: z.string().default("info"),
+  latest_run_status: z.string().default("not_started"),
+  historical_failure: z.boolean().default(false),
   findings: z.array(z.string()).default([]),
   evidence_references: z.array(z.string()).default([]),
   actions: z.array(AnyRecord).default([]),
@@ -123,6 +131,54 @@ export const MetaControllerSchema = z.object({
   unresolved_risks: z.array(z.string()).default([]),
   latest_run: AnyRecord.nullable().optional(),
   history: z.array(AnyRecord).default([]),
+});
+
+export const DomainGuidanceSchema = z.object({
+  enabled: z.boolean().default(false),
+  status: z.string().default("not_configured"),
+  objective_eligibility: z.string().default("not_evaluated"),
+  contract: z.object({
+    id: z.string().nullable().optional(),
+    hash: z.string().nullable().optional(),
+    path: z.string().nullable().optional(),
+  }).optional(),
+  calibration: z.object({
+    status: z.string().default("required"),
+    id: z.string().nullable().optional(),
+    hash: z.string().nullable().optional(),
+    replicate_count: z.number().default(0),
+  }).optional(),
+  constraints: z.array(z.object({
+    id: z.string(),
+    title: z.string().default("Domain constraint"),
+    kind: z.string().nullable().optional(),
+    role: z.enum(["hard_guardrail", "secondary_evidence"]),
+    labels: z.array(z.string()).default([]),
+    support: AnyRecord.default({}),
+    status: z.string().default("unresolved"),
+    checks: z.array(z.object({
+      metric: z.string(),
+      status: z.string().default("unresolved"),
+      value: Numeric,
+      confidence_interval_95: z.array(z.number()).length(2).nullable().optional(),
+      delta: Numeric,
+      baseline: AnyRecord.nullable().optional(),
+      reason: z.string().nullable().optional(),
+      method: z.string().nullable().optional(),
+    })).default([]),
+  })).default([]),
+  unit_of_analysis: AnyRecord.default({}),
+  sample_coverage: AnyRecord.default({}),
+  replicate_coverage: z.object({
+    completed: z.number().default(0),
+    required: z.number().default(3),
+    seeds: z.array(z.number()).default([]),
+  }).default({ completed: 0, required: 3, seeds: [] }),
+  split_hash: z.string().nullable().optional(),
+  evaluation_id: z.string().nullable().optional(),
+  artifacts: AnyRecord.default({}),
+  warnings: z.array(z.string()).default([]),
+  umap_decision_role: z.string().default("visualization_only"),
 });
 
 export const InvestigationSchema = z.object({
@@ -196,6 +252,7 @@ export const InvestigationSchema = z.object({
     falsification_criteria: z.array(z.string()).default([]),
     missing_reason: z.string().nullable().optional(),
   }),
+  domain_guidance: DomainGuidanceSchema,
   evidence: z.object({ supporting: z.array(EvidenceSchema), contradicting: z.array(EvidenceSchema), inconclusive: z.array(EvidenceSchema), unclassified: z.array(EvidenceSchema), total: z.number(), counts: z.record(z.string(), z.number()).default({}) }),
   candidates: z.array(CandidateSchema).default([]),
   belief_history: z.array(z.record(z.string(), z.unknown())).default([]),
@@ -214,3 +271,4 @@ export type Candidate = z.infer<typeof CandidateSchema>;
 export type Alert = z.infer<typeof AlertSchema>;
 export type MetricPoint = z.infer<typeof MetricPointSchema>;
 export type MetaController = z.infer<typeof MetaControllerSchema>;
+export type DomainGuidance = z.infer<typeof DomainGuidanceSchema>;

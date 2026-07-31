@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.dashboard_data import build_investigation, find_entity, find_observation, resolve_campaign
 from src.agent_campaign_loop import load_campaign_config, campaign_live_status, terminate_campaign
-from src.meta_controller import _pid_running, stop_loop
+from src.meta_controller import _pid_running, request_run_now, stop_loop
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,12 +116,38 @@ def _spawn(command: list[str]) -> dict[str, Any]:
     return {"status": "started", "pid": process.pid, "command": command}
 
 
+def _run_meta_now(campaign: str) -> dict[str, Any]:
+    alias, config = _campaign_config(campaign)
+    campaign_id = str(config["campaign"]["id"])
+    request = request_run_now(ROOT, config, requested_by="dashboard_user")
+    if request["status"] in {"requested", "already_running"}:
+        return {**request, "controller": "meta", "campaign": campaign_id}
+    return _spawn(
+        [
+            sys.executable,
+            str(ROOT / "run_campaign.py"),
+            "meta-controller",
+            alias,
+            "--once",
+            "--invocation-source",
+            "dashboard_user",
+        ]
+    ) | {"controller": "meta", "campaign": campaign_id, "invocation_source": "dashboard_user"}
+
+
 @app.post("/api/investigation/{campaign}/control/{controller}/{action}")
 def control(campaign: str, controller: str, action: str) -> dict[str, Any]:
     if controller not in {"meta", "campaign"}:
         raise HTTPException(status_code=400, detail="controller must be meta or campaign")
+    if action == "run-now":
+        if controller != "meta":
+            raise HTTPException(status_code=400, detail="run-now is only available for the meta controller")
+        try:
+            return _run_meta_now(campaign)
+        except (FileNotFoundError, ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     if action not in {"start", "stop", "continue"}:
-        raise HTTPException(status_code=400, detail="action must be start, stop, or continue")
+        raise HTTPException(status_code=400, detail="action must be start, stop, continue, or run-now")
     try:
         alias, config = _campaign_config(campaign)
         campaign_id = str(config["campaign"]["id"])
@@ -146,7 +172,6 @@ def control(campaign: str, controller: str, action: str) -> dict[str, Any]:
         return _spawn([sys.executable, str(ROOT / "run_campaign.py"), alias])
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
 
 DIST = ROOT / "dashboard" / "dist"
 if DIST.exists():

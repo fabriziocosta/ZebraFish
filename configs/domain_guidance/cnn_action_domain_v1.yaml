@@ -1,0 +1,112 @@
+version: 1
+id: cnn_action_domain_v1
+title: CNN action-class identifiability and biological representation geometry
+
+applies_to:
+  campaign: cnn_pretrain_finetune
+  stages: [13C]
+  target: action
+
+evaluation:
+  split: holdout
+  exclude_controls: true
+  control_labels: [Water]
+  outer_unit: compound
+  inner_unit: experimental_run_id
+  minimum_compounds_per_class: 2
+  minimum_runs_per_class: 2
+  bootstrap_iterations: 200
+  bootstrap_seed: 1729
+  neighbourhood_k: 7
+  baseline_replicates: 3
+  threshold_strategy: baseline_relative
+  live_monitoring:
+    enabled: true
+    cadence_epochs: 10
+    minimum_epoch: 20
+    persistent_controller_polls: 2
+    minimum_prediction_coverage: 0.5
+    maximum_prediction_collapse_index: 0.85
+    minimum_worst_class_recall: 0.05
+    termination_eligible: false
+
+constraints:
+  - id: action_identifiability
+    title: All non-control action classes remain identifiable
+    kind: classification_guardrail
+    role: hard_guardrail
+    labels:
+      - GABAAR_Antagonist
+      - NMDAR_Activation
+      - AChE_Inhibitor_Reversible
+      - mAChR_Agonist_NonSelective
+    checks:
+      - metric: worst_class_recall
+        direction: increase
+        minimum_effect: 0.0
+        absolute_minimum: 0.05
+      - metric: prediction_coverage
+        direction: preserve_or_improve
+        tolerance: 0.0
+        absolute_minimum: 0.5
+      - metric: prediction_collapse_index
+        direction: decrease
+        minimum_effect: 0.0
+        absolute_maximum: 0.85
+
+  - id: ache_machr_separability
+    title: AChE and mAChR remain locally distinguishable
+    kind: pairwise_separability
+    role: hard_guardrail
+    labels: [AChE_Inhibitor_Reversible, mAChR_Agonist_NonSelective]
+    checks:
+      - metric: pairwise_balanced_accuracy
+        direction: increase
+        minimum_effect: 0.0
+        absolute_minimum: 0.5
+      - metric: leave_one_compound_out_balanced_accuracy
+        direction: increase
+        minimum_effect: 0.0
+        absolute_minimum: 0.5
+      - metric: symmetric_confusion_rate
+        direction: decrease
+        minimum_effect: 0.0
+        absolute_maximum: 0.5
+
+  - id: gaba_nmda_related_geometry
+    title: GABAAR and NMDAR occupy related representation neighbourhoods
+    kind: related_geometry
+    role: secondary_evidence
+    labels: [GABAAR_Antagonist, NMDAR_Activation]
+    checks:
+      - metric: normalized_centroid_distance
+        direction: preserve_or_improve
+        tolerance: 0.05
+      - metric: related_distance_rank_score
+        direction: preserve_or_improve
+        tolerance: 0.05
+      - metric: neighbourhood_pair_affinity
+        direction: preserve_or_improve
+        tolerance: 0.05
+      - metric: neighbourhood_purity
+        direction: preserve_or_improve
+        tolerance: 0.05
+
+  - id: ache_machr_related_geometry
+    title: AChE and mAChR remain globally related while locally separable
+    kind: related_geometry
+    role: secondary_evidence
+    labels: [AChE_Inhibitor_Reversible, mAChR_Agonist_NonSelective]
+    checks:
+      - metric: normalized_centroid_distance
+        direction: preserve_or_improve
+        tolerance: 0.05
+      - metric: related_distance_rank_score
+        direction: preserve_or_improve
+        tolerance: 0.05
+      - metric: neighbourhood_pair_affinity
+        direction: preserve_or_improve
+        tolerance: 0.05
+      - metric: neighbourhood_purity
+        direction: preserve_or_improve
+        tolerance: 0.05

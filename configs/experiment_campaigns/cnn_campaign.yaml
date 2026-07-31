@@ -80,6 +80,14 @@ objective:
   maximize: true
   minimums:
     action.accuracy: 0.30
+domain_guidance:
+  enabled: true
+  contract_path: configs/domain_guidance/cnn_action_domain_v1.yaml
+  calibration_profile_path: state/domain_guidance/cnn_action_domain_v1_baseline.json
+  candidate_family_id: cnn_action_domain_family_v1
+  applicable_stages: [13C]
+  policy: mixed_hierarchy
+  umap_decision_role: visualization_only
 artifacts:
   root: artifacts/campaigns/cnn_pretrain_finetune
 logbook:

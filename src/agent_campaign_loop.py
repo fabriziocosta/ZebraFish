@@ -52,6 +52,13 @@ RESUMABLE_STOPPED_STATUSES = {
     "termination_race_stopped",
 }
 
+TERMINAL_RECOVERY_STATUSES = {
+    "failed",
+    "semantic_early_stopped",
+    "terminated",
+    "termination_race_stopped",
+}
+
 
 @dataclass(frozen=True)
 class CampaignDecision:
@@ -161,7 +168,14 @@ def _campaign_terminate_lock_path(config: dict[str, Any]) -> Path:
 
 def _acquire_campaign_lock(config: dict[str, Any]) -> Path:
     path = _campaign_lock_path(config)
-    return _acquire_pid_lock(path, label="Campaign")
+    try:
+        return _acquire_pid_lock(path, label="Campaign")
+    except RuntimeError:
+        owner = _read_lock_pid(path)
+        if owner is None or owner == os.getpid() or not _campaign_supervisor_is_stranded(config, owner):
+            raise
+        _reclaim_stranded_campaign_supervisor(path, owner)
+        return _acquire_pid_lock(path, label="Campaign")
 
 
 def _acquire_terminate_lock(config: dict[str, Any]) -> Path:
@@ -197,6 +211,35 @@ def _read_lock_pid(path: Path) -> int | None:
         return int(payload.get("pid"))
     except (TypeError, ValueError, AttributeError):
         return None
+
+
+def _campaign_supervisor_is_stranded(config: dict[str, Any], owner: int) -> bool:
+    """Identify a live supervisor that owns a lock after its child is terminal."""
+
+    if not experiment_loop._is_process_running(owner):
+        return True
+    state = _read_json(_campaign_state_path(config))
+    if state.get("status") not in TERMINAL_RECOVERY_STATUSES:
+        return False
+    child_pid = state.get("active_launch_state", {}).get("pid") if isinstance(state.get("active_launch_state"), dict) else None
+    return not (isinstance(child_pid, int) and experiment_loop._is_process_running(child_pid))
+
+
+def _reclaim_stranded_campaign_supervisor(path: Path, owner: int) -> None:
+    """Stop only a supervisor proven idle by terminal campaign state."""
+
+    if experiment_loop._is_process_running(owner):
+        try:
+            os.kill(owner, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        deadline = time.monotonic() + 2.0
+        while experiment_loop._is_process_running(owner) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        if experiment_loop._is_process_running(owner):
+            os.kill(owner, signal.SIGKILL)
+    if _read_lock_pid(path) == owner:
+        path.unlink(missing_ok=True)
 
 
 def _release_campaign_lock(path: Path) -> None:
@@ -306,6 +349,14 @@ def _copy_stage_configs(
             optimization = patched.setdefault("optimization_config", {})
             if isinstance(optimization, dict):
                 optimization["random_state"] = int(replicate_seed)
+        domain_guidance = campaign_config.get("domain_guidance", {})
+        applicable_stages = domain_guidance.get("applicable_stages", [])
+        if domain_guidance.get("enabled") and stage in applicable_stages:
+            patched["domain_guidance_contract"] = domain_guidance.get("contract_path")
+            patched["domain_guidance_calibration"] = domain_guidance.get("calibration_profile_path")
+            patched["evaluation_protocol"] = campaign_config.get("campaign", {}).get(
+                "evaluation_protocol", "legacy_single_seed"
+            )
         patched["experiment_output_dir"] = str(_stage_output_root(trial_dir, stage))
         write_yaml_mapping(target, patched)
         copied[stage] = str(target)

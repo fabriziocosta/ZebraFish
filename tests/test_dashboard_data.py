@@ -30,6 +30,10 @@ class DashboardDataTests(unittest.TestCase):
         self.assertIn("events", payload["current_experiment"]["metric_plot"])
         self.assertIn("interpretation", payload["current_experiment"]["metric_plot"])
         self.assertIn("data_coverage", payload["diagnostics"])
+        self.assertIn("domain_guidance", payload)
+        self.assertTrue(payload["domain_guidance"]["enabled"])
+        self.assertEqual(payload["domain_guidance"]["umap_decision_role"], "visualization_only")
+        self.assertGreaterEqual(len(payload["domain_guidance"]["constraints"]), 4)
         if payload["current_experiment"]["stage"] == "10C":
             self.assertIn(payload["current_experiment"]["metric_display"]["role"], {"diagnostic", "unavailable"})
             if payload["current_experiment"]["metric_display"]["role"] == "diagnostic":

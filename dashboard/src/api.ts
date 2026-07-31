@@ -31,3 +31,12 @@ export async function controlController(
   }
   return response.json();
 }
+
+export async function runMetaControllerNow(campaign: string): Promise<{ status: string; [key: string]: unknown }> {
+  const response = await fetch(`/api/investigation/${encodeURIComponent(campaign)}/control/meta/run-now`, { method: "POST" });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Meta-controller run-now returned ${response.status}: ${detail}`);
+  }
+  return response.json();
+}

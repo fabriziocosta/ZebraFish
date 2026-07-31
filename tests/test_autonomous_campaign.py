@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,6 +9,8 @@ from unittest import mock
 
 from src.autonomous_campaign import _apply_decision
 from src.autonomous_campaign import _ensure_seed_knowledge
+from src.autonomous_campaign import _record_live_observations
+from src.autonomous_campaign import _replicate_aggregate
 from src.autonomous_campaign import parse_decision
 from src.scientific_state import empty_state, record_entity
 
@@ -194,6 +197,83 @@ class AutonomousCampaignTests(unittest.TestCase):
         launch.assert_not_called()
         self.assertIn("no completed compatible 10C checkpoint", reason)
         self.assertIn("last_rejected_candidate", updated["controller_state"])
+
+    def test_live_domain_diagnostic_becomes_a_controller_trigger_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            live_dir = Path(tmpdir) / "domain_guidance" / "live"
+            live_dir.mkdir(parents=True)
+            (live_dir / "latest.json").write_text(
+                json.dumps({
+                    "id": "domain-live-1",
+                    "epoch": 20,
+                    "contract_hash": "contract-hash",
+                    "created_at": "2026-07-30T12:00:00+00:00",
+                    "termination_eligible": False,
+                    "live_triggers": [{
+                        "type": "domain_live_prediction_collapse",
+                        "metric": "prediction_collapse_index",
+                        "value": 0.95,
+                        "threshold": 0.85,
+                    }],
+                }),
+                encoding="utf-8",
+            )
+            updated, observations = _record_live_observations(
+                empty_state(),
+                {"observation": {}},
+                {"current_trial_id": "trial-1", "current_stage": "13C"},
+                {"artifacts": {"run_dir": tmpdir}},
+            )
+        domain_observation = next(
+            item for item in observations
+            if item["type"] == "domain_live_prediction_collapse"
+        )
+        self.assertFalse(domain_observation["measurements"]["termination_eligible"])
+        self.assertIn(domain_observation["id"], updated["entities"]["observations"])
+
+    def test_baseline_replicate_aggregate_resolves_named_domain_family(self) -> None:
+        state = record_entity(
+            empty_state(),
+            "candidate_experiments",
+            "baseline-candidate",
+            {
+                "id": "baseline-candidate",
+                "candidate_kind": "baseline_calibration",
+                "status": "selected_for_execution",
+                "provenance": {"created_by": "test"},
+            },
+            actor="test",
+        )
+        state = record_entity(
+            state,
+            "domain_calibrations",
+            "calibration-1",
+            {
+                "id": "calibration-1",
+                "status": "frozen",
+                "candidate_family_id": "cnn-domain-family",
+                "provenance": {"created_by": "test"},
+            },
+            actor="test",
+        )
+        state["controller_state"]["active_replicate_group"] = {
+            "id": "group-1",
+            "candidate_id": "baseline-candidate",
+            "seeds": [0, 1, 2],
+            "completed_trial_ids": ["trial-0", "trial-1", "trial-2"],
+        }
+        aggregate = _replicate_aggregate(
+            state,
+            {
+                "domain_guidance": {
+                    "enabled": True,
+                    "candidate_family_id": "cnn-domain-family",
+                }
+            },
+        )
+        self.assertIsNotNone(aggregate)
+        self.assertEqual(aggregate["domain_guidance"]["status"], "baseline_calibrated")
+        self.assertEqual(aggregate["evidence_status"], "baseline_calibration")
 
 
 if __name__ == "__main__":

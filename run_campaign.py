@@ -294,11 +294,14 @@ def meta_controller_command(argv: list[str]) -> int:
     mode.add_argument("--start", action="store_true", help="Run the persistent daily loop.")
     mode.add_argument("--continue", dest="continue_loop", action="store_true", help="Continue the persistent daily loop.")
     mode.add_argument("--stop", action="store_true", help="Stop the persistent daily loop.")
+    parser.add_argument("--invocation-source", default="cli", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     from src.meta_controller import cli as meta_cli
 
     forwarded = [resolve_campaign(args.campaign)]
     forwarded.append("--once" if args.once else "--start" if args.start else "--continue" if args.continue_loop else "--stop")
+    if args.once:
+        forwarded.extend(["--invocation-source", args.invocation_source])
     return meta_cli(forwarded, root=Path(__file__).resolve().parent)
 
 

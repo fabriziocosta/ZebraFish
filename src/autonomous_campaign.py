@@ -21,6 +21,14 @@ from src import agent_campaign_loop as legacy
 from src import agent_experiment_loop as experiment_loop
 from src.campaign_watchdog import inspect_campaign
 from src.autonomous_policy import CandidateValidation, validate_candidate
+from src.domain_guidance import (
+    aggregate_domain_evaluations,
+    calibrate_domain_baseline,
+    domain_evaluation_observations,
+    live_domain_observations,
+    load_domain_contract,
+    save_domain_calibration,
+)
 from src.experiment_protocol import (
     aggregate_guardrail,
     aggregate_replicates,
@@ -58,6 +66,16 @@ DECISIONS = {"continue", "propose_trial", "terminate_trial", "stop_campaign", "n
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _detector_config(campaign_config: dict[str, Any]) -> DetectorConfig:
+    """Build detector settings without leaking watchdog-only config keys."""
+
+    raw = campaign_config.get("observation", {})
+    if not isinstance(raw, dict):
+        raw = {}
+    allowed = set(DetectorConfig.__dataclass_fields__)
+    return DetectorConfig(**{key: value for key, value in raw.items() if key in allowed})
 
 
 def record_lockbox_confirmation(
@@ -224,6 +242,8 @@ def _decision_schema() -> dict[str, Any]:
                             "risks",
                             "allowed_stages",
                             "baseline",
+                            "domain_expectations",
+                            "candidate_kind",
                         ],
                         "properties": {
                             "id": {"type": "string"},
@@ -246,6 +266,21 @@ def _decision_schema() -> dict[str, Any]:
                             "risks": {"type": "array", "items": {"type": "string"}},
                             "allowed_stages": {"type": "array", "items": {"type": "string"}},
                             "baseline": {"type": "string"},
+                            "candidate_kind": {"type": "string", "enum": ["intervention", "baseline_calibration"]},
+                            "domain_expectations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["constraint_id", "comparison", "direction", "role"],
+                                    "properties": {
+                                        "constraint_id": {"type": "string"},
+                                        "comparison": {"type": "string", "enum": ["paired_baseline"]},
+                                        "direction": {"type": "string", "enum": ["increase", "decrease", "preserve_or_improve"]},
+                                        "role": {"type": "string", "enum": ["hard_guardrail", "secondary_evidence"]},
+                                    },
+                                },
+                            },
                         },
                     },
                 },
@@ -379,6 +414,8 @@ def _build_prompt(
         "No human will approve or repair your proposal. Return one bounded, evidence-based decision.",
         "Raw measurements are calculated by deterministic software. Use observations rather than inventing numeric findings.",
         "A candidate must be one controlled trial, address an existing question and hypothesis, use only allowlisted parameters, and include expected outcomes and falsification criteria.",
+        "When domain guidance is active, preregister every protected domain constraint in domain_expectations. Hard guardrails outrank representation geometry; UMAP is visualization only.",
+        "Use candidate_kind baseline_calibration only to repeat the exact registered baseline configuration for threshold calibration; it must have no changed leaves. Use intervention for all scientific changes.",
         "Use exact hypothesis and question IDs from the scientific context, never their titles or statements.",
         "Encode operation value and expected_old as JSON strings. Encode candidate configuration_patch and fixed_variables as JSON strings.",
         "Every created hypothesis, belief, question, or candidate must include created_at and provenance; every update must use expected_old when changing existing state.",
@@ -471,6 +508,14 @@ def _record_stage(
         summary_candidates = sorted(Path(str(run_dir)).rglob("*summary_metrics*.csv"))
         summary_metrics_path = str(summary_candidates[-1]) if summary_candidates else None
     summary_metrics = read_summary_metrics(summary_metrics_path) if summary_metrics_path else {}
+    domain_report = None
+    domain_report_path = Path(str(run_dir)) / "domain_guidance" / "domain_evaluation.json" if run_dir else None
+    if domain_report_path is not None and domain_report_path.exists():
+        try:
+            loaded_domain_report = json.loads(domain_report_path.read_text(encoding="utf-8"))
+            domain_report = loaded_domain_report if isinstance(loaded_domain_report, dict) else None
+        except (OSError, json.JSONDecodeError):
+            domain_report = None
     checkpoint_manifest_value = legacy_state.get("checkpoint_manifest") or checkpoint_reuse.get("manifest")
     if not isinstance(checkpoint_manifest_value, dict):
         checkpoint_candidates = []
@@ -529,6 +574,12 @@ def _record_stage(
             "controller_status": controller_status,
             "run_status": stage_status.get("run_status", {}),
             "summary_metrics": summary_metrics,
+            "domain_guidance": None if domain_report is None else {
+                "evaluation_id": domain_report.get("id"),
+                "objective_eligibility": domain_report.get("objective_eligibility"),
+                "contract_id": domain_report.get("contract_id"),
+                "contract_hash": domain_report.get("contract_hash"),
+            },
         },
         "provenance": {"created_by": "autonomous_controller", "source": "campaign_stage_status"},
     }
@@ -543,6 +594,144 @@ def _record_stage(
                 actor="deterministic_split_engine",
             )
     scientific_state = record_entity(scientific_state, "experiments", experiment_id, record, actor="autonomous_controller")
+    if domain_report is not None:
+        domain_record = {
+            **domain_report,
+            "stage_experiment_id": experiment_id,
+            "trial_id": trial_id,
+            "replicate_index": legacy_state.get("replicate_index"),
+            "training_seed": legacy_state.get("replicate_seed", domain_report.get("training_seed")),
+            "status": "completed",
+            "provenance": {
+                **(domain_report.get("provenance", {}) if isinstance(domain_report.get("provenance"), dict) else {}),
+                "source": str(domain_report_path),
+                "created_by": "domain_guidance_evaluator",
+            },
+        }
+        domain_id = str(domain_record["id"])
+        contract_path = campaign_config.get("domain_guidance", {}).get("contract_path")
+        if contract_path:
+            try:
+                domain_contract = load_domain_contract(contract_path)
+            except (OSError, ValueError):
+                domain_contract = None
+            if domain_contract is not None:
+                for constraint in domain_contract.get("constraints", []):
+                    constraint_entity_id = (
+                        f"{domain_contract['id']}@{domain_contract['_hash'][:12]}:{constraint['id']}"
+                    )
+                    if constraint_entity_id not in scientific_state["entities"]["domain_constraints"]:
+                        scientific_state = record_entity(
+                            scientific_state,
+                            "domain_constraints",
+                            constraint_entity_id,
+                            {
+                                **constraint,
+                                "id": constraint_entity_id,
+                                "constraint_id": constraint["id"],
+                                "contract_id": domain_contract["id"],
+                                "contract_hash": domain_contract["_hash"],
+                                "status": "registered",
+                                "provenance": {
+                                    "created_by": "domain_contract_loader",
+                                    "source": str(contract_path),
+                                },
+                            },
+                            actor="domain_contract_loader",
+                        )
+        if domain_id not in scientific_state["entities"]["domain_evaluations"]:
+            scientific_state = record_entity(
+                scientific_state,
+                "domain_evaluations",
+                domain_id,
+                domain_record,
+                actor="domain_guidance_evaluator",
+            )
+        scientific_state = apply_operations(
+            scientific_state,
+            [{
+                "operation": "relation",
+                "value": {
+                    "type": "produced",
+                    "source": experiment_id,
+                    "target": domain_id,
+                },
+            }],
+            actor="domain_guidance_evaluator",
+        )
+        for constraint in domain_report.get("constraints", []):
+            constraint_entity_id = (
+                f"{domain_report.get('contract_id')}@"
+                f"{str(domain_report.get('contract_hash', 'unknown'))[:12]}:"
+                f"{constraint.get('id')}"
+            )
+            if constraint_entity_id in scientific_state["entities"]["domain_constraints"]:
+                relation = {
+                    "type": "evaluates_constraint",
+                    "source": domain_id,
+                    "target": constraint_entity_id,
+                }
+                if not any(
+                    item.get("type") == relation["type"]
+                    and item.get("source") == relation["source"]
+                    and item.get("target") == relation["target"]
+                    for item in scientific_state.get("relations", [])
+                ):
+                    scientific_state = apply_operations(
+                        scientific_state,
+                        [{"operation": "relation", "value": relation}],
+                        actor="domain_guidance_evaluator",
+                    )
+        for observation in domain_evaluation_observations(domain_record):
+            observation_id = observation["id"]
+            if observation_id not in scientific_state["entities"]["observations"]:
+                scientific_state = record_entity(
+                    scientific_state,
+                    "observations",
+                    observation_id,
+                    observation,
+                    actor="domain_guidance_evaluator",
+                )
+            produced = {"type": "produced", "source": experiment_id, "target": observation_id}
+            if not any(
+                item.get("type") == produced["type"]
+                and item.get("source") == produced["source"]
+                and item.get("target") == produced["target"]
+                for item in scientific_state.get("relations", [])
+            ):
+                scientific_state = apply_operations(
+                    scientific_state,
+                    [{"operation": "relation", "value": produced}],
+                    actor="domain_guidance_evaluator",
+                )
+            group = scientific_state.get("controller_state", {}).get("active_replicate_group", {})
+            candidate = scientific_state.get("entities", {}).get("candidate_experiments", {}).get(
+                group.get("candidate_id") if isinstance(group, dict) else None,
+                {},
+            )
+            relation_type = (
+                "supports" if observation.get("direction") == "supporting"
+                else "contradicts" if observation.get("direction") == "contradicting"
+                else None
+            )
+            if relation_type and isinstance(candidate, dict):
+                for hypothesis_id in candidate.get("hypothesis_ids", []):
+                    relation = {
+                        "type": relation_type,
+                        "source": observation_id,
+                        "target": hypothesis_id,
+                    }
+                    if hypothesis_id in scientific_state["entities"]["hypotheses"] and not any(
+                        item.get("type") == relation["type"]
+                        and item.get("source") == relation["source"]
+                        and item.get("target") == relation["target"]
+                        for item in scientific_state.get("relations", [])
+                    ):
+                        scientific_state = apply_operations(
+                            scientific_state,
+                            [{"operation": "relation", "value": relation}],
+                            actor="domain_guidance_evaluator",
+                        )
     if split_manifest:
         split_id = str(split_manifest.get("id") or f"split_{config_hash(split_manifest)[:16]}")
         scientific_state = apply_operations(
@@ -605,8 +794,21 @@ def _record_stage(
         runtime_hours=runtime_hours,
         comparable_runtime_hours=comparable_runtimes,
         replicate_scores=replicate_scores,
-        config=DetectorConfig(**campaign_config.get("observation", {})),
+        config=_detector_config(campaign_config),
     )
+    live_domain_path = Path(str(run_dir)) / "domain_guidance" / "live" / "latest.json"
+    if live_domain_path.exists():
+        try:
+            live_domain_report = json.loads(live_domain_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            live_domain_report = None
+        if isinstance(live_domain_report, dict):
+            observations.extend(
+                live_domain_observations(
+                    live_domain_report,
+                    stage_experiment_id=experiment_id,
+                )
+            )
     for observation in observations:
         observation_id = observation["id"]
         if observation_id not in scientific_state["entities"]["observations"]:
@@ -653,8 +855,21 @@ def _record_live_observations(
     observations = generate_observations(
         experiment_id,
         run_dir=run_dir,
-        config=DetectorConfig(**campaign_config.get("observation", {})),
+        config=_detector_config(campaign_config),
     )
+    live_domain_path = Path(str(run_dir)) / "domain_guidance" / "live" / "latest.json"
+    if live_domain_path.exists():
+        try:
+            live_domain_report = json.loads(live_domain_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            live_domain_report = None
+        if isinstance(live_domain_report, dict):
+            observations.extend(
+                live_domain_observations(
+                    live_domain_report,
+                    stage_experiment_id=experiment_id,
+                )
+            )
     existing = {
         _observation_fingerprint(record)
         for record in scientific_state.get("entities", {}).get("observations", {}).values()
@@ -739,6 +954,15 @@ def _request_live_intervention(
         scientific_state, campaign_config, live_observations
     )
     if not ready:
+        if scientific_state.get("controller_state", {}).get("last_live_intervention_error"):
+            scientific_state = update_controller_state(
+                scientific_state,
+                {
+                    "last_live_intervention_error": None,
+                    "last_live_intervention_error_at": None,
+                },
+                actor="live_observation_engine",
+            )
         return scientific_state, legacy_state, controller_reason
     summary = {
         "status": "live_intervention_triggered",
@@ -750,6 +974,20 @@ def _request_live_intervention(
         "instruction": "Decide whether to continue, terminate this low-yield trial, or propose one bounded replacement trial. Do not infer raw metrics beyond these deterministic observations.",
     }
     decision = request_decision(campaign_config, loop_config, scientific_state, summary, client=client)
+    termination_eligible = [
+        item
+        for item in triggered
+        if not str(item.get("type", "")).startswith("domain_live_")
+        or bool(item.get("measurements", {}).get("termination_eligible"))
+    ]
+    if decision["decision"] == "terminate_trial" and not termination_eligible:
+        decision = {
+            "decision": "continue",
+            "reason": "live domain diagnostics requested review but are not registered as termination-eligible",
+            "operations": decision.get("operations", []),
+            "candidate": None,
+            "evidence_references": decision.get("evidence_references", []),
+        }
     scientific_state = update_controller_state(
         scientific_state,
         {"last_live_llm_intervention_at": _now(), "live_trigger_polls": 0, "last_live_decision": decision["decision"]},
@@ -956,7 +1194,7 @@ def _reject_candidate(
         event_type="rejected",
         payload={"reasons": list(reasons)},
         actor="autonomous_controller",
-    )
+    ) if f"candidate_event_{stable_hash({'candidate': candidate_id, 'event': 'rejected', 'reasons': reasons})[:20]}" not in updated.get("entities", {}).get("candidate_events", {}) else updated
     return updated, "rejected candidate: " + "; ".join(reasons)
 
 
@@ -1007,6 +1245,7 @@ def _apply_decision(
         candidate = dict(candidate)
         candidate.setdefault("id", _candidate_id(candidate))
         candidate.setdefault("status", "proposed")
+        candidate.setdefault("candidate_kind", "intervention")
         candidate.setdefault("replicate_seeds", _candidate_seeds(candidate, campaign_config))
         candidate.setdefault("replicate_group_id", candidate["id"])
         validation = validate_candidate(
@@ -1226,7 +1465,7 @@ def _apply_decision(
             {"status": "autonomous_safe_stop", "safe_stop_reason": decision.get("reason"), "last_decision_at": _now()},
         )
         return proposed_state, legacy_state, "autonomous safe stop: " + decision.get("reason", "no reason")
-    if decision["decision"] in {"continue", "no_action"} and legacy_state.get("status") in {"trial_completed", "failed"}:
+    if decision["decision"] in {"continue", "no_action"} and legacy_state.get("status") in {"trial_completed", "failed", "semantic_early_stopped", "terminated", "termination_race_stopped"}:
         proposed_state = update_controller_state(
             proposed_state,
             {
@@ -1263,6 +1502,60 @@ def _selected_recovery_candidate(scientific_state: dict[str, Any]) -> dict[str, 
         return None
     selected.sort(key=lambda value: str(value.get("created_at", "")), reverse=True)
     return dict(selected[0])
+
+
+def _recover_or_request_next_trial(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    scientific_state: dict[str, Any],
+    legacy_state: dict[str, Any],
+    summary: dict[str, Any],
+    *,
+    client: Any | None,
+    stream: TextIO,
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Apply a selected recovery or retry invalid new candidates with feedback."""
+
+    validation_error: str | None = None
+    selected_candidate = _selected_recovery_candidate(scientific_state)
+    attempts = max(1, min(3, int(campaign_config.get("campaign", {}).get("max_decision_retries", 3))))
+    for attempt in range(attempts):
+        if selected_candidate is not None and validation_error is None:
+            decision = {
+                "decision": "propose_trial",
+                "reason": "deterministically recovering the selected candidate after the previous process ended",
+                "operations": [],
+                "candidate": selected_candidate,
+                "evidence_references": [],
+            }
+        else:
+            decision = request_decision(
+                campaign_config,
+                loop_config,
+                scientific_state,
+                summary,
+                client=client,
+                validation_error=validation_error,
+            )
+        scientific_state, legacy_state, reason = _apply_decision(
+            campaign_config,
+            loop_config,
+            scientific_state,
+            legacy_state,
+            decision,
+            stream=stream,
+        )
+        if (
+            decision.get("decision") == "propose_trial"
+            and reason.startswith("rejected candidate:")
+            and scientific_state.get("controller_state", {}).get("status") != "autonomous_safe_stop"
+            and attempt + 1 < attempts
+        ):
+            selected_candidate = None
+            validation_error = reason
+            continue
+        return scientific_state, legacy_state, reason
+    return scientific_state, legacy_state, reason
 
 
 def _candidate_seeds(candidate: dict[str, Any], campaign_config: dict[str, Any]) -> list[int]:
@@ -1321,7 +1614,10 @@ def _replicate_candidate_and_seed(
     return dict(candidate), seeds[index], index
 
 
-def _replicate_aggregate(scientific_state: dict[str, Any]) -> dict[str, Any] | None:
+def _replicate_aggregate(
+    scientific_state: dict[str, Any],
+    campaign_config: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     group = scientific_state.get("controller_state", {}).get("active_replicate_group")
     if not isinstance(group, dict):
         return None
@@ -1333,6 +1629,12 @@ def _replicate_aggregate(scientific_state: dict[str, Any]) -> dict[str, Any] | N
     ]
     scores: list[float] = []
     guardrail_values: list[float] = []
+    completed_trial_ids = set(map(str, group.get("completed_trial_ids", [])))
+    domain_evaluations = [
+        record
+        for record in scientific_state.get("entities", {}).get("domain_evaluations", {}).values()
+        if isinstance(record, dict) and str(record.get("trial_id")) in completed_trial_ids
+    ]
     for trial in trials:
         outcome = trial.get("outcome", {}) if isinstance(trial.get("outcome"), dict) else {}
         stage_ids = trial.get("stage_experiment_ids", []) if isinstance(trial.get("stage_experiment_ids"), list) else []
@@ -1352,16 +1654,142 @@ def _replicate_aggregate(scientific_state: dict[str, Any]) -> dict[str, Any] | N
             guardrail_values.append(float(guardrail))
     aggregate = aggregate_replicates([value for value in scores if value is not None], minimum_replicates=len(group.get("seeds", [])) or 3)
     guardrail = aggregate_guardrail(guardrail_values, minimum=0.30, minimum_replicates=len(group.get("seeds", [])) or 3)
-    valid = aggregate.status == "replicate_complete" and guardrail["all_replicates_pass"]
+    candidate = scientific_state.get("entities", {}).get("candidate_experiments", {}).get(group.get("candidate_id"), {})
+    candidate_kind = candidate.get("candidate_kind", "intervention") if isinstance(candidate, dict) else "intervention"
+    guidance = (campaign_config or {}).get("domain_guidance", {})
+    calibration_family_id = str(
+        guidance.get("candidate_family_id")
+        or guidance.get("contract_id")
+        or "domain-guidance"
+    )
+    calibration_ids = [
+        calibration_id
+        for calibration_id, calibration in scientific_state.get("entities", {}).get("domain_calibrations", {}).items()
+        if isinstance(calibration, dict)
+        and calibration.get("candidate_family_id") == calibration_family_id
+    ]
+    guidance_enabled = isinstance(guidance, dict) and bool(guidance.get("enabled"))
+    if not guidance_enabled:
+        domain_gate = {
+            "status": "not_configured",
+            "evaluation_count": 0,
+            "hard_guardrails_pass": True,
+        }
+    elif candidate_kind == "baseline_calibration":
+        domain_gate = {
+            "status": "baseline_calibrated" if calibration_ids else "calibration_failed",
+            "evaluation_count": len(domain_evaluations),
+            "calibration_ids": calibration_ids,
+            "hard_guardrails_pass": bool(calibration_ids),
+        }
+    else:
+        calibration_id = scientific_state.get("controller_state", {}).get("active_domain_calibration_id")
+        calibration = scientific_state.get("entities", {}).get("domain_calibrations", {}).get(calibration_id)
+        try:
+            contract = load_domain_contract(guidance.get("contract_path"))
+            if not isinstance(calibration, dict):
+                raise ValueError("frozen domain calibration is unavailable")
+            domain_gate = aggregate_domain_evaluations(
+                domain_evaluations,
+                calibration=calibration,
+                contract=contract,
+            )
+        except (OSError, ValueError) as exc:
+            domain_gate = {
+                "status": "unresolved",
+                "evaluation_count": len(domain_evaluations),
+                "hard_guardrails_pass": False,
+                "reason": f"{type(exc).__name__}: {exc}",
+            }
+    valid = (
+        aggregate.status == "replicate_complete"
+        and guardrail["all_replicates_pass"]
+        and domain_gate["hard_guardrails_pass"]
+        and candidate_kind != "baseline_calibration"
+    )
     return {
         "score": aggregate.as_dict(),
         "guardrail": guardrail,
+        "domain_guidance": domain_gate,
         "trial_count": len(trials),
         "objective_eligible": valid,
-        "evidence_status": "replicate_supported" if valid else "invalid_or_incomplete_evidence",
+        "evidence_status": (
+            "baseline_calibration"
+            if candidate_kind == "baseline_calibration" and domain_gate["hard_guardrails_pass"]
+            else "replicate_supported" if valid
+            else "invalid_or_incomplete_evidence"
+        ),
         "lockbox_status": "protected_not_evaluated",
         "protocol_version": "replicate-lockbox-v1",
     }
+
+
+def _freeze_domain_calibration_if_ready(
+    scientific_state: dict[str, Any],
+    campaign_config: dict[str, Any],
+) -> dict[str, Any]:
+    guidance = campaign_config.get("domain_guidance", {})
+    group = scientific_state.get("controller_state", {}).get("active_replicate_group")
+    if not isinstance(guidance, dict) or not guidance.get("enabled") or not isinstance(group, dict):
+        return scientific_state
+    candidate = scientific_state.get("entities", {}).get("candidate_experiments", {}).get(group.get("candidate_id"), {})
+    if not isinstance(candidate, dict) or candidate.get("candidate_kind", "intervention") != "baseline_calibration":
+        return scientific_state
+    completed_trial_ids = set(map(str, group.get("completed_trial_ids", [])))
+    if len(completed_trial_ids) < len(group.get("seeds", [])):
+        return scientific_state
+    existing = [
+        item
+        for item in scientific_state.get("entities", {}).get("domain_calibrations", {}).values()
+        if isinstance(item, dict)
+        and item.get("candidate_family_id") == str(
+            guidance.get("candidate_family_id") or guidance.get("contract_id") or "domain-guidance"
+        )
+    ]
+    if existing:
+        return scientific_state
+    reports = sorted([
+        record
+        for record in scientific_state.get("entities", {}).get("domain_evaluations", {}).values()
+        if isinstance(record, dict) and str(record.get("trial_id")) in completed_trial_ids
+    ], key=lambda record: (int(record.get("replicate_index", 10**9)), str(record.get("id", ""))))
+    try:
+        contract = load_domain_contract(guidance.get("contract_path"))
+        calibration = calibrate_domain_baseline(
+            reports,
+            contract=contract,
+            candidate_family_id=str(
+                guidance.get("candidate_family_id") or contract["id"]
+            ),
+        )
+    except (OSError, ValueError) as exc:
+        return update_controller_state(
+            scientific_state,
+            {
+                "domain_calibration_status": "failed",
+                "domain_calibration_error": f"{type(exc).__name__}: {exc}",
+            },
+            actor="domain_guidance_calibrator",
+        )
+    updated = record_entity(
+        scientific_state,
+        "domain_calibrations",
+        calibration["id"],
+        {**calibration, "status": "frozen"},
+        actor="domain_guidance_calibrator",
+    )
+    profile_path = guidance.get("calibration_profile_path")
+    if profile_path:
+        save_domain_calibration(profile_path, calibration)
+    return update_controller_state(
+        updated,
+        {
+            "domain_calibration_status": "frozen",
+            "active_domain_calibration_id": calibration["id"],
+            "active_domain_contract_hash": calibration["contract_hash"],
+        },
+        actor="domain_guidance_calibrator",
+    )
 
 
 def _campaign_process_active(campaign_config: dict[str, Any]) -> bool:
@@ -1421,12 +1849,39 @@ def _run_autonomous_campaign_body(
     scientific_path = _state_path(campaign_config)
     scientific_state = _ensure_seed_knowledge(load_state(scientific_path), campaign_config)
     legacy_state = legacy._read_json(legacy._campaign_state_path(campaign_config))
-    if new_trial or not legacy_state or legacy_state.get("status") in {"campaign_completed", "analysis_completed", "autonomous_safe_stop"}:
+    # A resumed child is an explicit recovery path.  Do not let a stale
+    # controller safe-stop flag prevent the supervisor from collecting the
+    # already-started experiment's final artifacts.
+    if (
+        legacy_state
+        and _campaign_process_active(campaign_config)
+        and scientific_state.get("controller_state", {}).get("status") == "autonomous_safe_stop"
+    ):
+        scientific_state = update_controller_state(
+            scientific_state,
+            {
+                "status": "running",
+                "safe_stop_reason": None,
+                "recovery_warning": "resumed live child takes precedence over stale controller safe-stop metadata",
+                "recovered_at": _now(),
+            },
+            actor="autonomous_recovery",
+        )
+        transactional_update(scientific_path, lambda current: merge_nonconflicting_states(current, scientific_state))
+    if new_trial or not legacy_state or legacy_state.get("status") in {"campaign_completed", "analysis_completed", "autonomous_safe_stop", "failed", "semantic_early_stopped", "terminated", "termination_race_stopped"}:
         if dry_run:
             return 0
         summary = {"status": "initializing", "trial_id": start_trial_id or "pending"}
         try:
-            decision = request_decision(campaign_config, loop_config, scientific_state, summary, client=client)
+            scientific_state, legacy_state, reason = _recover_or_request_next_trial(
+                campaign_config,
+                loop_config,
+                scientific_state,
+                legacy_state,
+                summary,
+                client=client,
+                stream=stream,
+            )
         except Exception as exc:
             scientific_state = update_controller_state(
                 scientific_state,
@@ -1436,21 +1891,8 @@ def _run_autonomous_campaign_body(
             transactional_update(scientific_path, lambda current: merge_nonconflicting_states(current, scientific_state))
             print(f"autonomous safe stop: decision protocol failure {type(exc).__name__}: {exc}", file=stream, flush=True)
             return 1
-        if decision["decision"] in {"no_action", "continue"}:
-            recovery_candidate = _selected_recovery_candidate(scientific_state)
-            if recovery_candidate is not None:
-                decision = {
-                    "decision": "propose_trial",
-                    "reason": "deterministically recovering the previously selected candidate after interruption",
-                    "operations": [],
-                    "candidate": recovery_candidate,
-                    "evidence_references": [],
-                }
-        scientific_state, legacy_state, reason = _apply_decision(
-            campaign_config, loop_config, scientific_state, legacy_state, decision, stream=stream
-        )
         transactional_update(scientific_path, lambda current: merge_nonconflicting_states(current, scientific_state))
-        print(f"autonomous initialization decision={decision['decision']} reason={reason}", file=stream, flush=True)
+        print(f"autonomous initialization recovery reason={reason}", file=stream, flush=True)
         if scientific_state.get("controller_state", {}).get("status") == "autonomous_safe_stop":
             return 1
     poll_seconds = int(campaign_config["campaign"].get("poll_seconds", campaign_config["agent"].get("poll_seconds", 3600)))
@@ -1464,6 +1906,47 @@ def _run_autonomous_campaign_body(
             latest = legacy._read_json(legacy._campaign_state_path(campaign_config))
             if latest:
                 legacy_state = latest
+            if legacy_state.get("status") in {"failed", "semantic_early_stopped", "terminated", "termination_race_stopped"}:
+                if dry_run:
+                    return 0
+                summary = _summary_for_state(campaign_config, legacy_state)
+                try:
+                    scientific_state, legacy_state, reason = _recover_or_request_next_trial(
+                        campaign_config,
+                        loop_config,
+                        scientific_state,
+                        legacy_state,
+                        summary,
+                        client=client,
+                        stream=stream,
+                    )
+                except Exception as exc:
+                    scientific_state = update_controller_state(
+                        scientific_state,
+                        {
+                            "status": "autonomous_safe_stop",
+                            "safe_stop_reason": f"terminal-run recovery failed: {type(exc).__name__}: {exc}",
+                            "last_decision_error_at": _now(),
+                        },
+                        actor="autonomous_recovery",
+                    )
+                    transactional_update(scientific_path, lambda current: merge_nonconflicting_states(current, scientific_state))
+                    print(f"autonomous safe stop: terminal-run recovery failed {type(exc).__name__}: {exc}", file=stream, flush=True)
+                    return 1
+                transactional_update(scientific_path, lambda current: merge_nonconflicting_states(current, scientific_state))
+                action = "recover_terminal_run"
+                controller_status = "recovered"
+                print(
+                    f"[{_now()}] autonomous campaign={campaign_config['campaign']['id']} "
+                    f"recovered terminal state action={action} reason={reason}",
+                    file=stream,
+                    flush=True,
+                )
+                if scientific_state.get("controller_state", {}).get("status") == "autonomous_safe_stop":
+                    return 1
+                if once:
+                    return 0
+                continue
             if not dry_run:
                 watchdog = inspect_campaign(
                     campaign_config,
@@ -1548,7 +2031,11 @@ def _run_autonomous_campaign_body(
                         )
                         action = "replicate"
                     else:
-                        aggregate = _replicate_aggregate(scientific_state)
+                        scientific_state = _freeze_domain_calibration_if_ready(
+                            scientific_state,
+                            campaign_config,
+                        )
+                        aggregate = _replicate_aggregate(scientific_state, campaign_config)
                         if aggregate is not None:
                             scientific_state = update_controller_state(
                                 scientific_state,

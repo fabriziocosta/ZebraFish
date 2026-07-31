@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -47,6 +48,16 @@ class DashboardApiTests(unittest.TestCase):
     def test_control_endpoint_rejects_unknown_operations(self) -> None:
         self.assertEqual(self.client.post("/api/investigation/cnn/control/unknown/start").status_code, 400)
         self.assertEqual(self.client.post("/api/investigation/cnn/control/meta/launch").status_code, 400)
+
+    def test_meta_run_now_is_an_explicit_operational_trigger(self) -> None:
+        with mock.patch(
+            "src.dashboard_api._run_meta_now",
+            return_value={"status": "requested", "controller": "meta"},
+        ) as trigger:
+            response = self.client.post("/api/investigation/cnn/control/meta/run-now")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "requested")
+        trigger.assert_called_once_with("cnn")
 
 
 if __name__ == "__main__":

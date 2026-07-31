@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from src.observation_engine import read_history, read_summary_metrics
+from src.domain_guidance import DomainGuidanceError, load_domain_contract
 from src.scientific_dashboard import RELATION_COLORS, _graphviz_svg, build_reasoning_graph
 from src.scientific_state import load_state
 
@@ -134,15 +135,26 @@ def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[st
     records.sort(key=lambda item: str(item.get("completed_at") or item.get("created_at") or ""), reverse=True)
     latest = records[0] if records else None
     status = str(current.get("status") or (latest or {}).get("status") or "not_started")
+    latest_status = str((latest or {}).get("status") or "not_started")
+    latest_summary = (latest or {}).get("diagnosis", {}).get("summary", "No meta-controller run recorded.")
+    historical_failure = latest_status == "failed" and status not in {"running", "starting", "stopping"}
+    if historical_failure:
+        latest_summary = f"Historical last-run failure; meta-controller is currently {status}: {latest_summary}"
     return {
         "status": status,
         "running": status in {"running", "starting", "stopping"},
         "pid": current.get("pid"),
         "last_run_at": current.get("last_run_at") or (latest or {}).get("completed_at"),
         "next_run_at": current.get("next_run_at"),
+        "last_invocation_source": current.get("last_invocation_source") or (latest or {}).get("invocation_source"),
+        "run_now_supported": bool(current.get("run_now_supported", False)),
         "mandate_version": current.get("mandate_version") or (latest or {}).get("mandate_version"),
-        "summary": current.get("summary") or (latest or {}).get("diagnosis", {}).get("summary", "No meta-controller run recorded."),
+        "architecture_version": current.get("architecture_version") or (latest or {}).get("architecture_version"),
+        "architecture_path": current.get("architecture_path") or (latest or {}).get("architecture_path"),
+        "summary": current.get("summary") or latest_summary,
         "severity": (latest or {}).get("diagnosis", {}).get("severity", "info"),
+        "latest_run_status": latest_status,
+        "historical_failure": historical_failure,
         "findings": (latest or {}).get("diagnosis", {}).get("root_causes", []),
         "evidence_references": (latest or {}).get("evidence_references", []),
         "actions": (latest or {}).get("actions", []),
@@ -538,6 +550,7 @@ def _candidate_rows(state: dict[str, Any], question_id: str | None = None, hypot
                 "title": candidate.get("title") or _short_text(candidate.get("purpose", ""), 120),
                 "purpose": candidate.get("purpose", ""),
                 "status": status,
+                "candidate_kind": candidate.get("candidate_kind", "intervention"),
                 "question_id": candidate.get("question_id") or candidate.get("addresses", {}).get("question_id"),
                 "hypothesis_ids": candidate.get("hypothesis_ids") or candidate.get("addresses", {}).get("hypothesis_ids", []),
                 "rationale": candidate.get("rationale", ""),
@@ -551,6 +564,7 @@ def _candidate_rows(state: dict[str, Any], question_id: str | None = None, hypot
                 "configuration_patch": candidate.get("configuration_patch", candidate.get("trial_patch", {})),
                 "expected_outcomes": candidate.get("expected_outcomes", []),
                 "falsification_criteria": candidate.get("falsification_criteria", []),
+                "domain_expectations": candidate.get("domain_expectations", []),
                 "risks": candidate.get("risks", []),
                 "validation_reasons": reasons,
                 "created_at": _iso(candidate.get("created_at")),
@@ -590,6 +604,149 @@ def _alerts(state: dict[str, Any], current: dict[str, Any], artifact_age_seconds
             }
         )
     return result
+
+
+def _domain_guidance_summary(
+    root: Path,
+    state: dict[str, Any],
+    config: dict[str, Any],
+    current: dict[str, Any],
+    run_dir: Path | None,
+) -> dict[str, Any]:
+    guidance = config.get("domain_guidance", {})
+    if not isinstance(guidance, dict) or not guidance.get("enabled"):
+        return {
+            "enabled": False,
+            "status": "not_configured",
+            "objective_eligibility": "not_evaluated",
+            "constraints": [],
+            "warnings": [],
+            "umap_decision_role": "visualization_only",
+        }
+    warnings: list[str] = []
+    contract = None
+    contract_path = _resolve(root, guidance.get("contract_path"))
+    if contract_path:
+        try:
+            contract = load_domain_contract(contract_path)
+        except (DomainGuidanceError, OSError) as exc:
+            warnings.append(f"Domain contract unavailable: {exc}")
+    evaluations = [
+        item
+        for item in state.get("entities", {}).get("domain_evaluations", {}).values()
+        if isinstance(item, dict)
+    ]
+    current_id = str(current.get("id") or "")
+    trial_id = str(current.get("trial_id") or "")
+    matching = [
+        item for item in evaluations
+        if str(item.get("experiment_id")) == current_id
+        or str(item.get("stage_experiment_id")) == current_id
+        or (trial_id and str(item.get("trial_id")) == trial_id)
+    ]
+    report = matching[-1] if matching else None
+    report_path = run_dir / "domain_guidance" / "domain_evaluation.json" if run_dir else None
+    if report is None and report_path is not None and report_path.exists():
+        report, error = _read_json(report_path)
+        if error:
+            warnings.append(error)
+    calibrations = [
+        item
+        for item in state.get("entities", {}).get("domain_calibrations", {}).values()
+        if isinstance(item, dict)
+        and (contract is None or item.get("contract_hash") == contract.get("_hash"))
+        and (
+            not guidance.get("candidate_family_id")
+            or item.get("candidate_family_id") == guidance.get("candidate_family_id")
+        )
+    ]
+    calibration = calibrations[-1] if calibrations else None
+    if calibration is None:
+        profile_path = _resolve(root, guidance.get("calibration_profile_path"))
+        if profile_path and profile_path.exists():
+            calibration, error = _read_json(profile_path)
+            if error:
+                warnings.append(error)
+            elif (
+                isinstance(calibration, dict)
+                and guidance.get("candidate_family_id")
+                and calibration.get("candidate_family_id") != guidance.get("candidate_family_id")
+            ):
+                warnings.append("Domain calibration belongs to a different candidate family.")
+                calibration = None
+    if report:
+        constraints = report.get("constraints", [])
+        status = str(report.get("objective_eligibility", "unresolved"))
+    else:
+        constraints = [
+            {
+                "id": item.get("id"),
+                "title": item.get("title", item.get("id")),
+                "kind": item.get("kind"),
+                "role": item.get("role"),
+                "labels": item.get("labels", []),
+                "status": "awaiting_evaluation" if calibration else "calibrating",
+                "checks": [
+                    {
+                        "metric": check.get("metric"),
+                        "status": "awaiting_evaluation" if calibration else "calibrating",
+                        "value": None,
+                        "confidence_interval_95": None,
+                        "baseline": None,
+                        "delta": None,
+                    }
+                    for check in item.get("checks", [])
+                ],
+            }
+            for item in (contract or {}).get("constraints", [])
+        ]
+        status = "awaiting_evaluation" if calibration else "calibrating"
+    artifacts = report.get("artifacts", {}) if isinstance(report, dict) else {}
+    active_group = state.get("controller_state", {}).get("active_replicate_group", {})
+    active_group = active_group if isinstance(active_group, dict) else {}
+    replicate_seeds = [
+        int(seed)
+        for seed in active_group.get("seeds", [])
+        if isinstance(seed, (int, float))
+    ]
+    return {
+        "enabled": True,
+        "status": status,
+        "objective_eligibility": status,
+        "contract": {
+            "id": (report or {}).get("contract_id") or (contract or {}).get("id"),
+            "hash": (report or {}).get("contract_hash") or (contract or {}).get("_hash"),
+            "path": str(contract_path) if contract_path else None,
+        },
+        "calibration": {
+            "status": calibration.get("status", "frozen") if isinstance(calibration, dict) else "required",
+            "id": calibration.get("id") if isinstance(calibration, dict) else None,
+            "hash": calibration.get("hash") if isinstance(calibration, dict) else None,
+            "replicate_count": calibration.get("replicate_count") if isinstance(calibration, dict) else 0,
+        },
+        "constraints": constraints,
+        "unit_of_analysis": (report or {}).get(
+            "unit_of_analysis",
+            {
+                "outer": (contract or {}).get("evaluation", {}).get("outer_unit"),
+                "inner": (contract or {}).get("evaluation", {}).get("inner_unit"),
+                "frame_rows_are_independent": False,
+            },
+        ),
+        "sample_coverage": (report or {}).get("sample_coverage", {}),
+        "replicate_coverage": {
+            "completed": len(active_group.get("completed_trial_ids", [])),
+            "required": len(replicate_seeds) or int(
+                (contract or {}).get("evaluation", {}).get("baseline_replicates", 3)
+            ),
+            "seeds": replicate_seeds,
+        },
+        "split_hash": (report or {}).get("split_hash"),
+        "evaluation_id": (report or {}).get("id"),
+        "artifacts": artifacts,
+        "warnings": warnings,
+        "umap_decision_role": "visualization_only",
+    }
 
 
 def _focused_graph(state: dict[str, Any], hypothesis_id: str | None, evidence: list[dict[str, Any]], candidates: list[dict[str, Any]], level: int, relation_depth: int, filters: dict[str, Any]) -> dict[str, Any]:
@@ -813,12 +970,26 @@ def build_investigation(
         current["evaluation_protocol"] = campaign_config.get("evaluation_protocol", "three_seed_replicate_lockbox_v1")
     replicate_group = state.get("controller_state", {}).get("active_replicate_group", {})
     configured_replicates = int(campaign_config.get("minimum_replicates", 3))
+    registered_replicate_group = (
+        isinstance(replicate_group, dict)
+        and bool(replicate_group.get("id"))
+        and isinstance(active_trial, dict)
+        and bool(active_trial.get("replicate_group_id"))
+    )
+    # A legacy single-seed run must not appear as an empty 0/3 replicate
+    # group merely because the current campaign configuration now requires
+    # three replicates.
+    replicate_status = (
+        (state.get("controller_state", {}).get("last_replicate_aggregate") or {}).get("score", {}).get("status", "not_started")
+        if registered_replicate_group
+        else "legacy_single_seed"
+    )
     current["replicates"] = {
-        "required": max(1, len(replicate_group.get("seeds", []))) if isinstance(replicate_group, dict) and replicate_group.get("seeds") else configured_replicates,
-        "completed": len(replicate_group.get("completed_trial_ids", [])) if isinstance(replicate_group, dict) else 0,
-        "seeds": replicate_group.get("seeds", []) if isinstance(replicate_group, dict) else [],
+        "required": max(1, len(replicate_group.get("seeds", []))) if registered_replicate_group and replicate_group.get("seeds") else (configured_replicates if registered_replicate_group else 1),
+        "completed": len(replicate_group.get("completed_trial_ids", [])) if registered_replicate_group else 0,
+        "seeds": replicate_group.get("seeds", []) if registered_replicate_group else [],
         "aggregate": state.get("controller_state", {}).get("last_replicate_aggregate"),
-        "status": (state.get("controller_state", {}).get("last_replicate_aggregate") or {}).get("score", {}).get("status", "not_started"),
+        "status": replicate_status,
     }
     active_candidate_id = primary_candidate.get("id") if primary_candidate else None
     confirmations = state.get("entities", {}).get("lockbox_confirmations", {})
@@ -829,6 +1000,8 @@ def build_investigation(
     lockbox_status = (
         str(matching_confirmation.get("status"))
         if matching_confirmation
+        else "legacy_not_evaluated"
+        if not registered_replicate_group
         else "protected_not_evaluated"
         if stage_config.get("lockbox_fraction") or campaign_config.get("lockbox_required")
         else "not_configured"
@@ -858,8 +1031,27 @@ def build_investigation(
         "falsification_criteria": [item if isinstance(item, str) else json.dumps(item, sort_keys=True) for item in raw_falsification],
         "missing_reason": "This experiment has no registered predictions and cannot currently distinguish competing hypotheses." if registration_status == "missing" else None,
     }
+    domain_guidance = _domain_guidance_summary(root_path, state, config, current, run_dir)
     errors = [error for error in (config_error, campaign_state_error, run_status_error, stage_state_error) if error]
+    errors.extend(domain_guidance.get("warnings", []))
     alerts = _alerts(state, current, artifact_age, campaign_id=campaign_id)
+    failed_domain_constraints = [
+        constraint
+        for constraint in domain_guidance.get("constraints", [])
+        if constraint.get("role") == "hard_guardrail" and constraint.get("status") == "fail"
+    ]
+    if failed_domain_constraints:
+        alerts.append(
+            {
+                "id": "domain-hard-guardrail-failure",
+                "severity": "critical",
+                "type": "domain_guardrail_failure",
+                "condition": "One or more preregistered domain identifiability constraints failed.",
+                "measurements": {"constraint_ids": [item.get("id") for item in failed_domain_constraints]},
+                "recommended_action": "Reject this result as an improvement and let the autonomous controller select a bounded replacement intervention.",
+                "automatic": True,
+            }
+        )
     if registration_status != "registered":
         alerts.append(
             {
@@ -954,6 +1146,7 @@ def build_investigation(
         "active_hypothesis": {"id": hypothesis_id, **(active_hypothesis or {}), "belief": beliefs, "belief_score": beliefs, "hypothesis_quality": hypothesis_quality} if active_hypothesis or hypothesis_id else None,
         "current_experiment": current,
         "expected_outcomes": expected_outcomes,
+        "domain_guidance": domain_guidance,
         "evidence": {
             "supporting": [item for item in evidence if item["direction"] == "supporting"],
             "contradicting": [item for item in evidence if item["direction"] == "contradicting"],
@@ -1004,6 +1197,8 @@ def build_investigation(
                 "missing_baseline": True,
                 "missing_metric": metric_display.get("role") != "primary",
                 "missing_lockbox_confirmation": current.get("lockbox", {}).get("status") != "confirmed",
+                "domain_guidance_status": domain_guidance.get("status"),
+                "domain_calibration_missing": domain_guidance.get("calibration", {}).get("status") != "frozen",
             },
         },
     }

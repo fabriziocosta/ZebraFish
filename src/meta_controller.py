@@ -9,7 +9,9 @@ recorded as proposals.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import fcntl
 import fnmatch
 import hashlib
 import json
@@ -18,6 +20,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import threading
 import time
 from typing import Any, Callable, Iterable
 import uuid
@@ -40,6 +43,7 @@ except ModuleNotFoundError:  # pragma: no cover
 META_DECISIONS = {"no_action", "patch", "campaign_control", "proposal", "safe_stop"}
 SEVERITIES = {"info", "warning", "critical"}
 CAMPAIGN_ACTIONS = {"stop", "continue", "reconcile"}
+RUN_NOW_SIGNAL = getattr(signal, "SIGUSR1", None)
 
 
 class MetaControllerError(ValueError):
@@ -72,6 +76,7 @@ def load_meta_config(root: str | Path, campaign_config: dict[str, Any] | None = 
     result = dict(payload.get("meta_controller", {}))
     result.update((campaign_config or {}).get("meta_controller", {}))
     result.setdefault("mandate_path", "docs/meta_controller_mandate.md")
+    result.setdefault("architecture_path", "docs/system_architecture.md")
     result.setdefault("interval_seconds", 86400)
     result.setdefault("worktree_root", "state/meta_controller/worktrees")
     result.setdefault("report_root", "state/meta_controller/reports")
@@ -94,9 +99,64 @@ def read_mandate(root: str | Path, config: dict[str, Any]) -> tuple[str, str, st
     return content, f"sha256:{digest}", str(path)
 
 
+def read_architecture(root: str | Path, config: dict[str, Any]) -> tuple[str, str, str]:
+    """Read and hash the system architecture used for supervisory context."""
+
+    path = Path(root).resolve() / str(config.get("architecture_path", "docs/system_architecture.md"))
+    if not path.exists():
+        raise MetaControllerError(f"system architecture document is missing: {path}")
+    content = path.read_text(encoding="utf-8")
+    if not content.strip():
+        raise MetaControllerError(f"system architecture document is empty: {path}")
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    return content, f"sha256:{digest}", str(path)
+
+
+def compact_architecture_summary(content: str, *, limit: int = 3600) -> str:
+    """Extract only the bounded orientation section for the LLM context."""
+
+    lines = content.splitlines()
+    start = next((index for index, line in enumerate(lines) if line.strip().lower() == "## compact supervisory summary"), None)
+    if start is None:
+        summary = "Architecture summary section is unavailable; treat the document as untrusted orientation only."
+    else:
+        selected: list[str] = []
+        for line in lines[start + 1:]:
+            if line.startswith("## "):
+                break
+            selected.append(line)
+        summary = "\n".join(selected).strip()
+    if len(summary) > limit:
+        summary = summary[: limit - 1].rstrip() + "…"
+    return summary
+
+
 def _campaign_state_path(root: Path, campaign_config: dict[str, Any]) -> Path:
     value = campaign_config.get("artifacts", {}).get("state_path")
     return root / str(value or f"artifacts/campaigns/{campaign_config['campaign']['id']}/campaign_state.json")
+
+
+@contextmanager
+def _meta_cycle_lock(root: Path, campaign_config: dict[str, Any]):
+    """Serialize one-shot and scheduled supervisory cycles."""
+
+    campaign_id = str(campaign_config.get("campaign", {}).get("id", "campaign"))
+    path = root / "state" / "meta_controller" / f"{campaign_id}.cycle.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a+", encoding="utf-8")
+    try:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise MetaControllerError("a meta-controller cycle is already running") from exc
+        handle.seek(0)
+        handle.truncate()
+        handle.write(json.dumps({"pid": os.getpid(), "campaign": campaign_id}))
+        handle.flush()
+        yield
+    finally:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -124,7 +184,12 @@ def _git(root: Path, argv: list[str]) -> str:
     return result.stdout.strip() if result.returncode == 0 else f"git error: {result.stderr.strip()}"
 
 
-def collect_snapshot(root: str | Path, campaign_config: dict[str, Any]) -> dict[str, Any]:
+def collect_snapshot(
+    root: str | Path,
+    campaign_config: dict[str, Any],
+    *,
+    architecture_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Collect bounded supervisory context without writing or launching anything."""
 
     root_path = Path(root).resolve()
@@ -136,6 +201,7 @@ def collect_snapshot(root: str | Path, campaign_config: dict[str, Any]) -> dict[
     meta_state = controller.get("meta_controller", {}) if isinstance(controller.get("meta_controller"), dict) else {}
     pid = campaign_state.get("active_launch_state", {}).get("pid")
     observations = list(state.get("entities", {}).get("observations", {}).values())[-20:]
+    domain_evaluations = list(state.get("entities", {}).get("domain_evaluations", {}).values())[-5:]
     reports = list(state.get("entities", {}).get("meta_controller_runs", {}).values())[-5:]
     return {
         "campaign": {
@@ -154,6 +220,27 @@ def collect_snapshot(root: str | Path, campaign_config: dict[str, Any]) -> dict[
         "meta_controller": meta_state,
         "observations": observations,
         "known_evidence_ids": [str(item.get("id")) for item in observations if isinstance(item, dict) and item.get("id")],
+        "domain_guidance": [
+            {
+                "id": item.get("id"),
+                "contract_id": item.get("contract_id"),
+                "objective_eligibility": item.get("objective_eligibility"),
+                "constraints": [
+                    {
+                        "id": constraint.get("id"),
+                        "role": constraint.get("role"),
+                        "status": constraint.get("status"),
+                    }
+                    for constraint in item.get("constraints", [])
+                ],
+                "umap_used_for_decision": False,
+            }
+            for item in domain_evaluations if isinstance(item, dict)
+        ],
+        "architecture": architecture_context or {
+            "status": "not_loaded",
+            "summary": "Architecture context was not loaded for this snapshot.",
+        },
         "recent_meta_reports": reports,
         "repository": {
             "revision": _git(root_path, ["rev-parse", "HEAD"]),
@@ -172,9 +259,10 @@ def _schema() -> dict[str, Any]:
             "schema": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["mandate_version", "decision", "diagnosis", "actions", "proposal_only_changes", "rollback_plan", "unresolved_risks"],
+                "required": ["mandate_version", "architecture_version", "decision", "diagnosis", "actions", "proposal_only_changes", "rollback_plan", "unresolved_risks"],
                 "properties": {
                     "mandate_version": {"type": "string"},
+                    "architecture_version": {"type": "string"},
                     "decision": {"type": "string", "enum": sorted(META_DECISIONS)},
                     "diagnosis": {
                         "type": "object", "additionalProperties": False,
@@ -215,7 +303,7 @@ def parse_decision(payload: str | dict[str, Any]) -> dict[str, Any]:
         raise MetaDecisionError(f"LLM response is not valid JSON: {exc}") from exc
     if not isinstance(result, dict):
         raise MetaDecisionError("meta decision must be a JSON object")
-    required = {"mandate_version", "decision", "diagnosis", "actions", "proposal_only_changes", "rollback_plan", "unresolved_risks"}
+    required = {"mandate_version", "architecture_version", "decision", "diagnosis", "actions", "proposal_only_changes", "rollback_plan", "unresolved_risks"}
     missing = sorted(required - result.keys())
     if missing:
         raise MetaDecisionError(f"meta decision missing fields: {', '.join(missing)}")
@@ -297,6 +385,11 @@ def validate_patch(patch: str, config: dict[str, Any]) -> tuple[str, ...]:
         "dataset_semantics",
         "architecture",
         "model_family",
+        "domain_guidance",
+        "domain_expectations",
+        "contract_path",
+        "threshold_strategy",
+        "umap_decision_role",
     )
     config_paths = [path for path in paths if path.startswith("configs/experiment_campaigns/")]
     if config_paths and any(token in lowered for token in protected_scientific_tokens):
@@ -308,8 +401,8 @@ def validate_patch(patch: str, config: dict[str, Any]) -> tuple[str, ...]:
         weakened = ("skip", "xfail", "assert true", "pass #", "return true")
         if any(any(token in line.lower() for token in weakened) for line in removed):
             raise PatchSafetyError("patch weakens or removes verification coverage")
-    if any(path in {"configs/meta_controller.yaml", "docs/meta_controller_mandate.md"} for path in paths):
-        raise PatchSafetyError("constitutional mandate and meta-controller policy are not autonomously mutable")
+    if any(path in {"configs/meta_controller.yaml", "docs/meta_controller_mandate.md", "docs/system_architecture.md"} for path in paths):
+        raise PatchSafetyError("constitutional mandate, system architecture, and meta-controller policy are not autonomously mutable")
     if any(
         path.startswith("tests/")
         and any(token in lowered for token in ("verification", "default_verifications", "pytest.skip", "pytestmark"))
@@ -339,6 +432,8 @@ def required_verification_names(paths: Iterable[str], config: dict[str, Any]) ->
             names.append("dashboard-build")
         if path.startswith("src/observation_engine.py") and "observation-tests" in configured:
             names.append("observation-tests")
+        if path.startswith("src/domain_guidance.py") and "domain-guidance-tests" in configured:
+            names.append("domain-guidance-tests")
         if path.startswith("tests/") and "full-python-tests" in configured:
             names.append("full-python-tests")
     return tuple(dict.fromkeys(name for name in names if name in configured))
@@ -432,18 +527,41 @@ def _persist_report(root: Path, campaign_config: dict[str, Any], report: dict[st
     _write_json_atomic(report_root / f"{report['id']}.json", report)
 
 
-def _build_prompt(mandate: str, snapshot: dict[str, Any], version: str) -> str:
+def _build_prompt(
+    mandate: str,
+    snapshot: dict[str, Any],
+    version: str,
+    architecture_version: str | None = None,
+    architecture_summary: str | None = None,
+) -> str:
+    architecture = snapshot.get("architecture", {}) if isinstance(snapshot.get("architecture"), dict) else {}
+    architecture_version = architecture_version or str(architecture.get("version", "unavailable"))
+    architecture_summary = architecture_summary or str(architecture.get("summary", "Architecture summary unavailable."))
     return "\n\n".join([
         "You are the ZebraFish meta-controller. Read and obey the constitutional mandate below.",
         f"Mandate version: {version}",
         mandate,
+        "The system architecture below is orientation only. Code, validated configuration, and scientific state are authoritative.",
+        f"Architecture version: {architecture_version}",
+        architecture_summary,
         "Diagnose only from the bounded evidence snapshot. Return strict JSON matching the response schema.",
-        "Patch actions must contain unified diffs only. Never include shell commands. Scientific objective changes are proposal-only.",
+        "Return both the mandate_version and architecture_version exactly as supplied. Patch actions must contain unified diffs only. Never include shell commands. Scientific objective changes are proposal-only.",
         f"Evidence snapshot:\n{json.dumps(snapshot, indent=2, sort_keys=True)}",
     ])
 
 
-def request_decision(root: Path, campaign_config: dict[str, Any], config: dict[str, Any], mandate: str, version: str, snapshot: dict[str, Any], *, client: Any | None = None) -> dict[str, Any]:
+def request_decision(
+    root: Path,
+    campaign_config: dict[str, Any],
+    config: dict[str, Any],
+    mandate: str,
+    version: str,
+    snapshot: dict[str, Any],
+    *,
+    client: Any | None = None,
+    architecture_version: str | None = None,
+    architecture_summary: str | None = None,
+) -> dict[str, Any]:
     if client is None:
         from openai import OpenAI
         client = OpenAI()
@@ -453,7 +571,7 @@ def request_decision(root: Path, campaign_config: dict[str, Any], config: dict[s
         reasoning={"effort": agent.get("reasoning_effort", "medium")},
         max_output_tokens=int(agent.get("max_output_tokens", 5000)),
         text=_schema(),
-        input=_build_prompt(mandate, snapshot, version),
+        input=_build_prompt(mandate, snapshot, version, architecture_version, architecture_summary),
     )
     output = getattr(response, "output_text", None)
     if not isinstance(output, str):
@@ -461,6 +579,9 @@ def request_decision(root: Path, campaign_config: dict[str, Any], config: dict[s
     decision = parse_decision(output)
     if decision["mandate_version"] != version:
         raise MetaDecisionError("LLM returned a mandate version different from the loaded mandate")
+    expected_architecture = architecture_version or str(snapshot.get("architecture", {}).get("version", "unavailable"))
+    if decision["architecture_version"] != expected_architecture:
+        raise MetaDecisionError("LLM returned an architecture version different from the loaded architecture document")
     return decision
 
 
@@ -545,16 +666,85 @@ def apply_patch_in_worktree(root: Path, config: dict[str, Any], patch: str, run_
         subprocess.run(["git", "worktree", "remove", "--force", str(worktree)], cwd=root, capture_output=True, text=True, check=False)
 
 
-def run_once(root: str | Path, campaign_config: dict[str, Any], *, client: Any | None = None) -> dict[str, Any]:
+def run_once(
+    root: str | Path,
+    campaign_config: dict[str, Any],
+    *,
+    client: Any | None = None,
+    invocation_source: str = "cli",
+    execution_mode: str = "once",
+) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    try:
+        with _meta_cycle_lock(root_path, campaign_config):
+            return _run_once(
+                root_path,
+                campaign_config,
+                client=client,
+                invocation_source=invocation_source,
+                execution_mode=execution_mode,
+            )
+    except MetaControllerError as exc:
+        if "already running" not in str(exc):
+            raise
+        return {
+            "id": f"meta_busy_{os.getpid()}",
+            "campaign": campaign_config.get("campaign", {}).get("id"),
+            "status": "already_running",
+            "diagnosis": {"summary": str(exc), "severity": "info", "evidence_references": [], "root_causes": []},
+            "actions": [],
+            "invocation_source": invocation_source,
+        }
+
+
+def _run_once(
+    root: str | Path,
+    campaign_config: dict[str, Any],
+    *,
+    client: Any | None = None,
+    invocation_source: str = "cli",
+    execution_mode: str = "once",
+) -> dict[str, Any]:
     root_path = Path(root).resolve()
     config = load_meta_config(root_path, campaign_config)
     started = utc_now()
     run_id = f"meta_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
-    controller_status = {"status": "running", "run_id": run_id, "started_at": started}
+    mandate_version = "unavailable"
+    mandate_path: str | None = None
+    architecture_version = "unavailable"
+    architecture_path: str | None = None
+    controller_status = {
+        "status": "running",
+        "run_id": run_id,
+        "active_run_id": run_id,
+        "pid": os.getpid(),
+        "mode": execution_mode,
+        "run_now_supported": execution_mode == "loop" and RUN_NOW_SIGNAL is not None,
+        "started_at": started,
+        "invocation_source": invocation_source,
+    }
+    _set_meta_status(root_path, campaign_config, controller_status)
     try:
         mandate, mandate_version, mandate_path = read_mandate(root_path, config)
-        snapshot = collect_snapshot(root_path, campaign_config)
-        decision = request_decision(root_path, campaign_config, config, mandate, mandate_version, snapshot, client=client)
+        architecture, architecture_version, architecture_path = read_architecture(root_path, config)
+        architecture_context = {
+            "version": architecture_version,
+            "path": architecture_path,
+            "summary": compact_architecture_summary(architecture),
+            "read_only_orientation": True,
+        }
+        snapshot = collect_snapshot(root_path, campaign_config, architecture_context=architecture_context)
+        decision = request_decision(
+            root_path,
+            campaign_config,
+            config,
+            mandate,
+            mandate_version,
+            snapshot,
+            client=client,
+            architecture_version=architecture_version,
+            architecture_summary=architecture_context["summary"],
+        )
         _validate_decision_evidence(decision, snapshot)
         actions: list[dict[str, Any]] = []
         for action in decision["actions"]:
@@ -572,27 +762,35 @@ def run_once(root: str | Path, campaign_config: dict[str, Any], *, client: Any |
             status = "meta_controller_safe_stop"
         report = {
             "id": run_id, "campaign": campaign_config.get("campaign", {}).get("id"), "status": status,
+            "invocation_source": invocation_source,
             "mandate_version": mandate_version, "mandate_path": mandate_path,
+            "architecture_version": architecture_version, "architecture_path": architecture_path,
             "started_at": started, "completed_at": utc_now(),
             "diagnosis": decision["diagnosis"], "evidence_references": decision["diagnosis"].get("evidence_references", []),
             "actions": actions, "proposal_only_changes": decision["proposal_only_changes"],
             "rollback_plan": decision["rollback_plan"], "unresolved_risks": decision["unresolved_risks"],
-            "provenance": {"created_by": "meta_controller", "mandate_version": mandate_version, "snapshot": "compact"},
-            "controller_status": {"status": status, "last_run_id": run_id, "last_run_at": utc_now(), "mandate_version": mandate_version, "summary": decision["diagnosis"].get("summary", ""), "next_run_at": None},
+            "provenance": {"created_by": "meta_controller", "mandate_version": mandate_version, "architecture_version": architecture_version, "snapshot": "compact", "invocation_source": invocation_source},
+            "controller_status": {"status": status, "last_run_id": run_id, "last_run_at": utc_now(), "mandate_version": mandate_version, "architecture_version": architecture_version, "summary": decision["diagnosis"].get("summary", ""), "next_run_at": None, "pid": None if execution_mode == "once" else os.getpid(), "mode": execution_mode, "run_now_supported": execution_mode == "loop" and RUN_NOW_SIGNAL is not None, "invocation_source": invocation_source},
         }
     except Exception as exc:
         try:
             _, mandate_version, mandate_path = read_mandate(root_path, config)
         except Exception:
             mandate_version, mandate_path = "unavailable", None
+        try:
+            _, architecture_version, architecture_path = read_architecture(root_path, config)
+        except Exception:
+            architecture_version, architecture_path = "unavailable", None
         report = {
             "id": run_id, "campaign": campaign_config.get("campaign", {}).get("id"), "status": "failed",
+            "invocation_source": invocation_source,
             "mandate_version": mandate_version, "mandate_path": mandate_path,
+            "architecture_version": architecture_version, "architecture_path": architecture_path,
             "started_at": started, "completed_at": utc_now(),
             "diagnosis": {"summary": f"Meta-controller could not complete: {type(exc).__name__}: {exc}", "severity": "critical", "evidence_references": [], "root_causes": []},
             "evidence_references": [], "actions": [], "proposal_only_changes": [], "rollback_plan": "No patch was applied.", "unresolved_risks": [str(exc)],
-            "provenance": {"created_by": "meta_controller", "error": type(exc).__name__},
-            "controller_status": {"status": "failed", "last_run_id": run_id, "last_run_at": utc_now(), "mandate_version": mandate_version, "summary": str(exc), "next_run_at": None},
+            "provenance": {"created_by": "meta_controller", "error": type(exc).__name__, "mandate_version": mandate_version, "architecture_version": architecture_version, "invocation_source": invocation_source},
+            "controller_status": {"status": "failed", "last_run_id": run_id, "last_run_at": utc_now(), "mandate_version": mandate_version, "architecture_version": architecture_version, "summary": str(exc), "next_run_at": None, "pid": None if execution_mode == "once" else os.getpid(), "mode": execution_mode, "run_now_supported": execution_mode == "loop" and RUN_NOW_SIGNAL is not None, "invocation_source": invocation_source},
         }
     _persist_report(root_path, campaign_config, report)
     return report
@@ -665,11 +863,17 @@ def _meta_state(root: Path, campaign_config: dict[str, Any]) -> dict[str, Any]:
     return load_state(state_path) if state_path.exists() else {"controller_state": {}}
 
 
-def _set_meta_status(root: Path, campaign_config: dict[str, Any], updates: dict[str, Any]) -> None:
+def _set_meta_status(
+    root: Path,
+    campaign_config: dict[str, Any],
+    updates: dict[str, Any],
+    *,
+    actor: str = "meta_controller",
+) -> None:
     state_path = root / str(campaign_config.get("scientific_state", {}).get("path", "state/scientific_state.yaml"))
     transactional_update(
         state_path,
-        lambda state: update_controller_state(state, {"meta_controller": updates}, actor="meta_controller"),
+        lambda state: update_controller_state(state, {"meta_controller": updates}, actor=actor),
     )
 
 
@@ -689,6 +893,36 @@ def stop_loop(root: str | Path, campaign_config: dict[str, Any], *, reason: str 
     return True
 
 
+def request_run_now(root: str | Path, campaign_config: dict[str, Any], *, requested_by: str = "dashboard_user") -> dict[str, Any]:
+    """Wake a compatible scheduler, or report that a one-shot may be spawned."""
+
+    root_path = Path(root).resolve()
+    state = _meta_state(root_path, campaign_config)
+    meta = state.get("controller_state", {}).get("meta_controller", {})
+    meta = meta if isinstance(meta, dict) else {}
+    pid = meta.get("pid")
+    if _pid_running(pid):
+        if meta.get("mode") == "loop" and meta.get("run_now_supported") and RUN_NOW_SIGNAL is not None:
+            try:
+                os.kill(int(pid), RUN_NOW_SIGNAL)
+            except OSError as exc:
+                raise MetaControllerError(f"could not wake meta-controller scheduler: {exc}") from exc
+            _set_meta_status(
+                root_path,
+                campaign_config,
+                {
+                    **meta,
+                    "status": "run_now_requested",
+                    "run_now_requested_at": utc_now(),
+                    "run_now_requested_by": requested_by,
+                },
+                actor=requested_by,
+            )
+            return {"status": "requested", "mode": "scheduler_wakeup", "pid": int(pid)}
+        return {"status": "already_running", "mode": meta.get("mode", "once"), "pid": int(pid)}
+    return {"status": "not_running", "mode": "one_shot_required"}
+
+
 def run_loop(root: str | Path, campaign_config: dict[str, Any], *, client: Any | None = None, sleep_fn: Callable[[float], None] = time.sleep) -> int:
     root_path = Path(root).resolve()
     config = load_meta_config(root_path, campaign_config)
@@ -696,18 +930,37 @@ def run_loop(root: str | Path, campaign_config: dict[str, Any], *, client: Any |
     meta = _meta_state(root_path, campaign_config).get("controller_state", {}).get("meta_controller", {})
     if _pid_running(meta.get("pid")) and int(meta.get("pid")) != pid:
         return 1
+    wake_event = threading.Event()
+
     def _stop(_signum: int, _frame: Any) -> None:
         raise KeyboardInterrupt
+
+    def _run_now(_signum: int, _frame: Any) -> None:
+        wake_event.set()
+
     signal.signal(signal.SIGTERM, _stop)
-    _set_meta_status(root_path, campaign_config, {"status": "running", "pid": pid, "started_at": utc_now(), "interval_seconds": int(config["interval_seconds"])})
+    if RUN_NOW_SIGNAL is not None:
+        signal.signal(RUN_NOW_SIGNAL, _run_now)
+    _set_meta_status(root_path, campaign_config, {"status": "running", "pid": pid, "mode": "loop", "run_now_supported": RUN_NOW_SIGNAL is not None, "started_at": utc_now(), "interval_seconds": int(config["interval_seconds"])})
     try:
         while True:
-            report = run_once(root_path, campaign_config, client=client)
+            requested_now = wake_event.is_set()
+            wake_event.clear()
+            report = run_once(
+                root_path,
+                campaign_config,
+                client=client,
+                invocation_source="dashboard_user" if requested_now else "scheduled",
+                execution_mode="loop",
+            )
             if report["status"] == "meta_controller_safe_stop":
                 return 2
             next_at = datetime.now(timezone.utc).timestamp() + int(config["interval_seconds"])
-            _set_meta_status(root_path, campaign_config, {"status": "running", "pid": pid, "last_run_id": report["id"], "last_run_at": report["completed_at"], "next_run_at": datetime.fromtimestamp(next_at, timezone.utc).isoformat(timespec="seconds"), "mandate_version": report["mandate_version"], "summary": report["diagnosis"].get("summary", "")})
-            sleep_fn(int(config["interval_seconds"]))
+            _set_meta_status(root_path, campaign_config, {"status": "running", "pid": pid, "mode": "loop", "run_now_supported": RUN_NOW_SIGNAL is not None, "last_run_id": report["id"], "last_run_at": report["completed_at"], "next_run_at": datetime.fromtimestamp(next_at, timezone.utc).isoformat(timespec="seconds"), "mandate_version": report["mandate_version"], "architecture_version": report.get("architecture_version", "unavailable"), "summary": report["diagnosis"].get("summary", ""), "last_invocation_source": report.get("invocation_source", "scheduled")})
+            if sleep_fn is time.sleep:
+                wake_event.wait(int(config["interval_seconds"]))
+            else:
+                sleep_fn(int(config["interval_seconds"]))
     except KeyboardInterrupt:
         _set_meta_status(root_path, campaign_config, {"status": "stopped", "pid": None, "stopped_at": utc_now(), "stop_reason": "stop requested"})
         return 0
@@ -721,11 +974,12 @@ def cli(argv: list[str], *, root: str | Path) -> int:
     mode.add_argument("--start", action="store_true")
     mode.add_argument("--continue", dest="continue_loop", action="store_true")
     mode.add_argument("--stop", action="store_true")
+    parser.add_argument("--invocation-source", default="cli")
     args = parser.parse_args(argv)
     from src.agent_campaign_loop import load_campaign_config
     campaign_config = load_campaign_config(args.campaign_config)
     if args.once:
-        report = run_once(root, campaign_config)
+        report = run_once(root, campaign_config, invocation_source=args.invocation_source)
         print(json.dumps(report, indent=2, sort_keys=True))
         return 0 if report["status"] == "completed" else 2
     if args.stop:

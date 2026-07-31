@@ -9,7 +9,8 @@ from typing import Any
 
 from src.observation_engine import generate_observations
 from src.campaign_watchdog import inspect_campaign
-from src.scientific_state import apply_operations, load_state, merge_nonconflicting_states, record_entity, transactional_update, update_controller_state
+from src.experiment_protocol import file_hash, stable_hash
+from src.scientific_state import apply_operations, load_state, merge_nonconflicting_states, record_entity, transactional_update, update_controller_state, utc_now
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -59,6 +60,26 @@ def _read_ledger_rows(root: Path) -> list[dict[str, Any]]:
         except OSError:
             pass
     return rows
+
+
+def _legacy_domain_artifacts(run_dir: str | Path | None) -> dict[str, list[dict[str, str]]]:
+    if not run_dir:
+        return {"confusion": [], "umap": []}
+    root = Path(str(run_dir))
+    if not root.exists():
+        return {"confusion": [], "umap": []}
+    confusion_paths = sorted((root / "confusion_matrices").glob("*.csv"))
+    umap_paths = sorted((root / "figures").glob("*umap*"))
+    return {
+        "confusion": [
+            {"path": str(path), "hash": file_hash(path), "decision_role": "descriptive_legacy"}
+            for path in confusion_paths
+        ],
+        "umap": [
+            {"path": str(path), "hash": file_hash(path), "decision_role": "visualization_only"}
+            for path in umap_paths
+        ],
+    }
 
 
 def migrate_campaign(
@@ -145,6 +166,56 @@ def migrate_campaign(
                     observation_id = observation["id"]
                     state = record_entity(state, "observations", observation_id, observation, actor="observation_engine")
                     observations_added += 1
+            legacy_domain_artifacts = _legacy_domain_artifacts(run_dir)
+            if any(legacy_domain_artifacts.values()):
+                observation_id = f"obs_{stable_hash({'experiment': experiment_id, 'artifacts': legacy_domain_artifacts})[:16]}"
+                if observation_id not in state["entities"]["observations"]:
+                    state = record_entity(
+                        state,
+                        "observations",
+                        observation_id,
+                        {
+                            "id": observation_id,
+                            "type": "legacy_domain_artifacts",
+                            "source_experiments": [experiment_id],
+                            "statement": (
+                                "Historical confusion and UMAP artifacts are available as descriptive "
+                                "legacy evidence; they are not protocol-compliant domain measurements."
+                            ),
+                            "direction": "unclassified",
+                            "measurements": {
+                                **legacy_domain_artifacts,
+                                "objective_eligibility": "historical_only",
+                                "umap_used_for_decision": False,
+                            },
+                            "detection": {
+                                "method": "state_migration_artifact_inventory",
+                                "rule": "descriptive_legacy_only",
+                                "threshold": None,
+                            },
+                            "reliability": 1.0,
+                            "created_at": utc_now(),
+                            "provenance": {
+                                "created_by": "state_migration",
+                                "source": str(run_dir),
+                            },
+                        },
+                        actor="state_migration",
+                    )
+                    observations_added += 1
+                relation = {"type": "produced", "source": experiment_id, "target": observation_id}
+                if not any(
+                    item.get("type") == relation["type"]
+                    and item.get("source") == relation["source"]
+                    and item.get("target") == relation["target"]
+                    for item in state.get("relations", [])
+                ):
+                    state = apply_operations(
+                        state,
+                        [{"operation": "relation", "value": relation}],
+                        actor="state_migration",
+                    )
+                    relations_added += 1
             if new_stage:
                 imported_stages += 1
         if trial_id not in state["entities"]["trials"]:

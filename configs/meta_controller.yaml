@@ -1,5 +1,6 @@
 meta_controller:
   mandate_path: docs/meta_controller_mandate.md
+  architecture_path: docs/system_architecture.md
   interval_seconds: 86400
   worktree_root: state/meta_controller/worktrees
   report_root: state/meta_controller/reports
@@ -19,6 +20,7 @@ meta_controller:
     - src/observation_engine.py
     - src/campaign_watchdog.py
     - src/experiment_protocol.py
+    - src/domain_guidance.py
     - src/dashboard_data.py
     - src/dashboard_api.py
     - src/meta_controller.py
@@ -27,6 +29,7 @@ meta_controller:
     - configs/experiment_campaigns/*.yaml
     - tests/test_meta_controller.py
     - tests/test_observation_engine.py
+    - tests/test_domain_guidance.py
   forbidden_prefixes:
     - state/
     - artifacts/
@@ -35,6 +38,7 @@ meta_controller:
     - src/models/
     - src/training/
     - data/
+    - configs/domain_guidance/
   verification:
     - name: meta-controller-python-tests
       argv: [.venv/bin/python, -m, pytest, tests/test_meta_controller.py, -q]
@@ -43,3 +47,5 @@ meta_controller:
     - name: dashboard-build
       argv: [npm, run, build]
       cwd: dashboard
+    - name: domain-guidance-tests
+      argv: [.venv/bin/python, -m, pytest, tests/test_domain_guidance.py, -q]

@@ -1,0 +1,41 @@
+{
+  "actions": [],
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-31T10:07:46+00:00",
+  "controller_status": {
+    "consecutive_failures": 1,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-07-31T10:07:46+00:00",
+    "last_run_id": "meta_20260731_100727_d75ddd9e",
+    "mandate_version": "sha256:03a77156d2e6f919d233014cf03e7f4630a9c98ae1d4b2f858450314b72d3aa5",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 1191792,
+    "run_now_supported": true,
+    "status": "failed",
+    "summary": "diagnosis references unavailable evidence: campaign.status=running"
+  },
+  "diagnosis": {
+    "evidence_references": [],
+    "root_causes": [],
+    "severity": "critical",
+    "summary": "Meta-controller could not complete: MetaDecisionError: diagnosis references unavailable evidence: campaign.status=running"
+  },
+  "evidence_references": [],
+  "id": "meta_20260731_100727_d75ddd9e",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:03a77156d2e6f919d233014cf03e7f4630a9c98ae1d4b2f858450314b72d3aa5",
+  "proposal_only_changes": [],
+  "provenance": {
+    "created_by": "meta_controller",
+    "error": "MetaDecisionError",
+    "invocation_source": "scheduled"
+  },
+  "rollback_plan": "No patch was applied.",
+  "started_at": "2026-07-31T10:07:27+00:00",
+  "status": "failed",
+  "unresolved_risks": [
+    "diagnosis references unavailable evidence: campaign.status=running"
+  ]
+}
