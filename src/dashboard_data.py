@@ -125,6 +125,34 @@ def _entity_text(entity: dict[str, Any]) -> str:
     return str(entity.get("statement") or entity.get("question") or entity.get("title") or entity.get("purpose") or "")
 
 
+def _human_expectation(value: Any, *, falsification: bool = False) -> str:
+    """Turn structured predictions into short dashboard-ready sentences."""
+
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        return str(value)
+    metric = str(value.get("metric") or "the measured outcome")
+    metric = metric.replace("macro_f1", "macro-F1").replace("_", " ")
+    comparison = str(value.get("comparison") or "the registered reference").replace("_", " ")
+    direction = str(value.get("direction") or "change").replace("_", " ")
+    minimum_effect = value.get("minimum_effect")
+    threshold = f" (minimum effect: {minimum_effect})" if minimum_effect is not None else ""
+    if direction == "no change":
+        statement = f"{metric} should stay about the same as {comparison}"
+        if falsification:
+            statement = f"Flag this result if {metric} changes from {comparison}"
+    elif direction == "no improvement":
+        statement = f"{metric} should improve over {comparison}"
+        if falsification:
+            statement = f"This result would be questioned if {metric} does not improve over {comparison}"
+    else:
+        statement = f"{metric} should {direction} relative to {comparison}"
+        if falsification:
+            statement = f"This result would be questioned if {metric} does not {direction} relative to {comparison}"
+    return statement + threshold + "."
+
+
 def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[str, Any]:
     controller = state.get("controller_state", {})
     current = controller.get("meta_controller", {})
@@ -1076,14 +1104,14 @@ def build_investigation(
         "predictions": [
             {
                 "id": f"prediction-{index}",
-                "statement": statement if isinstance(statement, str) else json.dumps(statement, sort_keys=True),
+            "statement": _human_expectation(statement),
                 "hypothesis_ids": primary_candidate.get("hypothesis_ids", [hypothesis_id]) if primary_candidate else [hypothesis_id],
                 "observed_status": "not_yet_observed",
                 "source": "pre_registered",
             }
             for index, statement in enumerate(raw_predictions, start=1)
         ],
-        "falsification_criteria": [item if isinstance(item, str) else json.dumps(item, sort_keys=True) for item in raw_falsification],
+        "falsification_criteria": [_human_expectation(item, falsification=True) for item in raw_falsification],
         "missing_reason": "This experiment has no registered predictions and cannot currently distinguish competing hypotheses." if registration_status == "missing" else None,
     }
     domain_guidance = _domain_guidance_summary(root_path, state, config, current, run_dir)

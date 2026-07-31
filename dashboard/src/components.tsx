@@ -82,17 +82,17 @@ function Card({ title, eyebrow, summary, children, className = "" }: { title: st
   return <details ref={ref} className={`card ${className}`} open onToggle={(event) => { try { window.localStorage.setItem(storageKey, event.currentTarget.open ? "open" : "closed"); } catch { /* optional */ } }}><summary className="card-heading">{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2>{title}</h2>{summary && <span className="card-summary">{summary}</span>}<span className="collapse-icon" aria-hidden="true">⌃</span></summary><div className="card-body">{children}</div></details>;
 }
 
-export function InvestigationHeader({ data }: { data: Investigation }) {
+export function InvestigationHeader({ data, controls }: { data: Investigation; controls?: ReactNode }) {
   const statusTone = data.investigation.health === "healthy" ? "healthy" : "attention";
   return <header className="mission-header">
     <div className="mission-title"><h1><span>Commutative Representation</span><small>Zebrafish experiment</small></h1></div>
-    <div className="header-stats">
+    <div className="mission-header-right">{controls}<div className="header-stats">
       <div><span className="eyebrow">RUN STATUS</span><Badge tone={lifecycleTone(data.current_experiment.status, data.current_experiment.process_running)}>{data.current_experiment.status}</Badge></div>
       <div><span className="eyebrow">SCIENTIFIC HEALTH</span><Badge tone={statusTone}>{data.investigation.health}</Badge></div>
       <div><span className="eyebrow">CONTROLLER</span><Badge tone={data.health.controller_metadata === "stale" ? "warning" : "healthy"}>{data.health.controller_metadata === "stale" ? "metadata stale" : "consistent"}</Badge></div>
       <div><span className="eyebrow">INTERVENTION</span><Badge tone={data.health.intervention_required ? "critical" : "healthy"}>{data.health.intervention_required ? "required" : "not required"}</Badge></div>
       <div><span className="eyebrow">UPDATED</span><strong>{data.investigation.last_updated ? new Date(data.investigation.last_updated).toLocaleTimeString() : "—"}</strong></div>
-    </div>
+    </div></div>
   </header>;
 }
 

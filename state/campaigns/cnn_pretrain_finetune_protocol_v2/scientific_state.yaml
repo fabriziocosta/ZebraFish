@@ -1,9 +1,9 @@
 version: 2
 protocol_version: scientific-loop-v3
 writer_protocol: scientific-loop-v3
-state_revision: 713
+state_revision: 806
 last_writer: emps-costa:1346545
-updated_at: '2026-07-31T16:47:56+00:00'
+updated_at: '2026-07-31T17:25:25+00:00'
 project: {}
 entities:
   components: {}
@@ -1591,6 +1591,151 @@ entities:
       provenance:
         created_by: observation_engine
         created_at: '2026-07-31T16:31:11+00:00'
+    obs_5a0edf5383dc91e9:
+      id: obs_5a0edf5383dc91e9
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_loss and val_loss differ by 4.08176 at the final recorded point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 2.247676828910896
+        validation: 6.329434242053247
+        gap: 4.08175741314235
+        relative_gap: 0.6448850334873283
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+    obs_5067e7a21643b4ca:
+      id: obs_5067e7a21643b4ca
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_self_probe_loss and val_self_probe_loss differ by 4.08176 at
+        the final recorded point.
+      measurements:
+        train_metric: train_self_probe_loss
+        validation_metric: val_self_probe_loss
+        train: 2.247676828910896
+        validation: 6.329434242053247
+        gap: 4.08175741314235
+        relative_gap: 0.6448850334873283
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+    obs_1a4880e2c43b00b6:
+      id: obs_1a4880e2c43b00b6
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_loss has an estimated slope of -0.0126642 over the last 5 points;
+        direction is improving.
+      measurements:
+        metric: train_loss
+        slope: -0.012664248922719112
+        slope_standard_error: 0.005943674989802135
+        effective_slope: 0.012664248922719112
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+    obs_67834b487fa4a7ac:
+      id: obs_67834b487fa4a7ac
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_self_probe_loss has an estimated slope of -0.0126642 over the
+        last 5 points; direction is improving.
+      measurements:
+        metric: train_self_probe_loss
+        slope: -0.012664248922719112
+        slope_standard_error: 0.005943674989802135
+        effective_slope: 0.012664248922719112
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+    obs_8882468c2e739b77:
+      id: obs_8882468c2e739b77
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: val_loss has an estimated slope of -0.0450128 over the last 5 points;
+        direction is improving.
+      measurements:
+        metric: val_loss
+        slope: -0.04501284610549474
+        slope_standard_error: 0.0021170212462918365
+        effective_slope: 0.04501284610549474
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+    obs_1f811148f628a133:
+      id: obs_1f811148f628a133
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: val_self_probe_loss has an estimated slope of -0.0450128 over the
+        last 5 points; direction is improving.
+      measurements:
+        metric: val_self_probe_loss
+        slope: -0.04501284610549474
+        slope_standard_error: 0.0021170212462918365
+        effective_slope: 0.04501284610549474
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
   hypotheses:
     hyp_cnn_pretrain_finetune_protocol_v2_objective:
       title: Bounded commutative pretraining can improve compound discrimination without
@@ -2182,15 +2327,14 @@ controller_state:
       observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
       expected_start_ticks: '147832147'
       observed_start_ticks: '147832147'
-    checked_at: '2026-07-31T16:47:37+00:00'
+    checked_at: '2026-07-31T17:24:40+00:00'
     detector_version: watchdog-v1
-  live_trigger_polls: 0
+  live_trigger_polls: 3
   live_trigger_types:
   - generalisation_gap
-  - unstable_metric
-  last_live_observation_at: '2026-07-31T17:33:21'
+  last_live_observation_at: '2026-07-31T18:08:52'
   active_stage: 10C
-  last_poll_at: '2026-07-31T17:47:37'
+  last_poll_at: '2026-07-31T18:24:40'
   last_controller_status: running_stale
   meta_controller:
     status: running
@@ -24378,6 +24522,2749 @@ audit_log:
       last_controller_status: running_stale
 - id: op_cb005cd0684d
   created_at: '2026-07-31T16:47:54+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_2622da43b031
+  created_at: '2026-07-31T16:48:31+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_31753a4bd614
+  created_at: '2026-07-31T16:48:42+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:48:42+00:00'
+        detector_version: watchdog-v1
+- id: op_8b8785b7cf2a
+  created_at: '2026-07-31T16:48:42+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:48:42'
+      last_controller_status: running_stale
+- id: op_4e3dbcef211e
+  created_at: '2026-07-31T16:49:08+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_43b4d1c86448
+  created_at: '2026-07-31T16:49:45+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_cc18312b7997
+  created_at: '2026-07-31T16:49:47+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:49:47+00:00'
+        detector_version: watchdog-v1
+- id: op_cc736f2d29a4
+  created_at: '2026-07-31T16:49:47+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:49:47'
+      last_controller_status: running_stale
+- id: op_dda145ee87ff
+  created_at: '2026-07-31T16:50:23+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_34121aa6146c
+  created_at: '2026-07-31T16:50:55+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:50:55+00:00'
+        detector_version: watchdog-v1
+- id: op_85900ddd35de
+  created_at: '2026-07-31T16:50:55+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:50:55'
+      last_controller_status: running_stale
+- id: op_109b8b2ee585
+  created_at: '2026-07-31T16:51:04+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_77e07f01221d
+  created_at: '2026-07-31T16:51:43+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_a7a6f487e4c9
+  created_at: '2026-07-31T16:52:00+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:52:00+00:00'
+        detector_version: watchdog-v1
+- id: op_f46e8905d79a
+  created_at: '2026-07-31T16:52:01+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:52:01'
+      last_controller_status: running_stale
+- id: op_938a79260a0d
+  created_at: '2026-07-31T16:52:20+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_c310c43e28c4
+  created_at: '2026-07-31T16:52:57+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_e4e6afedf779
+  created_at: '2026-07-31T16:53:06+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:53:06+00:00'
+        detector_version: watchdog-v1
+- id: op_ca3905f89df2
+  created_at: '2026-07-31T16:53:06+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:53:06'
+      last_controller_status: running_stale
+- id: op_71bc2f94ad59
+  created_at: '2026-07-31T16:53:35+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_9d65cff7d79d
+  created_at: '2026-07-31T16:54:12+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_e4de37a67ce8
+  created_at: '2026-07-31T16:54:11+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:54:11+00:00'
+        detector_version: watchdog-v1
+- id: op_b88cfaf37a0b
+  created_at: '2026-07-31T16:54:11+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:54:11'
+      last_controller_status: running_stale
+- id: op_92f30be99bad
+  created_at: '2026-07-31T16:54:49+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_91e988de0ad1
+  created_at: '2026-07-31T16:55:26+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_875915c79ff0
+  created_at: '2026-07-31T16:55:23+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:55:23+00:00'
+        detector_version: watchdog-v1
+- id: op_dd686d3b31bb
+  created_at: '2026-07-31T16:55:23+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:55:23'
+      last_controller_status: running_stale
+- id: op_4e9ed4d13263
+  created_at: '2026-07-31T16:56:03+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_7ce6d34614cd
+  created_at: '2026-07-31T16:56:35+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:56:35+00:00'
+        detector_version: watchdog-v1
+- id: op_7b1cfd8aa341
+  created_at: '2026-07-31T16:56:35+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:56:35'
+      last_controller_status: running_stale
+- id: op_6b3bd384139c
+  created_at: '2026-07-31T16:56:44+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_0e4a8fe4d938
+  created_at: '2026-07-31T16:57:21+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_37df8713025b
+  created_at: '2026-07-31T16:57:40+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:57:40+00:00'
+        detector_version: watchdog-v1
+- id: op_f0d9a71d9b77
+  created_at: '2026-07-31T16:57:40+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:57:40'
+      last_controller_status: running_stale
+- id: op_b58ba4a81ec0
+  created_at: '2026-07-31T16:57:58+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_e415adb75ec6
+  created_at: '2026-07-31T16:58:36+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_101e4dbd495c
+  created_at: '2026-07-31T16:58:45+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:58:45+00:00'
+        detector_version: watchdog-v1
+- id: op_33c34af3e080
+  created_at: '2026-07-31T16:58:46+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:58:46'
+      last_controller_status: running_stale
+- id: op_f7096e89aca1
+  created_at: '2026-07-31T16:59:15+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_6cb5ddcd18f6
+  created_at: '2026-07-31T16:59:52+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_7c97a10b6d60
+  created_at: '2026-07-31T16:59:51+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T16:59:51+00:00'
+        detector_version: watchdog-v1
+- id: op_499dd9386454
+  created_at: '2026-07-31T16:59:51+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T17:59:51'
+      last_controller_status: running_stale
+- id: op_e15110bacd99
+  created_at: '2026-07-31T17:00:29+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_650bbda38bf8
+  created_at: '2026-07-31T17:01:01+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:01:01+00:00'
+        detector_version: watchdog-v1
+- id: op_1ed42d3f1f9b
+  created_at: '2026-07-31T17:01:01+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:01:01'
+      last_controller_status: running_stale
+- id: op_f7136c7064b6
+  created_at: '2026-07-31T17:01:10+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_fea039d612cf
+  created_at: '2026-07-31T17:01:49+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_df459abf0984
+  created_at: '2026-07-31T17:02:06+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:02:06+00:00'
+        detector_version: watchdog-v1
+- id: op_74c8a415c2b6
+  created_at: '2026-07-31T17:02:06+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:02:06'
+      last_controller_status: running_stale
+- id: op_67eb20b0d43f
+  created_at: '2026-07-31T17:02:26+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_28f91e69e6ef
+  created_at: '2026-07-31T17:03:04+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_982166eccbad
+  created_at: '2026-07-31T17:03:12+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:03:12+00:00'
+        detector_version: watchdog-v1
+- id: op_4b4236af67c0
+  created_at: '2026-07-31T17:03:12+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:03:12'
+      last_controller_status: running_stale
+- id: op_354223e78d55
+  created_at: '2026-07-31T17:03:41+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_c67272ee7e22
+  created_at: '2026-07-31T17:04:19+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_d2c2214022c1
+  created_at: '2026-07-31T17:04:17+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:04:17+00:00'
+        detector_version: watchdog-v1
+- id: op_cdeba04854e3
+  created_at: '2026-07-31T17:04:17+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:04:17'
+      last_controller_status: running_stale
+- id: op_1fbe11fbc8bc
+  created_at: '2026-07-31T17:04:56+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_0a54fde4dea2
+  created_at: '2026-07-31T17:05:33+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_572eb6fae00a
+  created_at: '2026-07-31T17:05:30+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:05:29+00:00'
+        detector_version: watchdog-v1
+- id: op_12b73cf53c63
+  created_at: '2026-07-31T17:05:30+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:05:30'
+      last_controller_status: running_stale
+- id: op_9482d43c9485
+  created_at: '2026-07-31T17:06:09+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_fd81f908efed
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:06:41+00:00'
+        detector_version: watchdog-v1
+- id: op_38f93cb9b507
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_5a0edf5383dc91e9
+    value:
+      id: obs_5a0edf5383dc91e9
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_loss and val_loss differ by 4.08176 at the final recorded point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 2.247676828910896
+        validation: 6.329434242053247
+        gap: 4.08175741314235
+        relative_gap: 0.6448850334873283
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+- id: op_e78bf6616fcf
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_5067e7a21643b4ca
+    value:
+      id: obs_5067e7a21643b4ca
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_self_probe_loss and val_self_probe_loss differ by 4.08176 at
+        the final recorded point.
+      measurements:
+        train_metric: train_self_probe_loss
+        validation_metric: val_self_probe_loss
+        train: 2.247676828910896
+        validation: 6.329434242053247
+        gap: 4.08175741314235
+        relative_gap: 0.6448850334873283
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+- id: op_3809f6d9c80d
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_1a4880e2c43b00b6
+    value:
+      id: obs_1a4880e2c43b00b6
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_loss has an estimated slope of -0.0126642 over the last 5 points;
+        direction is improving.
+      measurements:
+        metric: train_loss
+        slope: -0.012664248922719112
+        slope_standard_error: 0.005943674989802135
+        effective_slope: 0.012664248922719112
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+- id: op_748239b63b2f
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_67834b487fa4a7ac
+    value:
+      id: obs_67834b487fa4a7ac
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: train_self_probe_loss has an estimated slope of -0.0126642 over the
+        last 5 points; direction is improving.
+      measurements:
+        metric: train_self_probe_loss
+        slope: -0.012664248922719112
+        slope_standard_error: 0.005943674989802135
+        effective_slope: 0.012664248922719112
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+- id: op_d962a871538a
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_8882468c2e739b77
+    value:
+      id: obs_8882468c2e739b77
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: val_loss has an estimated slope of -0.0450128 over the last 5 points;
+        direction is improving.
+      measurements:
+        metric: val_loss
+        slope: -0.04501284610549474
+        slope_standard_error: 0.0021170212462918365
+        effective_slope: 0.04501284610549474
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+- id: op_e8af1082339e
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_1f811148f628a133
+    value:
+      id: obs_1f811148f628a133
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be:10C
+      statement: val_self_probe_loss has an estimated slope of -0.0450128 over the
+        last 5 points; direction is improving.
+      measurements:
+        metric: val_self_probe_loss
+        slope: -0.04501284610549474
+        slope_standard_error: 0.0021170212462918365
+        effective_slope: 0.04501284610549474
+        window: 5
+        trend: improving
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.8
+      created_at: '2026-07-31T17:06:41+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T17:06:41+00:00'
+- id: op_f74d861edd93
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 1
+      live_trigger_types:
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T18:06:41'
+- id: op_003c160785e1
+  created_at: '2026-07-31T17:06:41+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:06:41'
+      last_controller_status: running_progress
+- id: op_f0f4c4ec018d
+  created_at: '2026-07-31T17:06:50+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_7ecc8c281c0b
+  created_at: '2026-07-31T17:07:28+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_79b232e9f944
+  created_at: '2026-07-31T17:07:46+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:07:46+00:00'
+        detector_version: watchdog-v1
+- id: op_4bd095331bb6
+  created_at: '2026-07-31T17:07:46+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 2
+      live_trigger_types:
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T18:07:46'
+- id: op_dbf324786ae3
+  created_at: '2026-07-31T17:07:46+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:07:46'
+      last_controller_status: running_wait
+- id: op_905c24e66d3f
+  created_at: '2026-07-31T17:08:05+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_98448c9cc277
+  created_at: '2026-07-31T17:08:43+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_4b5807b376a0
+  created_at: '2026-07-31T17:08:52+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:08:52+00:00'
+        detector_version: watchdog-v1
+- id: op_76d2833a6f8e
+  created_at: '2026-07-31T17:08:52+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 3
+      live_trigger_types:
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T18:08:52'
+- id: op_a6b3d9149a7c
+  created_at: '2026-07-31T17:08:52+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:08:52'
+      last_controller_status: running_wait
+- id: op_ecb8fb509bac
+  created_at: '2026-07-31T17:09:21+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: watchdog_20260731T170925+0000
+  created_at: '2026-07-31T17:09:25+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: watchdog_observation
+    trigger_count: 0
+- id: op_3e023be00def
+  created_at: '2026-07-31T17:09:59+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_869f294f0e48
+  created_at: '2026-07-31T17:09:58+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:09:58+00:00'
+        detector_version: watchdog-v1
+- id: op_f331c156e3b1
+  created_at: '2026-07-31T17:09:58+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:09:58'
+      last_controller_status: running_stale
+- id: op_b0a80508571f
+  created_at: '2026-07-31T17:10:36+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_fee64c6f15be
+  created_at: '2026-07-31T17:11:13+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_b6fb7a9082ed
+  created_at: '2026-07-31T17:11:10+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:11:10+00:00'
+        detector_version: watchdog-v1
+- id: op_79736eb40162
+  created_at: '2026-07-31T17:11:10+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:11:10'
+      last_controller_status: running_stale
+- id: op_5614c3445a50
+  created_at: '2026-07-31T17:11:53+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_aa8aecd478fb
+  created_at: '2026-07-31T17:12:25+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:12:25+00:00'
+        detector_version: watchdog-v1
+- id: op_0f607993365d
+  created_at: '2026-07-31T17:12:25+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:12:25'
+      last_controller_status: running_stale
+- id: op_3252eb93d304
+  created_at: '2026-07-31T17:12:34+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_b4f229d20041
+  created_at: '2026-07-31T17:13:13+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_a20798d3fa67
+  created_at: '2026-07-31T17:13:30+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:13:30+00:00'
+        detector_version: watchdog-v1
+- id: op_c26206c1a0fc
+  created_at: '2026-07-31T17:13:30+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:13:30'
+      last_controller_status: running_stale
+- id: op_06d24754aeaf
+  created_at: '2026-07-31T17:13:51+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_f98b83536475
+  created_at: '2026-07-31T17:14:28+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_fbe81e1ce9b5
+  created_at: '2026-07-31T17:14:36+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:14:36+00:00'
+        detector_version: watchdog-v1
+- id: op_5dd2f77ce055
+  created_at: '2026-07-31T17:14:36+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:14:36'
+      last_controller_status: running_stale
+- id: op_848fd656b4d6
+  created_at: '2026-07-31T17:15:06+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_cd4a6a22b6c9
+  created_at: '2026-07-31T17:15:44+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_8aff5fbd4af3
+  created_at: '2026-07-31T17:15:42+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:15:42+00:00'
+        detector_version: watchdog-v1
+- id: op_005e4147c3b9
+  created_at: '2026-07-31T17:15:42+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:15:42'
+      last_controller_status: running_stale
+- id: op_5842d746f3ff
+  created_at: '2026-07-31T17:16:21+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_571a63c9864f
+  created_at: '2026-07-31T17:16:53+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:16:53+00:00'
+        detector_version: watchdog-v1
+- id: op_85adcf5e5a6e
+  created_at: '2026-07-31T17:16:53+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:16:53'
+      last_controller_status: running_stale
+- id: op_a26ed12a56e6
+  created_at: '2026-07-31T17:17:03+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_5e437de913e2
+  created_at: '2026-07-31T17:17:42+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_685d2f033ec7
+  created_at: '2026-07-31T17:17:58+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:17:58+00:00'
+        detector_version: watchdog-v1
+- id: op_4eeac6457f5b
+  created_at: '2026-07-31T17:17:58+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:17:58'
+      last_controller_status: running_stale
+- id: op_e9ff473c39e1
+  created_at: '2026-07-31T17:18:19+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_d48d96291c7f
+  created_at: '2026-07-31T17:18:57+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_b26f3a617a44
+  created_at: '2026-07-31T17:19:04+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:19:04+00:00'
+        detector_version: watchdog-v1
+- id: op_9661f9596c5e
+  created_at: '2026-07-31T17:19:04+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:19:04'
+      last_controller_status: running_stale
+- id: op_5d4f7a827bf2
+  created_at: '2026-07-31T17:19:35+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_ff8604387adc
+  created_at: '2026-07-31T17:20:12+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_84933eeee4a1
+  created_at: '2026-07-31T17:20:10+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:20:10+00:00'
+        detector_version: watchdog-v1
+- id: op_b8ef8be945d6
+  created_at: '2026-07-31T17:20:10+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:20:10'
+      last_controller_status: running_stale
+- id: op_889b86bf7604
+  created_at: '2026-07-31T17:20:50+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_0a11570d1215
+  created_at: '2026-07-31T17:21:21+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:21:21+00:00'
+        detector_version: watchdog-v1
+- id: op_3c5b9c389188
+  created_at: '2026-07-31T17:21:22+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:21:22'
+      last_controller_status: running_stale
+- id: op_4053af5da159
+  created_at: '2026-07-31T17:21:34+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_a76d55cdd9d4
+  created_at: '2026-07-31T17:22:12+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_5d33c864a2fd
+  created_at: '2026-07-31T17:22:27+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:22:27+00:00'
+        detector_version: watchdog-v1
+- id: op_7856229c6b01
+  created_at: '2026-07-31T17:22:27+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:22:27'
+      last_controller_status: running_stale
+- id: op_90e8f1f893f3
+  created_at: '2026-07-31T17:22:50+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_b386d35ab5b0
+  created_at: '2026-07-31T17:23:28+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_9cb6363bbb21
+  created_at: '2026-07-31T17:23:34+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:23:34+00:00'
+        detector_version: watchdog-v1
+- id: op_8c7c3c5655b4
+  created_at: '2026-07-31T17:23:34+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:23:34'
+      last_controller_status: running_stale
+- id: op_840127409a38
+  created_at: '2026-07-31T17:24:06+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_83d6ab7e275a
+  created_at: '2026-07-31T17:24:43+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1346545
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_123932_155a326c
+        last_run_at: '2026-07-31T12:39:43+00:00'
+        next_run_at: '2026-08-01T12:39:44+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic controller or campaign fault is evidenced in the
+          provided snapshot; campaign and controller processes are running, with no
+          safe-stop reason or test/reconciliation failure evidence, so autonomous
+          repair is not justified this cycle.
+        last_invocation_source: scheduled
+- id: op_c012e57b8148
+  created_at: '2026-07-31T17:24:40+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1332142
+        process_running: true
+        process_identity:
+          pid: 1332142
+          running: true
+          command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          process_start_ticks: '147832147'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: null
+          available: false
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 328ed4c87590f06fef7920ef0ae26e275a15f9c95f69b29719ee1a8db809f694
+          observed_command_hash: 33b3633a4a53d87a206c127e697f165f31076a99d942b81eb71c9de6b7c2ff15
+          expected_start_ticks: '147832147'
+          observed_start_ticks: '147832147'
+        checked_at: '2026-07-31T17:24:40+00:00'
+        detector_version: watchdog-v1
+- id: op_2b1d991ccdc0
+  created_at: '2026-07-31T17:24:40+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
+      active_stage: 10C
+      last_poll_at: '2026-07-31T18:24:40'
+      last_controller_status: running_stale
+- id: op_f9cfda10ed4c
+  created_at: '2026-07-31T17:25:23+00:00'
   actor: meta_controller
   operation:
     operation: controller_update

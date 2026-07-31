@@ -41,12 +41,14 @@ def _process_identity(pid: Any) -> dict[str, Any]:
         return {"pid": pid, "running": False}
     proc = Path(f"/proc/{pid}")
     try:
-        command = (proc / "cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", "replace").strip()
+        command_parts = [part for part in (proc / "cmdline").read_bytes().split(b"\x00") if part]
         stat = (proc / "stat").read_text(encoding="utf-8").split()
         return {
             "pid": pid,
             "running": True,
-            "command_hash": hashlib.sha256(command.encode("utf-8")).hexdigest(),
+            # launch_experiment hashes the NUL-separated argv representation;
+            # /proc exposes that same representation with a trailing NUL.
+            "command_hash": hashlib.sha256(b"\x00".join(command_parts)).hexdigest(),
             "process_start_ticks": stat[21] if len(stat) > 21 else None,
         }
     except (OSError, IndexError):
