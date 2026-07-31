@@ -143,7 +143,11 @@ def _candidate_id(candidate: dict[str, Any]) -> str:
     return str(candidate.get("id") or candidate.get("candidate_id") or f"candidate_{uuid.uuid4().hex[:10]}")
 
 
-def _ensure_seed_knowledge(state: dict[str, Any], campaign_config: dict[str, Any]) -> dict[str, Any]:
+def _ensure_seed_knowledge(
+    state: dict[str, Any],
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Create minimal objective-linked knowledge so the first trial is valid."""
 
     campaign_id = str(campaign_config["campaign"]["id"])
@@ -186,6 +190,118 @@ def _ensure_seed_knowledge(state: dict[str, Any], campaign_config: dict[str, Any
             },
             actor="autonomous_controller",
         )
+    # A clean protocol campaign needs an explicit starting reference before
+    # the LLM is allowed to propose an intervention.  Register the unchanged
+    # stage templates as a planned baseline; its three fixed-seed executions
+    # will become the frozen domain calibration.  This is deliberately a
+    # registration record, not a completed experiment and cannot provide a
+    # checkpoint for a later direct-stage launch.
+    campaign_policy = campaign_config.get("campaign", {})
+    if (
+        campaign_policy.get("require_protocol_compliance")
+        and isinstance(loop_config, dict)
+        and "baseline_registration" not in state["entities"]["experiments"]
+    ):
+        resolved: dict[str, Any] = {}
+        for stage in campaign_policy.get("stages", []):
+            stage_config = loop_config.get("experiments", {}).get(stage, {})
+            params_path = stage_config.get("params_yaml") if isinstance(stage_config, dict) else None
+            if params_path:
+                try:
+                    resolved[str(stage)] = read_yaml_mapping(Path(str(params_path)))
+                except (OSError, ValueError):
+                    resolved[str(stage)] = {"params_yaml": str(params_path)}
+        baseline_id = f"baseline_registration_{campaign_id}"
+        state = record_entity(
+            state,
+            "experiments",
+            baseline_id,
+            {
+                "id": baseline_id,
+                "campaign_id": campaign_id,
+                "status": "registered",
+                "stage": "campaign_chain",
+                "configuration": {
+                    "resolved_configuration": resolved,
+                    "resolved_configuration_hash": config_hash(resolved),
+                },
+                "execution": {"status": "not_started"},
+                "provenance": {
+                    "created_by": "campaign_registration",
+                    "reason": "clean protocol campaign baseline registration",
+                },
+            },
+            actor="campaign_registration",
+        )
+        baseline_candidate_id = f"baseline_calibration_{campaign_id}"
+        if baseline_candidate_id not in state["entities"]["candidate_experiments"]:
+            guidance = campaign_config.get("domain_guidance", {})
+            domain_expectations: list[dict[str, Any]] = []
+            if isinstance(guidance, dict) and guidance.get("enabled"):
+                try:
+                    contract = load_domain_contract(guidance.get("contract_path"))
+                    domain_expectations = [
+                        {
+                            "constraint_id": constraint["id"],
+                            "comparison": "paired_baseline",
+                            "direction": "preserve_or_improve",
+                            "role": constraint["role"],
+                        }
+                        for constraint in contract.get("constraints", [])
+                    ]
+                except (OSError, ValueError, TypeError, KeyError):
+                    domain_expectations = []
+            baseline_candidate = {
+                "id": baseline_candidate_id,
+                "candidate_kind": "baseline_calibration",
+                "title": "Register the unchanged CNN chain as the protocol baseline",
+                "purpose": "Establish the fixed-seed reference and domain thresholds before interventions.",
+                "question_id": question_id,
+                "hypothesis_ids": [hypothesis_id],
+                "base_experiment": baseline_id,
+                "base_stage": str(campaign_policy.get("stages", ["10C"])[0]),
+                "configuration_patch": {},
+                "fixed_variables": {},
+                "varied_variables": {},
+                "expected_outcomes": [
+                    {
+                        "metric": "compound.macro_f1",
+                        "comparison": "paired_baseline",
+                        "direction": "no_change",
+                        "minimum_effect": 0.0,
+                    }
+                ],
+                "falsification_criteria": [
+                    {
+                        "metric": "compound.macro_f1",
+                        "comparison": "paired_baseline",
+                        "direction": "no_change",
+                        "minimum_effect": 0.0,
+                    }
+                ],
+                "resolved_base_configuration_hash": config_hash(resolved),
+                "source_checkpoint": "not_applicable_full_chain_baseline",
+                "replicate_seeds": [int(seed) for seed in campaign_policy.get("replicate_seeds", [0, 1, 2])],
+                "estimated_gpu_hours": float(campaign_policy.get("max_single_trial_gpu_hours", 20.0)),
+                "estimated_wall_hours": 24.0,
+                "risks": ["baseline calibration consumes the registered replicate budget"],
+                "allowed_stages": list(campaign_policy.get("stages", [])),
+                "baseline": baseline_id,
+                "domain_expectations": domain_expectations,
+                "replicate_group_id": baseline_candidate_id,
+                "status": "selected_for_execution",
+                "provenance": {
+                    "created_by": "campaign_registration",
+                    "reason": "first clean-cut campaign action is deterministic baseline calibration",
+                },
+            }
+            state = record_entity(
+                state,
+                "candidate_experiments",
+                baseline_candidate_id,
+                baseline_candidate,
+                actor="campaign_registration",
+            )
     return state
 
 
@@ -1399,7 +1515,7 @@ def _apply_decision(
             )
             launch_kwargs["start_trial"] = launched_trial_id
             state_path = _state_path(campaign_config)
-            if state_path.exists() and campaign_config.get("campaign", {}).get("evaluation_protocol"):
+            if campaign_config.get("campaign", {}).get("evaluation_protocol"):
                 save_state(state_path, proposed_state)
             try:
                 next_legacy = _launch_trial_guarded(campaign_config, loop_config, launch_kwargs)
@@ -1407,7 +1523,7 @@ def _apply_decision(
                 proposed_state = update_launch_reservation(
                     proposed_state, reservation_id, status="failed", actor="autonomous_controller"
                 )
-                if state_path.exists() and campaign_config.get("campaign", {}).get("evaluation_protocol"):
+                if campaign_config.get("campaign", {}).get("evaluation_protocol"):
                     save_state(state_path, proposed_state)
                 raise
             proposed_state = update_launch_reservation(
@@ -1847,7 +1963,7 @@ def _run_autonomous_campaign_body(
     if not dry_run:
         experiment_loop.validate_api_key({"agent": campaign_config["agent"]})
     scientific_path = _state_path(campaign_config)
-    scientific_state = _ensure_seed_knowledge(load_state(scientific_path), campaign_config)
+    scientific_state = _ensure_seed_knowledge(load_state(scientific_path), campaign_config, loop_config)
     legacy_state = legacy._read_json(legacy._campaign_state_path(campaign_config))
     # A resumed child is an explicit recovery path.  Do not let a stale
     # controller safe-stop flag prevent the supervisor from collecting the

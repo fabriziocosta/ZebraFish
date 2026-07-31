@@ -28,6 +28,7 @@ except ModuleNotFoundError:  # pragma: no cover - the project environment provid
 
 CAMPAIGN_CONFIGS = {
     "cnn": "configs/experiment_campaigns/cnn_campaign.yaml",
+    "cnn-v2": "configs/experiment_campaigns/cnn_protocol_v2.yaml",
     "transformer": "configs/experiment_campaigns/transformer_campaign.yaml",
 }
 
@@ -840,7 +841,24 @@ def build_investigation(
     summary_metrics = read_summary_metrics(summary_path) if summary_path else {}
     primary_metric = str(config.get("objective", {}).get("primary_metric", "macro_f1"))
     metric_display = _metric_descriptor(history, primary_metric)
-    metric_display["source_path"] = str(history_path) if history_path else None
+    selected_metric = str(campaign_state.get("selected_metric") or "")
+    if not selected_metric:
+        summary_candidate = f"{config.get('objective', {}).get('target', 'compound')}.{primary_metric}"
+        if summary_candidate in summary_metrics:
+            selected_metric = summary_candidate
+    if selected_metric and selected_metric in summary_metrics:
+        metric_display = {
+            "requested_metric": primary_metric,
+            "display_metric": selected_metric,
+            "role": "primary",
+            "available": True,
+            "direction": "higher_is_better",
+            "source": "summary_metrics_csv",
+            "source_path": str(summary_path) if summary_path else None,
+            "fallback_reason": None,
+        }
+    else:
+        metric_display["source_path"] = str(history_path) if history_path else None
     series = _metric_series(history, primary_metric, metric_display)
     metric_plot = _metric_plot(series, metric_display, state, run_status.get("experiment_id") or campaign_state.get("current_stage"))
     configured_epochs = None
@@ -912,8 +930,12 @@ def build_investigation(
         "history_path": str(history_path) if history_path else None,
         "primary_metric": primary_metric,
         "metric_display": metric_display,
-        "current_metric": _latest_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed"),
-        "best_metric": _best_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed", maximize=bool(config.get("objective", {}).get("maximize", True))),
+        "current_metric": _latest_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed")
+        if _latest_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed") is not None
+        else summary_metrics.get(metric_display.get("display_metric")),
+        "best_metric": _best_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed", maximize=bool(config.get("objective", {}).get("maximize", True)))
+        if _best_metric(series, key="primary" if metric_display.get("role") == "primary" else "displayed", maximize=bool(config.get("objective", {}).get("maximize", True))) is not None
+        else summary_metrics.get(metric_display.get("display_metric")),
         "summary_metrics": summary_metrics,
         "metric_series": series[-80:],
         "metric_plot": metric_plot,

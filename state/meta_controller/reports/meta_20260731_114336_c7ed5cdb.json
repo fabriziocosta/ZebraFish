@@ -1,0 +1,83 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Keep meta-controller in safe-stop posture for this cycle; do not apply code changes or lifecycle changes until a controlled, allowlisted, human-reviewed repair cycle is prepared."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-31T11:44:04+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-07-31T11:44:04+00:00",
+    "last_run_id": "meta_20260731_114336_c7ed5cdb",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 1286270,
+    "run_now_supported": true,
+    "status": "meta_controller_safe_stop",
+    "summary": "Supervisory reliability remains degraded: recent scheduled meta-controller cycles repeatedly failed on evidence-reference validation and verification allowlist handling, and the latest recorded supervisory state already entered meta_controller_safe_stop. With active local repository modifications and no bounded verified repair path in this snapshot, further autonomous repair attempts are unsafe."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "recent_meta_reports",
+      "recent_meta_reports[0].status",
+      "recent_meta_reports[1].status",
+      "recent_meta_reports[2].status",
+      "recent_meta_reports[3].status",
+      "recent_meta_reports[4].status",
+      "recent_meta_reports[3].controller_status.summary",
+      "meta_controller.status",
+      "meta_controller.stop_reason",
+      "repository",
+      "repository.status"
+    ],
+    "root_causes": [
+      "Repeated meta-controller run failures (MetaDecisionError and PatchSafetyError) indicate instability in supervisory decision validation and verification-policy flow.",
+      "Verification execution attempted a non-allowlisted target in a prior cycle, violating bounded repair requirements.",
+      "Repository contains in-progress modifications across controller/state/test files, increasing conflict risk for unattended patch application without an isolated verified workflow."
+    ],
+    "severity": "critical",
+    "summary": "Supervisory reliability remains degraded: recent scheduled meta-controller cycles repeatedly failed on evidence-reference validation and verification allowlist handling, and the latest recorded supervisory state already entered meta_controller_safe_stop. With active local repository modifications and no bounded verified repair path in this snapshot, further autonomous repair attempts are unsafe."
+  },
+  "evidence_references": [
+    "recent_meta_reports",
+    "recent_meta_reports[0].status",
+    "recent_meta_reports[1].status",
+    "recent_meta_reports[2].status",
+    "recent_meta_reports[3].status",
+    "recent_meta_reports[4].status",
+    "recent_meta_reports[3].controller_status.summary",
+    "meta_controller.status",
+    "meta_controller.stop_reason",
+    "repository",
+    "repository.status"
+  ],
+  "id": "meta_20260731_114336_c7ed5cdb",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No patch applied in this cycle; rollback not required.",
+  "started_at": "2026-07-31T11:43:36+00:00",
+  "status": "meta_controller_safe_stop",
+  "unresolved_risks": [
+    "Meta-supervisory coverage is reduced while safe-stop remains active.",
+    "Campaign execution may continue without reliable automated meta-level recovery from new operational regressions.",
+    "Dirty working tree may block or conflict with future isolated repairs until reconciled."
+  ]
+}

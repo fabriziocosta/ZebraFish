@@ -15,6 +15,8 @@ from src.meta_controller import (
     read_mandate,
     request_run_now,
     run_once,
+    _meta_loop_owns_state,
+    _validate_decision_evidence,
     _execute_campaign_control,
     validate_patch,
     validate_verifications,
@@ -188,6 +190,45 @@ class MetaControllerTests(unittest.TestCase):
             snapshot = collect_snapshot(root, config)
             self.assertFalse(snapshot["process"]["running"])
             self.assertEqual(snapshot["campaign"]["id"], "test")
+
+    def test_evidence_validation_accepts_snapshot_field_assertions(self) -> None:
+        snapshot = {
+            "campaign": {"status": "running", "stage": "13C"},
+            "process": {"running": True, "pid": 1234},
+            "recent_meta_reports": [{"controller_status": {"summary": "older"}}, {"controller_status": {"summary": "latest"}}],
+            "known_evidence_ids": ["obs_1"],
+        }
+        decision = {
+            "diagnosis": {
+                "evidence_references": [
+                    "campaign.status=running",
+                    "campaign.stage",
+                    "process.running=true",
+                    "recent_meta_reports[1].controller_status.summary=latest",
+                    "obs_1",
+                ]
+            }
+        }
+        _validate_decision_evidence(decision, snapshot)
+
+    def test_evidence_validation_rejects_missing_or_mismatched_snapshot_fields(self) -> None:
+        snapshot = {"campaign": {"status": "running"}, "known_evidence_ids": []}
+        with self.assertRaisesRegex(MetaDecisionError, "unavailable evidence"):
+            _validate_decision_evidence({"diagnosis": {"evidence_references": ["campaign.phase"]}}, snapshot)
+        with self.assertRaisesRegex(MetaDecisionError, "does not match snapshot"):
+            _validate_decision_evidence({"diagnosis": {"evidence_references": ["campaign.status=stopped"]}}, snapshot)
+
+    def test_meta_loop_ownership_follows_current_pid(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state_path = root / "state/scientific_state.yaml"
+            state_path.parent.mkdir()
+            state = empty_state()
+            state["controller_state"]["meta_controller"] = {"pid": 222}
+            save_state(state_path, state)
+            config = {"scientific_state": {"path": "state/scientific_state.yaml"}}
+            self.assertTrue(_meta_loop_owns_state(root, config, 222))
+            self.assertFalse(_meta_loop_owns_state(root, config, 111))
 
     def test_stop_control_requires_replacement_launch(self) -> None:
         import src.agent_campaign_loop as campaign_loop

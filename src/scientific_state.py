@@ -443,7 +443,11 @@ def merge_nonconflicting_states(
     if isinstance(incoming_controller, dict):
         for key, value in incoming_controller.items():
             if key == "meta_controller" and isinstance(value, dict) and isinstance(base.get("controller_state", {}).get(key), dict):
-                base["controller_state"][key] = {**base["controller_state"][key], **deepcopy(value)}
+                # Campaign/controller snapshots contain the meta-controller
+                # state that existed when they were loaded.  They must not
+                # overwrite a newer live loop status (or PID) when the
+                # campaign later merges its own scientific updates.
+                continue
             else:
                 base["controller_state"][key] = deepcopy(value)
     return validate_state(base)

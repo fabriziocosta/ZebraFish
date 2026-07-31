@@ -53,6 +53,10 @@ CAMPAIGNS: dict[str, dict[str, str]] = {
         "config": "configs/experiment_campaigns/cnn_campaign.yaml",
         "description": "10C CNN pretraining -> 13C CNN fine-tuning",
     },
+    "cnn-v2": {
+        "config": "configs/experiment_campaigns/cnn_protocol_v2.yaml",
+        "description": "clean CNN campaign with registered three-seed protocol baseline",
+    },
     "transformer": {
         "config": "configs/experiment_campaigns/transformer_campaign.yaml",
         "description": "12T transformer pretraining -> 15T transformer fine-tuning",

@@ -370,6 +370,91 @@ entities:
         source: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/campaign_state.json
         created_at: '2026-07-25T16:28:55+00:00'
       created_at: '2026-07-25T16:28:55+00:00'
+    cnn_pretrain_finetune_20260730_120254_2395da:
+      id: cnn_pretrain_finetune_20260730_120254_2395da
+      status: trial_completed
+      stage_experiment_ids:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      purpose:
+        question_id: q_cnn_pretrain_finetune_objective
+        hypothesis_ids:
+        - hyp_cnn_pretrain_finetune_objective
+      configuration: &id001
+        10C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/configs/10C_10C_pretrain_next.yaml
+        13C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml
+      checkpoint_reuse:
+        checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_encoder_state.pt
+        config_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml
+        run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329
+        source_experiment: cnn_pretrain_finetune_20260725_174326_4f984d:10C
+        source_stage: 10C
+      checkpoint_manifest: null
+      replicate_group_id: null
+      replicate_index: 0
+      replicate_seed: null
+      evaluation_protocol: three_seed_replicate_lockbox_v1
+      objective_eligibility: protocol_pending
+      lockbox_status: protected_not_evaluated
+      checkpoint_status: legacy_unverified
+      outcome:
+        trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+        trial_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da
+        status: trial_completed
+        score: 0.25011194192432884
+        ranking_score: 0.25011194192432884
+        ranking_values:
+        - 0.25011194192432884
+        - 0.7873719560204654
+        - null
+        - 0.3380281690140845
+        ranking_metric_order:
+        - compound.macro_f1
+        - compound.roc_auc_ovr_macro
+        - compound.balanced_accuracy
+        - compound.accuracy
+        objective_eligible: true
+        selected_metric: compound.macro_f1
+        guardrail_passed: true
+        guardrail_failures: {}
+        metrics_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_summary_metrics.csv
+        stage_runs:
+          13C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257
+        trial_configs: *id001
+        metrics:
+          action.accuracy: 0.5211267605633803
+          action.macro_precision: 0.47549206349206347
+          action.macro_recall: 0.44399999999999995
+          action.macro_f1: 0.42483384932920537
+          action.weighted_precision: 0.46101050748938066
+          action.weighted_recall: 0.5211267605633803
+          action.weighted_f1: 0.4475937150249277
+          action.n_samples: 71.0
+          action.roc_auc_ovr_macro: 0.7064200603227145
+          action.average_precision_macro: 0.47903261758440924
+          compound.accuracy: 0.3380281690140845
+          compound.macro_precision: 0.24807692307692308
+          compound.macro_recall: 0.37358974358974356
+          compound.macro_f1: 0.25011194192432884
+          compound.weighted_precision: 0.3306338028169014
+          compound.weighted_recall: 0.3380281690140845
+          compound.weighted_f1: 0.30836239319670705
+          compound.n_samples: 71.0
+          compound.roc_auc_ovr_macro: 0.7873719560204654
+          compound.average_precision_macro: 0.3877337076147077
+          concentration.accuracy: 0.4788732394366197
+          concentration.macro_precision: 0.5603841536614645
+          concentration.macro_recall: 0.4711111111111111
+          concentration.macro_f1: 0.41890311363995575
+          concentration.weighted_precision: 0.5687570802969074
+          concentration.weighted_recall: 0.4788732394366197
+          concentration.weighted_f1: 0.42174717341507556
+          concentration.n_samples: 71.0
+          concentration.roc_auc_ovr_macro: 0.6433402346445826
+          concentration.average_precision_macro: 0.4854517232723273
+      provenance:
+        created_by: autonomous_controller
+        source: campaign_trial_summary
+      created_at: '2026-07-31T11:54:45+00:00'
   experiments:
     cnn_pretrain_finetune_20260625_115021_08a733:10C:
       id: cnn_pretrain_finetune_20260625_115021_08a733:10C
@@ -1085,7 +1170,7 @@ entities:
       stage: 10C
       status: terminated
       configuration:
-        resolved_config_paths: &id001
+        resolved_config_paths: &id002
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -1095,7 +1180,7 @@ entities:
         artifacts:
           run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
           run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
-          latest_config_yamls: *id001
+          latest_config_yamls: *id002
           resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
         provenance:
           created_by: autonomous_controller
@@ -1126,7 +1211,7 @@ entities:
       stage: 10C
       status: completed
       configuration:
-        resolved_config_paths: &id002
+        resolved_config_paths: &id003
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -1408,7 +1493,7 @@ entities:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/epoch_140.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/10C_pretrain_commutative_cnn_20260725_174329_latest.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/latest.loss-curves.pdf
-          latest_config_yamls: *id002
+          latest_config_yamls: *id003
           latest_metrics:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_summary_metrics.csv
           checkpoints:
@@ -1445,7 +1530,7 @@ entities:
       stage: 10C
       status: failed
       configuration:
-        resolved_config_paths: &id003
+        resolved_config_paths: &id004
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/10C_pretrain_commutative_cnn_20260730_113952_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -1458,7 +1543,7 @@ entities:
           latest_history_csvs: []
           latest_history_tail: null
           latest_pdfs: []
-          latest_config_yamls: *id003
+          latest_config_yamls: *id004
           latest_metrics: []
           checkpoints: []
           confusion_matrices: []
@@ -1499,7 +1584,7 @@ entities:
       stage: 13C
       status: running_stale
       configuration:
-        resolved_config_paths: &id004
+        resolved_config_paths: &id005
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml
         resolved_configuration:
@@ -2102,7 +2187,7 @@ entities:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/loss_plots/fine_tune/epoch_115.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/loss_plots/fine_tune/epoch_116.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/loss_plots/fine_tune/latest.loss-curves.pdf
-          latest_config_yamls: *id004
+          latest_config_yamls: *id005
           latest_metrics: []
           checkpoints:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_model_state.pt
@@ -8812,6 +8897,178 @@ entities:
       provenance:
         created_by: observation_engine
         created_at: '2026-07-31T11:22:16+00:00'
+    obs_e4e1b47cf2ad2593:
+      id: obs_e4e1b47cf2ad2593
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss and val_loss differ by 0.240581 at the final recorded
+        point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 2.066936850232422
+        validation: 2.3075173695882163
+        gap: 0.2405805193557944
+        relative_gap: 0.10425946193363941
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T11:36:49+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:36:49+00:00'
+    obs_95952b0a21fd67c7:
+      id: obs_95952b0a21fd67c7
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss has an estimated slope of -0.00298565 over the last 5
+        points; direction is uncertain.
+      measurements:
+        metric: train_loss
+        slope: -0.0029856517201378276
+        slope_standard_error: 0.002275200064788542
+        effective_slope: 0.0029856517201378276
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:36:49+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:36:49+00:00'
+    obs_b8d437879d3a5a71:
+      id: obs_b8d437879d3a5a71
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: val_loss has an estimated slope of 0.000886128 over the last 5 points;
+        direction is uncertain.
+      measurements:
+        metric: val_loss
+        slope: 0.000886128062293734
+        slope_standard_error: 0.003027764604370397
+        effective_slope: -0.000886128062293734
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:36:49+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:36:49+00:00'
+    obs_54aa1d29330f18c1:
+      id: obs_54aa1d29330f18c1
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss and val_loss differ by 0.23649 at the final recorded point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 2.0576553691631903
+        validation: 2.294144936970302
+        gap: 0.23648956780711172
+        relative_gap: 0.10308396997768808
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T11:52:31+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:52:31+00:00'
+    obs_0d28fd963d768bc8:
+      id: obs_0d28fd963d768bc8
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss has an estimated slope of -0.00349933 over the last 5
+        points; direction is uncertain.
+      measurements:
+        metric: train_loss
+        slope: -0.003499325621065008
+        slope_standard_error: 0.0024594728485771667
+        effective_slope: 0.003499325621065008
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:52:31+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:52:31+00:00'
+    obs_0add47f2ad9972a2:
+      id: obs_0add47f2ad9972a2
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: val_loss has an estimated slope of -0.000347891 over the last 5 points;
+        direction is uncertain.
+      measurements:
+        metric: val_loss
+        slope: -0.00034789130801247123
+        slope_standard_error: 0.0034832803919422773
+        effective_slope: 0.00034789130801247123
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:52:31+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:52:31+00:00'
+    obs_5280ff34d08b40e4:
+      id: obs_5280ff34d08b40e4
+      type: domain_live_worst_class_failure
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: Live validation worst_class_recall is 0; the registered diagnostic
+        threshold is 0.05.
+      direction: contradicting
+      measurements:
+        metric: worst_class_recall
+        threshold: 0.05
+        type: domain_live_worst_class_failure
+        value: 0.0
+        epoch: 120
+        domain_evaluation_id: domain_live_44da3bcd0981c6aba6cf
+        termination_eligible: false
+      detection:
+        method: deterministic_live_domain_rule
+        rule: domain_live_worst_class_failure
+        threshold: 0.05
+        version: domain-guidance-v1
+      reliability: 0.9
+      created_at: '2026-07-31T11:51:50+00:00'
+      provenance:
+        created_by: live_domain_guidance_evaluator
+        contract_hash: aad78e5eb5cfee2cb1847257f2a8f4d47ea319c64d879b000b4e6d08fcd7ec96
+        validation_only: true
   hypotheses:
     hyp_cnn_pretrain_finetune_objective:
       title: Moderate 13C rotation augmentation will improve CNN compound generalisation
@@ -9214,7 +9471,7 @@ entities:
           while multiple large generalization gaps persist. Continuing this run is
           likely to consume compute with low additional information gain.'
         severity: warning
-        evidence_references: &id005
+        evidence_references: &id006
         - observations:obs_97ab1cf0ea84
         - observations:obs_f82995756ef7
         - observations:obs_47459ea7dc7b
@@ -9230,7 +9487,7 @@ entities:
           overfitting or objective mismatch for this candidate configuration.
         - No bounded operational reliability fault is evidenced in controller/process
           status; the main issue is scientific productivity of the current run.
-      evidence_references: *id005
+      evidence_references: *id006
       actions:
       - kind: campaign_control
         summary: Request deterministic campaign stop for the current trial to prevent
@@ -9293,7 +9550,7 @@ entities:
           assessed from this snapshot. A reconciliation is needed to restore observation/state
           alignment before any stop/continue judgment.
         severity: warning
-        evidence_references: &id006
+        evidence_references: &id007
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -9310,7 +9567,7 @@ entities:
           without fresh measurements.
         - No bounded operational failure is evidenced for process/controller liveness;
           the immediate issue is evidence freshness/alignment.
-      evidence_references: *id006
+      evidence_references: *id007
       actions:
       - kind: campaign_control
         summary: Request deterministic reconciliation to refresh campaign state and
@@ -9367,7 +9624,7 @@ entities:
           so there is insufficient aligned evidence to justify lifecycle intervention
           or code repair in this run.
         severity: warning
-        evidence_references: &id007
+        evidence_references: &id008
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -9383,7 +9640,7 @@ entities:
           immediate control is unlikely to change state.
         - No bounded operational fault is evidenced in process/controller liveness
           that would justify an automatic repair patch.
-      evidence_references: *id007
+      evidence_references: *id008
       actions:
       - kind: no_action
         summary: Record evidence-limited state and wait for fresh, active-trial-aligned
@@ -9515,7 +9772,7 @@ entities:
           scientific risk but not a clear, evidence-sufficient trigger for immediate
           stop/reconcile or an unverified code repair in this cycle.
         severity: warning
-        evidence_references: &id008
+        evidence_references: &id009
         - obs_7f545173f7c4bba3
         - obs_20d19af6f55a
         - obs_dbf597e9533e
@@ -9532,7 +9789,7 @@ entities:
         - Current snapshot does not provide bounded, verified evidence for a safe
           automatic operational patch; prior lock-related failures are historical
           and not directly reproducible from this bounded snapshot.
-      evidence_references: *id008
+      evidence_references: *id009
       actions:
       - kind: no_action
         summary: Record evidence-limited scientific risk state and continue monitoring
@@ -9619,6 +9876,290 @@ entities:
         invocation_source: scheduled
         consecutive_failures: 1
       created_at: '2026-07-31T11:28:38+00:00'
+    meta_20260731_113353_40a829c0:
+      id: meta_20260731_113353_40a829c0
+      campaign: cnn_pretrain_finetune
+      status: failed
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:33:53+00:00'
+      completed_at: '2026-07-31T11:34:18+00:00'
+      diagnosis:
+        summary: 'Meta-controller could not complete: MetaDecisionError: diagnosis
+          references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+        severity: critical
+        evidence_references: []
+        root_causes: []
+      evidence_references: []
+      actions: []
+      proposal_only_changes: []
+      rollback_plan: No patch was applied.
+      unresolved_risks:
+      - 'diagnosis references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+      provenance:
+        created_by: meta_controller
+        error: MetaDecisionError
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        invocation_source: scheduled
+      controller_status:
+        status: failed
+        last_run_id: meta_20260731_113353_40a829c0
+        last_run_at: '2026-07-31T11:34:18+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'diagnosis references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+        next_run_at: null
+        pid: 1270810
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+      created_at: '2026-07-31T11:34:24+00:00'
+    meta_20260731_113534_2476ab94:
+      id: meta_20260731_113534_2476ab94
+      campaign: cnn_pretrain_finetune
+      status: failed
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:35:34+00:00'
+      completed_at: '2026-07-31T11:36:03+00:00'
+      diagnosis:
+        summary: 'Meta-controller could not complete: MetaDecisionError: diagnosis
+          references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+        severity: critical
+        evidence_references: []
+        root_causes: []
+      evidence_references: []
+      actions: []
+      proposal_only_changes: []
+      rollback_plan: No patch was applied.
+      unresolved_risks:
+      - 'diagnosis references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+      provenance:
+        created_by: meta_controller
+        error: MetaDecisionError
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        invocation_source: scheduled
+      controller_status:
+        status: failed
+        last_run_id: meta_20260731_113534_2476ab94
+        last_run_at: '2026-07-31T11:36:03+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'diagnosis references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+        next_run_at: null
+        pid: 1272689
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+      created_at: '2026-07-31T11:36:07+00:00'
+    meta_20260731_113801_f6d256cf:
+      id: meta_20260731_113801_f6d256cf
+      campaign: cnn_pretrain_finetune
+      status: failed
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:38:01+00:00'
+      completed_at: '2026-07-31T11:38:47+00:00'
+      diagnosis:
+        summary: 'Meta-controller could not complete: PatchSafetyError: verification
+          command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+        severity: critical
+        evidence_references: []
+        root_causes: []
+      evidence_references: []
+      actions: []
+      proposal_only_changes: []
+      rollback_plan: No patch was applied.
+      unresolved_risks:
+      - 'verification command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+      provenance:
+        created_by: meta_controller
+        error: PatchSafetyError
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        invocation_source: scheduled
+      controller_status:
+        status: failed
+        last_run_id: meta_20260731_113801_f6d256cf
+        last_run_at: '2026-07-31T11:38:47+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'verification command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+        next_run_at: null
+        pid: 1275437
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+      created_at: '2026-07-31T11:38:51+00:00'
+    meta_20260731_114002_8bf03ae3:
+      id: meta_20260731_114002_8bf03ae3
+      campaign: cnn_pretrain_finetune
+      status: meta_controller_safe_stop
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:40:02+00:00'
+      completed_at: '2026-07-31T11:40:23+00:00'
+      diagnosis:
+        summary: Meta-controller scheduled runs are repeatedly failing on evidence-reference
+          validation and patch verification policy handling, so supervisory reliability
+          is currently degraded; per mandate, repeated failures require a safe stop
+          rather than further unverified autonomous repair.
+        severity: critical
+        evidence_references: &id010
+        - recent_meta_reports
+        - recent_meta_reports[1].controller_status.status
+        - recent_meta_reports[2].controller_status.status
+        - recent_meta_reports[3].controller_status.status
+        - recent_meta_reports[4].controller_status.summary
+        - meta_controller.status
+        - repository
+        root_causes:
+        - Repeated supervisory cycle failures occurred in consecutive scheduled runs,
+          including MetaDecisionError on evidence reference validation and PatchSafetyError
+          on non-allowlisted verification command handling.
+        - Active repository modifications include meta-controller and tests, but this
+          snapshot does not provide a bounded, verified, allowlisted patch path that
+          can be safely applied now.
+        - Continuing autonomous repair attempts in this state risks additional malformed/failed
+          cycles, violating reliability and recoverability priorities.
+      evidence_references: *id010
+      actions:
+      - kind: no_action
+        summary: Do not apply code changes in this cycle; trigger meta_controller_safe_stop
+          and require a controlled, human-reviewed repair cycle with allowlisted verification
+          configuration.
+        campaign_action: none
+        status: recorded
+      proposal_only_changes: []
+      rollback_plan: No patch applied; rollback not required.
+      unresolved_risks:
+      - Supervisory coverage remains reduced until evidence-reference validation and
+        verification-name selection are repaired and validated via allowlisted suite.
+      - Campaign may continue running without reliable meta-supervision, reducing
+        early detection of operational regressions.
+      - Repository has in-progress local changes; applying future automated patches
+        may conflict until workspace is reconciled.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        snapshot: compact
+        invocation_source: scheduled
+      controller_status:
+        status: meta_controller_safe_stop
+        last_run_id: meta_20260731_114002_8bf03ae3
+        last_run_at: '2026-07-31T11:40:23+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: Meta-controller scheduled runs are repeatedly failing on evidence-reference
+          validation and patch verification policy handling, so supervisory reliability
+          is currently degraded; per mandate, repeated failures require a safe stop
+          rather than further unverified autonomous repair.
+        next_run_at: null
+        pid: 1277715
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 0
+      created_at: '2026-07-31T11:40:31+00:00'
+    meta_20260731_114336_c7ed5cdb:
+      id: meta_20260731_114336_c7ed5cdb
+      campaign: cnn_pretrain_finetune
+      status: meta_controller_safe_stop
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:43:36+00:00'
+      completed_at: '2026-07-31T11:44:04+00:00'
+      diagnosis:
+        summary: 'Supervisory reliability remains degraded: recent scheduled meta-controller
+          cycles repeatedly failed on evidence-reference validation and verification
+          allowlist handling, and the latest recorded supervisory state already entered
+          meta_controller_safe_stop. With active local repository modifications and
+          no bounded verified repair path in this snapshot, further autonomous repair
+          attempts are unsafe.'
+        severity: critical
+        evidence_references: &id011
+        - recent_meta_reports
+        - recent_meta_reports[0].status
+        - recent_meta_reports[1].status
+        - recent_meta_reports[2].status
+        - recent_meta_reports[3].status
+        - recent_meta_reports[4].status
+        - recent_meta_reports[3].controller_status.summary
+        - meta_controller.status
+        - meta_controller.stop_reason
+        - repository
+        - repository.status
+        root_causes:
+        - Repeated meta-controller run failures (MetaDecisionError and PatchSafetyError)
+          indicate instability in supervisory decision validation and verification-policy
+          flow.
+        - Verification execution attempted a non-allowlisted target in a prior cycle,
+          violating bounded repair requirements.
+        - Repository contains in-progress modifications across controller/state/test
+          files, increasing conflict risk for unattended patch application without
+          an isolated verified workflow.
+      evidence_references: *id011
+      actions:
+      - kind: no_action
+        summary: Keep meta-controller in safe-stop posture for this cycle; do not
+          apply code changes or lifecycle changes until a controlled, allowlisted,
+          human-reviewed repair cycle is prepared.
+        campaign_action: none
+        status: recorded
+      proposal_only_changes: []
+      rollback_plan: No patch applied in this cycle; rollback not required.
+      unresolved_risks:
+      - Meta-supervisory coverage is reduced while safe-stop remains active.
+      - Campaign execution may continue without reliable automated meta-level recovery
+        from new operational regressions.
+      - Dirty working tree may block or conflict with future isolated repairs until
+        reconciled.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        snapshot: compact
+        invocation_source: scheduled
+      controller_status:
+        status: meta_controller_safe_stop
+        last_run_id: meta_20260731_114336_c7ed5cdb
+        last_run_at: '2026-07-31T11:44:04+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Supervisory reliability remains degraded: recent scheduled meta-controller
+          cycles repeatedly failed on evidence-reference validation and verification
+          allowlist handling, and the latest recorded supervisory state already entered
+          meta_controller_safe_stop. With active local repository modifications and
+          no bounded verified repair path in this snapshot, further autonomous repair
+          attempts are unsafe.'
+        next_run_at: null
+        pid: 1286270
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 0
+      created_at: '2026-07-31T11:44:08+00:00'
   belief_updates: {}
   replicate_groups: {}
   candidate_events:
@@ -10058,7 +10599,7 @@ relations:
   source_type: experiments
   target_type: observations
 controller_state:
-  status: running
+  status: autonomous_safe_stop
   active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
   active_stage: 13C
   last_migration:
@@ -10123,12 +10664,17 @@ controller_state:
     - candidate requires domain_expectations for the active domain contract
     - base experiment lacks a resolved configuration for protocol comparison
     created_at: '2026-07-31T11:49:25'
-  safe_stop_reason: null
-  last_poll_at: '2026-07-31T12:30:10'
-  last_controller_status: running_stale
+  safe_stop_reason: The completed 13C intervention did not improve the campaign primary
+    metric versus the registered CNN baseline (compound.macro_f1 0.25011194192432884
+    vs 0.25280931819393354), even though the action guardrail passed. With no protocol-complete
+    base configuration hash/linkage available in the current state for a new compliant
+    candidate registration, the safest bounded decision is to take no new trial action
+    now.
+  last_poll_at: '2026-07-31T12:54:59'
+  last_controller_status: completed
   last_rejection_reason: null
   last_decision: no_action
-  last_decision_at: '2026-07-31T12:24:41'
+  last_decision_at: '2026-07-31T12:54:59'
   termination_reason: user_requested
   initialization:
     completed_at: '2026-07-25T16:28:55+00:00'
@@ -10143,22 +10689,14 @@ controller_state:
   meta_controller:
     status: stopped
     pid: null
-    mode: loop
-    run_now_supported: true
-    last_run_id: meta_20260731_112814_eeec229a
-    last_run_at: '2026-07-31T11:28:34+00:00'
-    next_run_at: '2026-08-01T11:28:41+00:00'
-    mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
-    architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
-    summary: 'Meta-controller could not complete: MetaDecisionError: diagnosis references
-      unavailable evidence: campaign.status=running'
-    last_invocation_source: scheduled
+    next_run_at: null
     stopped_at: '2026-07-31T10:47:01+00:00'
     stop_reason: stop requested
-  live_trigger_polls: 0
+  live_trigger_polls: 5
   live_trigger_types:
+  - domain_live_worst_class_failure
   - generalisation_gap
-  last_live_observation_at: '2026-07-31T12:24:36'
+  last_live_observation_at: '2026-07-31T12:53:37'
   last_live_llm_intervention_at: '2026-07-31T12:24:41'
   last_live_decision: no_action
   last_decision_error_at: '2026-07-31T11:47:21'
@@ -10166,31 +10704,25 @@ controller_state:
     metadata
   recovered_at: '2026-07-31T11:56:15'
   watchdog:
-    status: running
+    status: dead_process
     pid: 1236414
-    process_running: true
+    process_running: false
     process_identity:
       pid: 1236414
-      running: true
-      command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
-      process_start_ticks: '147252086'
-    process_identity_mismatch: true
+      running: false
+    process_identity_mismatch: false
     run_dir: null
     latest_history_age_seconds: null
     checkpoint:
       path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
       available: true
     triggers:
-    - type: process_identity_mismatch
-      expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
-      observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
-      expected_start_ticks: '147252086'
-      observed_start_ticks: '147252086'
-    checked_at: '2026-07-31T11:30:10+00:00'
+    - type: dead_process
+      pid: 1236414
+    checked_at: '2026-07-31T11:54:45+00:00'
     detector_version: watchdog-v1
-  last_live_intervention_error: 'ValueError: decision references unknown evidence:
-    controller_state.watchdog.status=running'
-  last_live_intervention_error_at: '2026-07-31T12:23:30'
+  last_live_intervention_error: null
+  last_live_intervention_error_at: null
 audit_log:
 - id: op_bd4dc5214365
   created_at: '2026-07-23T13:15:00+00:00'
@@ -15660,7 +16192,7 @@ audit_log:
       stage: 10C
       status: terminated
       configuration:
-        resolved_config_paths: &id009
+        resolved_config_paths: &id012
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -15670,7 +16202,7 @@ audit_log:
         artifacts:
           run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440
           run_status_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/logs/10C/10C_20260723_143437.run_status.json
-          latest_config_yamls: *id009
+          latest_config_yamls: *id012
           resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
         provenance:
           created_by: autonomous_controller
@@ -17151,7 +17683,7 @@ audit_log:
       stage: 10C
       status: completed
       configuration:
-        resolved_config_paths: &id010
+        resolved_config_paths: &id013
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -17433,7 +17965,7 @@ audit_log:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/epoch_140.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/10C_pretrain_commutative_cnn_20260725_174329_latest.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/loss_plots/pretraining/latest.loss-curves.pdf
-          latest_config_yamls: *id010
+          latest_config_yamls: *id013
           latest_metrics:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_summary_metrics.csv
           checkpoints:
@@ -18019,7 +18551,7 @@ audit_log:
           while multiple large generalization gaps persist. Continuing this run is
           likely to consume compute with low additional information gain.'
         severity: warning
-        evidence_references: &id011
+        evidence_references: &id014
         - observations:obs_97ab1cf0ea84
         - observations:obs_f82995756ef7
         - observations:obs_47459ea7dc7b
@@ -18035,7 +18567,7 @@ audit_log:
           overfitting or objective mismatch for this candidate configuration.
         - No bounded operational reliability fault is evidenced in controller/process
           status; the main issue is scientific productivity of the current run.
-      evidence_references: *id011
+      evidence_references: *id014
       actions:
       - kind: campaign_control
         summary: Request deterministic campaign stop for the current trial to prevent
@@ -18275,7 +18807,7 @@ audit_log:
           assessed from this snapshot. A reconciliation is needed to restore observation/state
           alignment before any stop/continue judgment.
         severity: warning
-        evidence_references: &id012
+        evidence_references: &id015
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -18292,7 +18824,7 @@ audit_log:
           without fresh measurements.
         - No bounded operational failure is evidenced for process/controller liveness;
           the immediate issue is evidence freshness/alignment.
-      evidence_references: *id012
+      evidence_references: *id015
       actions:
       - kind: campaign_control
         summary: Request deterministic reconciliation to refresh campaign state and
@@ -18448,7 +18980,7 @@ audit_log:
           so there is insufficient aligned evidence to justify lifecycle intervention
           or code repair in this run.
         severity: warning
-        evidence_references: &id013
+        evidence_references: &id016
         - campaign.status=running
         - campaign.trial_id=cnn_pretrain_finetune_20260730_113949_4d2c60
         - observations:obs_97ab1cf0ea84
@@ -18464,7 +18996,7 @@ audit_log:
           immediate control is unlikely to change state.
         - No bounded operational fault is evidenced in process/controller liveness
           that would justify an automatic repair patch.
-      evidence_references: *id013
+      evidence_references: *id016
       actions:
       - kind: no_action
         summary: Record evidence-limited state and wait for fresh, active-trial-aligned
@@ -18549,7 +19081,7 @@ audit_log:
       stage: 10C
       status: failed
       configuration:
-        resolved_config_paths: &id014
+        resolved_config_paths: &id017
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/10C_pretrain_commutative_cnn_20260730_113952_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/configs/10C_10C_pretrain_next.yaml
       execution:
@@ -18562,7 +19094,7 @@ audit_log:
           latest_history_csvs: []
           latest_history_tail: null
           latest_pdfs: []
-          latest_config_yamls: *id014
+          latest_config_yamls: *id017
           latest_metrics: []
           checkpoints: []
           confusion_matrices: []
@@ -23837,7 +24369,7 @@ audit_log:
       stage: 13C
       status: running_stale
       configuration:
-        resolved_config_paths: &id015
+        resolved_config_paths: &id018
         - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml
         resolved_configuration:
@@ -24440,7 +24972,7 @@ audit_log:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/loss_plots/fine_tune/epoch_115.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/loss_plots/fine_tune/epoch_116.loss-curves.pdf
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/loss_plots/fine_tune/latest.loss-curves.pdf
-          latest_config_yamls: *id015
+          latest_config_yamls: *id018
           latest_metrics: []
           checkpoints:
           - artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_model_state.pt
@@ -25614,7 +26146,7 @@ audit_log:
           scientific risk but not a clear, evidence-sufficient trigger for immediate
           stop/reconcile or an unverified code repair in this cycle.
         severity: warning
-        evidence_references: &id016
+        evidence_references: &id019
         - obs_7f545173f7c4bba3
         - obs_20d19af6f55a
         - obs_dbf597e9533e
@@ -25631,7 +26163,7 @@ audit_log:
         - Current snapshot does not provide bounded, verified evidence for a safe
           automatic operational patch; prior lock-related failures are historical
           and not directly reproducible from this bounded snapshot.
-      evidence_references: *id016
+      evidence_references: *id019
       actions:
       - kind: no_action
         summary: Record evidence-limited scientific risk state and continue monitoring
@@ -26305,6 +26837,1887 @@ audit_log:
       active_stage: 13C
       last_poll_at: '2026-07-31T12:30:10'
       last_controller_status: running_stale
+- id: op_f1c170e64723
+  created_at: '2026-07-31T11:31:17+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:31:16+00:00'
+        detector_version: watchdog-v1
+- id: op_bd6dc4b850b1
+  created_at: '2026-07-31T11:31:17+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:31:17'
+      last_controller_status: running_stale
+- id: op_c1f8a51daca6
+  created_at: '2026-07-31T11:32:22+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:32:22+00:00'
+        detector_version: watchdog-v1
+- id: op_e8f7f5868659
+  created_at: '2026-07-31T11:32:22+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:32:22'
+      last_controller_status: running_stale
+- id: op_92ac6f030585
+  created_at: '2026-07-31T11:33:28+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:33:28+00:00'
+        detector_version: watchdog-v1
+- id: op_1a0f68bf84bc
+  created_at: '2026-07-31T11:33:28+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:33:28'
+      last_controller_status: running_stale
+- id: op_8fe3589afa7c
+  created_at: '2026-07-31T11:33:50+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1270810
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:33:48+00:00'
+        interval_seconds: 86400
+- id: op_bf81a9840bfd
+  created_at: '2026-07-31T11:33:55+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        run_id: meta_20260731_113353_40a829c0
+        active_run_id: meta_20260731_113353_40a829c0
+        pid: 1270810
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:33:53+00:00'
+        invocation_source: scheduled
+- id: op_a3d34638230c
+  created_at: '2026-07-31T11:34:17+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: stopped
+        pid: null
+        stopped_at: '2026-07-31T11:34:14+00:00'
+        stop_reason: stop requested
+- id: op_308813941265
+  created_at: '2026-07-31T11:34:24+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260731_113353_40a829c0
+    value:
+      id: meta_20260731_113353_40a829c0
+      campaign: cnn_pretrain_finetune
+      status: failed
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:33:53+00:00'
+      completed_at: '2026-07-31T11:34:18+00:00'
+      diagnosis:
+        summary: 'Meta-controller could not complete: MetaDecisionError: diagnosis
+          references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+        severity: critical
+        evidence_references: []
+        root_causes: []
+      evidence_references: []
+      actions: []
+      proposal_only_changes: []
+      rollback_plan: No patch was applied.
+      unresolved_risks:
+      - 'diagnosis references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+      provenance:
+        created_by: meta_controller
+        error: MetaDecisionError
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        invocation_source: scheduled
+      controller_status:
+        status: failed
+        last_run_id: meta_20260731_113353_40a829c0
+        last_run_at: '2026-07-31T11:34:18+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'diagnosis references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+        next_run_at: null
+        pid: 1270810
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+      created_at: '2026-07-31T11:34:24+00:00'
+- id: op_23a7e4ec3694
+  created_at: '2026-07-31T11:34:25+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: failed
+        last_run_id: meta_20260731_113353_40a829c0
+        last_run_at: '2026-07-31T11:34:18+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'diagnosis references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+        next_run_at: null
+        pid: 1270810
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+- id: op_b310ca082f95
+  created_at: '2026-07-31T11:34:32+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1270810
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_113353_40a829c0
+        last_run_at: '2026-07-31T11:34:18+00:00'
+        next_run_at: '2026-08-01T11:34:28+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Meta-controller could not complete: MetaDecisionError: diagnosis
+          references unavailable evidence: recent_meta_reports[1].controller_status.summary'
+        last_invocation_source: scheduled
+- id: op_b6c9de67348d
+  created_at: '2026-07-31T11:34:34+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:34:33+00:00'
+        detector_version: watchdog-v1
+- id: op_cd982c429c43
+  created_at: '2026-07-31T11:34:34+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:34:34'
+      last_controller_status: running_stale
+- id: op_d11c35df427c
+  created_at: '2026-07-31T11:34:50+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: stopped
+        pid: null
+        stopped_at: '2026-07-31T11:34:48+00:00'
+        stop_reason: stop requested
+- id: op_225c11b9f3c7
+  created_at: '2026-07-31T11:35:30+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1272689
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:35:28+00:00'
+        interval_seconds: 86400
+- id: op_3444f6c2b09a
+  created_at: '2026-07-31T11:35:36+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        run_id: meta_20260731_113534_2476ab94
+        active_run_id: meta_20260731_113534_2476ab94
+        pid: 1272689
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:35:34+00:00'
+        invocation_source: scheduled
+- id: op_8117c88d69a6
+  created_at: '2026-07-31T11:35:41+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:35:41+00:00'
+        detector_version: watchdog-v1
+- id: op_c635853598c5
+  created_at: '2026-07-31T11:35:41+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:35:41'
+      last_controller_status: running_stale
+- id: op_43d59eac172f
+  created_at: '2026-07-31T11:36:07+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260731_113534_2476ab94
+    value:
+      id: meta_20260731_113534_2476ab94
+      campaign: cnn_pretrain_finetune
+      status: failed
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:35:34+00:00'
+      completed_at: '2026-07-31T11:36:03+00:00'
+      diagnosis:
+        summary: 'Meta-controller could not complete: MetaDecisionError: diagnosis
+          references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+        severity: critical
+        evidence_references: []
+        root_causes: []
+      evidence_references: []
+      actions: []
+      proposal_only_changes: []
+      rollback_plan: No patch was applied.
+      unresolved_risks:
+      - 'diagnosis references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+      provenance:
+        created_by: meta_controller
+        error: MetaDecisionError
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        invocation_source: scheduled
+      controller_status:
+        status: failed
+        last_run_id: meta_20260731_113534_2476ab94
+        last_run_at: '2026-07-31T11:36:03+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'diagnosis references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+        next_run_at: null
+        pid: 1272689
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+      created_at: '2026-07-31T11:36:07+00:00'
+- id: op_9d6d3a008f96
+  created_at: '2026-07-31T11:36:07+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: failed
+        last_run_id: meta_20260731_113534_2476ab94
+        last_run_at: '2026-07-31T11:36:03+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'diagnosis references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+        next_run_at: null
+        pid: 1272689
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+- id: op_ec09a764d219
+  created_at: '2026-07-31T11:36:12+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1272689
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_113534_2476ab94
+        last_run_at: '2026-07-31T11:36:03+00:00'
+        next_run_at: '2026-08-01T11:36:10+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Meta-controller could not complete: MetaDecisionError: diagnosis
+          references unavailable evidence: recent_meta_reports[3].controller_status.summary'
+        last_invocation_source: scheduled
+- id: op_959216ba9760
+  created_at: '2026-07-31T11:36:49+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:36:48+00:00'
+        detector_version: watchdog-v1
+- id: op_10057fafd28b
+  created_at: '2026-07-31T11:36:49+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_e4e1b47cf2ad2593
+    value:
+      id: obs_e4e1b47cf2ad2593
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss and val_loss differ by 0.240581 at the final recorded
+        point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 2.066936850232422
+        validation: 2.3075173695882163
+        gap: 0.2405805193557944
+        relative_gap: 0.10425946193363941
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T11:36:49+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:36:49+00:00'
+- id: op_0a914e14b1ac
+  created_at: '2026-07-31T11:36:49+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_95952b0a21fd67c7
+    value:
+      id: obs_95952b0a21fd67c7
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss has an estimated slope of -0.00298565 over the last 5
+        points; direction is uncertain.
+      measurements:
+        metric: train_loss
+        slope: -0.0029856517201378276
+        slope_standard_error: 0.002275200064788542
+        effective_slope: 0.0029856517201378276
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:36:49+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:36:49+00:00'
+- id: op_50b617c66183
+  created_at: '2026-07-31T11:36:49+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_b8d437879d3a5a71
+    value:
+      id: obs_b8d437879d3a5a71
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: val_loss has an estimated slope of 0.000886128 over the last 5 points;
+        direction is uncertain.
+      measurements:
+        metric: val_loss
+        slope: 0.000886128062293734
+        slope_standard_error: 0.003027764604370397
+        effective_slope: -0.000886128062293734
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:36:49+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:36:49+00:00'
+- id: op_419d40569e71
+  created_at: '2026-07-31T11:36:49+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 1
+      live_trigger_types:
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T12:36:49'
+- id: op_3ec8354d42ff
+  created_at: '2026-07-31T11:36:49+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      last_live_intervention_error: null
+      last_live_intervention_error_at: null
+- id: op_91dd248a4567
+  created_at: '2026-07-31T11:36:49+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:36:49'
+      last_controller_status: running_progress
+- id: op_ec2e3c3db530
+  created_at: '2026-07-31T11:37:58+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1275437
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:37:56+00:00'
+        interval_seconds: 86400
+- id: op_27086d5e7acb
+  created_at: '2026-07-31T11:38:04+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        run_id: meta_20260731_113801_f6d256cf
+        active_run_id: meta_20260731_113801_f6d256cf
+        pid: 1275437
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:38:01+00:00'
+        invocation_source: scheduled
+- id: op_c547018a5b79
+  created_at: '2026-07-31T11:37:54+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:37:54+00:00'
+        detector_version: watchdog-v1
+- id: op_c912dd514ebf
+  created_at: '2026-07-31T11:37:54+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 2
+      live_trigger_types:
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T12:37:54'
+- id: op_f1a0c19c3858
+  created_at: '2026-07-31T11:37:55+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:37:54'
+      last_controller_status: running_wait
+- id: op_277e7f1d82a6
+  created_at: '2026-07-31T11:38:51+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260731_113801_f6d256cf
+    value:
+      id: meta_20260731_113801_f6d256cf
+      campaign: cnn_pretrain_finetune
+      status: failed
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:38:01+00:00'
+      completed_at: '2026-07-31T11:38:47+00:00'
+      diagnosis:
+        summary: 'Meta-controller could not complete: PatchSafetyError: verification
+          command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+        severity: critical
+        evidence_references: []
+        root_causes: []
+      evidence_references: []
+      actions: []
+      proposal_only_changes: []
+      rollback_plan: No patch was applied.
+      unresolved_risks:
+      - 'verification command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+      provenance:
+        created_by: meta_controller
+        error: PatchSafetyError
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        invocation_source: scheduled
+      controller_status:
+        status: failed
+        last_run_id: meta_20260731_113801_f6d256cf
+        last_run_at: '2026-07-31T11:38:47+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'verification command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+        next_run_at: null
+        pid: 1275437
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+      created_at: '2026-07-31T11:38:51+00:00'
+- id: op_761ae641e082
+  created_at: '2026-07-31T11:38:51+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: failed
+        last_run_id: meta_20260731_113801_f6d256cf
+        last_run_at: '2026-07-31T11:38:47+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'verification command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+        next_run_at: null
+        pid: 1275437
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 1
+- id: op_9cad92c5e660
+  created_at: '2026-07-31T11:38:56+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1275437
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260731_113801_f6d256cf
+        last_run_at: '2026-07-31T11:38:47+00:00'
+        next_run_at: '2026-08-01T11:38:54+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Meta-controller could not complete: PatchSafetyError: verification
+          command is not allowlisted: tests.test_meta_controller::test_validate_evidence_reference_accepts_value_qualified_path'
+        last_invocation_source: scheduled
+- id: op_9338adcde8ce
+  created_at: '2026-07-31T11:39:15+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:39:15+00:00'
+        detector_version: watchdog-v1
+- id: op_aeea4e3227f8
+  created_at: '2026-07-31T11:39:15+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 3
+      live_trigger_types:
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T12:39:15'
+- id: op_b2b583a61c03
+  created_at: '2026-07-31T11:39:15+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:39:15'
+      last_controller_status: running_wait
+- id: op_7f559ca7d3eb
+  created_at: '2026-07-31T11:39:58+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1277715
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:39:56+00:00'
+        interval_seconds: 86400
+- id: op_c2bf8bb730c5
+  created_at: '2026-07-31T11:40:04+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        run_id: meta_20260731_114002_8bf03ae3
+        active_run_id: meta_20260731_114002_8bf03ae3
+        pid: 1277715
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:40:02+00:00'
+        invocation_source: scheduled
+- id: op_70217bc9f3c0
+  created_at: '2026-07-31T11:40:21+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:40:21+00:00'
+        detector_version: watchdog-v1
+- id: op_a11a6f820c1a
+  created_at: '2026-07-31T11:40:21+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:40:21'
+      last_controller_status: running_stale
+- id: op_ae306c51be49
+  created_at: '2026-07-31T11:40:31+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260731_114002_8bf03ae3
+    value:
+      id: meta_20260731_114002_8bf03ae3
+      campaign: cnn_pretrain_finetune
+      status: meta_controller_safe_stop
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:40:02+00:00'
+      completed_at: '2026-07-31T11:40:23+00:00'
+      diagnosis:
+        summary: Meta-controller scheduled runs are repeatedly failing on evidence-reference
+          validation and patch verification policy handling, so supervisory reliability
+          is currently degraded; per mandate, repeated failures require a safe stop
+          rather than further unverified autonomous repair.
+        severity: critical
+        evidence_references: &id020
+        - recent_meta_reports
+        - recent_meta_reports[1].controller_status.status
+        - recent_meta_reports[2].controller_status.status
+        - recent_meta_reports[3].controller_status.status
+        - recent_meta_reports[4].controller_status.summary
+        - meta_controller.status
+        - repository
+        root_causes:
+        - Repeated supervisory cycle failures occurred in consecutive scheduled runs,
+          including MetaDecisionError on evidence reference validation and PatchSafetyError
+          on non-allowlisted verification command handling.
+        - Active repository modifications include meta-controller and tests, but this
+          snapshot does not provide a bounded, verified, allowlisted patch path that
+          can be safely applied now.
+        - Continuing autonomous repair attempts in this state risks additional malformed/failed
+          cycles, violating reliability and recoverability priorities.
+      evidence_references: *id020
+      actions:
+      - kind: no_action
+        summary: Do not apply code changes in this cycle; trigger meta_controller_safe_stop
+          and require a controlled, human-reviewed repair cycle with allowlisted verification
+          configuration.
+        campaign_action: none
+        status: recorded
+      proposal_only_changes: []
+      rollback_plan: No patch applied; rollback not required.
+      unresolved_risks:
+      - Supervisory coverage remains reduced until evidence-reference validation and
+        verification-name selection are repaired and validated via allowlisted suite.
+      - Campaign may continue running without reliable meta-supervision, reducing
+        early detection of operational regressions.
+      - Repository has in-progress local changes; applying future automated patches
+        may conflict until workspace is reconciled.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        snapshot: compact
+        invocation_source: scheduled
+      controller_status:
+        status: meta_controller_safe_stop
+        last_run_id: meta_20260731_114002_8bf03ae3
+        last_run_at: '2026-07-31T11:40:23+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: Meta-controller scheduled runs are repeatedly failing on evidence-reference
+          validation and patch verification policy handling, so supervisory reliability
+          is currently degraded; per mandate, repeated failures require a safe stop
+          rather than further unverified autonomous repair.
+        next_run_at: null
+        pid: 1277715
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 0
+      created_at: '2026-07-31T11:40:31+00:00'
+- id: op_cb27b59f3ecc
+  created_at: '2026-07-31T11:40:31+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: meta_controller_safe_stop
+        last_run_id: meta_20260731_114002_8bf03ae3
+        last_run_at: '2026-07-31T11:40:23+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: Meta-controller scheduled runs are repeatedly failing on evidence-reference
+          validation and patch verification policy handling, so supervisory reliability
+          is currently degraded; per mandate, repeated failures require a safe stop
+          rather than further unverified autonomous repair.
+        next_run_at: null
+        pid: 1277715
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 0
+- id: op_661e6c366fc9
+  created_at: '2026-07-31T11:41:26+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:41:26+00:00'
+        detector_version: watchdog-v1
+- id: op_5bcc73b7ac2d
+  created_at: '2026-07-31T11:41:26+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:41:26'
+      last_controller_status: running_stale
+- id: op_8d3f524f57f7
+  created_at: '2026-07-31T11:42:32+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:42:32+00:00'
+        detector_version: watchdog-v1
+- id: op_74f68e37ba6f
+  created_at: '2026-07-31T11:42:32+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:42:32'
+      last_controller_status: running_stale
+- id: op_7c0a353d9360
+  created_at: '2026-07-31T11:43:32+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 1286270
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:43:30+00:00'
+        interval_seconds: 86400
+- id: op_c684df457e6f
+  created_at: '2026-07-31T11:43:38+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        run_id: meta_20260731_114336_c7ed5cdb
+        active_run_id: meta_20260731_114336_c7ed5cdb
+        pid: 1286270
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-07-31T11:43:36+00:00'
+        invocation_source: scheduled
+- id: op_c65dd48af77e
+  created_at: '2026-07-31T11:43:38+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:43:38+00:00'
+        detector_version: watchdog-v1
+- id: op_b3686bb631e6
+  created_at: '2026-07-31T11:43:38+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:43:38'
+      last_controller_status: running_stale
+- id: op_5b7e643fc353
+  created_at: '2026-07-31T11:44:08+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260731_114336_c7ed5cdb
+    value:
+      id: meta_20260731_114336_c7ed5cdb
+      campaign: cnn_pretrain_finetune
+      status: meta_controller_safe_stop
+      invocation_source: scheduled
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-07-31T11:43:36+00:00'
+      completed_at: '2026-07-31T11:44:04+00:00'
+      diagnosis:
+        summary: 'Supervisory reliability remains degraded: recent scheduled meta-controller
+          cycles repeatedly failed on evidence-reference validation and verification
+          allowlist handling, and the latest recorded supervisory state already entered
+          meta_controller_safe_stop. With active local repository modifications and
+          no bounded verified repair path in this snapshot, further autonomous repair
+          attempts are unsafe.'
+        severity: critical
+        evidence_references: &id021
+        - recent_meta_reports
+        - recent_meta_reports[0].status
+        - recent_meta_reports[1].status
+        - recent_meta_reports[2].status
+        - recent_meta_reports[3].status
+        - recent_meta_reports[4].status
+        - recent_meta_reports[3].controller_status.summary
+        - meta_controller.status
+        - meta_controller.stop_reason
+        - repository
+        - repository.status
+        root_causes:
+        - Repeated meta-controller run failures (MetaDecisionError and PatchSafetyError)
+          indicate instability in supervisory decision validation and verification-policy
+          flow.
+        - Verification execution attempted a non-allowlisted target in a prior cycle,
+          violating bounded repair requirements.
+        - Repository contains in-progress modifications across controller/state/test
+          files, increasing conflict risk for unattended patch application without
+          an isolated verified workflow.
+      evidence_references: *id021
+      actions:
+      - kind: no_action
+        summary: Keep meta-controller in safe-stop posture for this cycle; do not
+          apply code changes or lifecycle changes until a controlled, allowlisted,
+          human-reviewed repair cycle is prepared.
+        campaign_action: none
+        status: recorded
+      proposal_only_changes: []
+      rollback_plan: No patch applied in this cycle; rollback not required.
+      unresolved_risks:
+      - Meta-supervisory coverage is reduced while safe-stop remains active.
+      - Campaign execution may continue without reliable automated meta-level recovery
+        from new operational regressions.
+      - Dirty working tree may block or conflict with future isolated repairs until
+        reconciled.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        snapshot: compact
+        invocation_source: scheduled
+      controller_status:
+        status: meta_controller_safe_stop
+        last_run_id: meta_20260731_114336_c7ed5cdb
+        last_run_at: '2026-07-31T11:44:04+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Supervisory reliability remains degraded: recent scheduled meta-controller
+          cycles repeatedly failed on evidence-reference validation and verification
+          allowlist handling, and the latest recorded supervisory state already entered
+          meta_controller_safe_stop. With active local repository modifications and
+          no bounded verified repair path in this snapshot, further autonomous repair
+          attempts are unsafe.'
+        next_run_at: null
+        pid: 1286270
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 0
+      created_at: '2026-07-31T11:44:08+00:00'
+- id: op_4181be733993
+  created_at: '2026-07-31T11:44:08+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: meta_controller_safe_stop
+        last_run_id: meta_20260731_114336_c7ed5cdb
+        last_run_at: '2026-07-31T11:44:04+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Supervisory reliability remains degraded: recent scheduled meta-controller
+          cycles repeatedly failed on evidence-reference validation and verification
+          allowlist handling, and the latest recorded supervisory state already entered
+          meta_controller_safe_stop. With active local repository modifications and
+          no bounded verified repair path in this snapshot, further autonomous repair
+          attempts are unsafe.'
+        next_run_at: null
+        pid: 1286270
+        mode: loop
+        run_now_supported: true
+        invocation_source: scheduled
+        consecutive_failures: 0
+- id: op_b382a4dc2ed4
+  created_at: '2026-07-31T11:44:16+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: meta_controller_safe_stop
+        pid: null
+        next_run_at: null
+        stopped_at: '2026-07-31T11:44:14+00:00'
+        stop_reason: repeated supervisory failures
+- id: op_187941560a88
+  created_at: '2026-07-31T11:44:47+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:44:47+00:00'
+        detector_version: watchdog-v1
+- id: op_828f63fb909f
+  created_at: '2026-07-31T11:44:47+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:44:47'
+      last_controller_status: running_stale
+- id: op_1abad3d3ebbf
+  created_at: '2026-07-31T11:45:53+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:45:53+00:00'
+        detector_version: watchdog-v1
+- id: op_27dfb531a0de
+  created_at: '2026-07-31T11:45:53+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:45:53'
+      last_controller_status: running_stale
+- id: op_2ad09e436505
+  created_at: '2026-07-31T11:47:00+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:47:00+00:00'
+        detector_version: watchdog-v1
+- id: op_61ced8c93978
+  created_at: '2026-07-31T11:47:00+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:47:00'
+      last_controller_status: running_stale
+- id: op_446aeba16999
+  created_at: '2026-07-31T11:48:06+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:48:06+00:00'
+        detector_version: watchdog-v1
+- id: op_9f034edac2c7
+  created_at: '2026-07-31T11:48:06+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:48:06'
+      last_controller_status: running_stale
+- id: op_318ce5b03b81
+  created_at: '2026-07-31T11:49:12+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:49:12+00:00'
+        detector_version: watchdog-v1
+- id: op_efefe2a5fd06
+  created_at: '2026-07-31T11:49:12+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:49:12'
+      last_controller_status: running_stale
+- id: op_8267ee07cffb
+  created_at: '2026-07-31T11:50:18+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:50:18+00:00'
+        detector_version: watchdog-v1
+- id: op_c622403ee3f4
+  created_at: '2026-07-31T11:50:18+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:50:18'
+      last_controller_status: running_stale
+- id: op_c2e8adddc8da
+  created_at: '2026-07-31T11:51:23+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:51:23+00:00'
+        detector_version: watchdog-v1
+- id: op_2f7cdf57dcf4
+  created_at: '2026-07-31T11:51:24+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:51:24'
+      last_controller_status: running_stale
+- id: op_de0f72c2828e
+  created_at: '2026-07-31T11:52:31+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:52:31+00:00'
+        detector_version: watchdog-v1
+- id: op_8bd87b0e047f
+  created_at: '2026-07-31T11:52:31+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_54aa1d29330f18c1
+    value:
+      id: obs_54aa1d29330f18c1
+      type: generalisation_gap
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss and val_loss differ by 0.23649 at the final recorded point.
+      measurements:
+        train_metric: train_loss
+        validation_metric: val_loss
+        train: 2.0576553691631903
+        validation: 2.294144936970302
+        gap: 0.23648956780711172
+        relative_gap: 0.10308396997768808
+        direction: minimize
+      detection:
+        method: deterministic_rule
+        rule: generalisation_gap_above_threshold
+        threshold: 0.1
+        version: observation-v2
+      reliability: 0.9
+      created_at: '2026-07-31T11:52:31+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:52:31+00:00'
+- id: op_61e8dda24e8b
+  created_at: '2026-07-31T11:52:31+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_0d28fd963d768bc8
+    value:
+      id: obs_0d28fd963d768bc8
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: train_loss has an estimated slope of -0.00349933 over the last 5
+        points; direction is uncertain.
+      measurements:
+        metric: train_loss
+        slope: -0.003499325621065008
+        slope_standard_error: 0.0024594728485771667
+        effective_slope: 0.003499325621065008
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:52:31+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:52:31+00:00'
+- id: op_5f03609ee0d2
+  created_at: '2026-07-31T11:52:31+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_0add47f2ad9972a2
+    value:
+      id: obs_0add47f2ad9972a2
+      type: trajectory_slope
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: val_loss has an estimated slope of -0.000347891 over the last 5 points;
+        direction is uncertain.
+      measurements:
+        metric: val_loss
+        slope: -0.00034789130801247123
+        slope_standard_error: 0.0034832803919422773
+        effective_slope: 0.00034789130801247123
+        window: 5
+        trend: uncertain
+      detection:
+        method: deterministic_rule
+        rule: linear_slope_with_confidence_bound
+        threshold: 1.96
+        version: observation-v2
+      reliability: 0.6
+      created_at: '2026-07-31T11:52:31+00:00'
+      provenance:
+        created_by: observation_engine
+        created_at: '2026-07-31T11:52:31+00:00'
+- id: op_5c1edba82dbb
+  created_at: '2026-07-31T11:52:31+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: create
+    path: entities.observations.obs_5280ff34d08b40e4
+    value:
+      id: obs_5280ff34d08b40e4
+      type: domain_live_worst_class_failure
+      source_experiments:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      statement: Live validation worst_class_recall is 0; the registered diagnostic
+        threshold is 0.05.
+      direction: contradicting
+      measurements:
+        metric: worst_class_recall
+        threshold: 0.05
+        type: domain_live_worst_class_failure
+        value: 0.0
+        epoch: 120
+        domain_evaluation_id: domain_live_44da3bcd0981c6aba6cf
+        termination_eligible: false
+      detection:
+        method: deterministic_live_domain_rule
+        rule: domain_live_worst_class_failure
+        threshold: 0.05
+        version: domain-guidance-v1
+      reliability: 0.9
+      created_at: '2026-07-31T11:51:50+00:00'
+      provenance:
+        created_by: live_domain_guidance_evaluator
+        contract_hash: aad78e5eb5cfee2cb1847257f2a8f4d47ea319c64d879b000b4e6d08fcd7ec96
+        validation_only: true
+- id: op_8ef2138a6d5a
+  created_at: '2026-07-31T11:52:31+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 4
+      live_trigger_types:
+      - domain_live_worst_class_failure
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T12:52:31'
+- id: op_09e2000abad9
+  created_at: '2026-07-31T11:52:31+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:52:31'
+      last_controller_status: running_progress
+- id: op_4ba194531377
+  created_at: '2026-07-31T11:53:37+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: running
+        pid: 1236414
+        process_running: true
+        process_identity:
+          pid: 1236414
+          running: true
+          command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          process_start_ticks: '147252086'
+        process_identity_mismatch: true
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: process_identity_mismatch
+          expected_command_hash: 821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942
+          observed_command_hash: 14c2a54ac4f3b2ceaffb968e9f5b79d6b5be98be8738aa6bba2273c4e20534f2
+          expected_start_ticks: '147252086'
+          observed_start_ticks: '147252086'
+        checked_at: '2026-07-31T11:53:37+00:00'
+        detector_version: watchdog-v1
+- id: op_95a225a0fc4e
+  created_at: '2026-07-31T11:53:37+00:00'
+  actor: live_observation_engine
+  operation:
+    operation: controller_update
+    value:
+      live_trigger_polls: 5
+      live_trigger_types:
+      - domain_live_worst_class_failure
+      - generalisation_gap
+      last_live_observation_at: '2026-07-31T12:53:37'
+- id: op_2ae8a622f9af
+  created_at: '2026-07-31T11:53:37+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:53:37'
+      last_controller_status: running_progress
+- id: op_998b5b759b40
+  created_at: '2026-07-31T11:54:45+00:00'
+  actor: campaign_watchdog
+  operation:
+    operation: controller_update
+    value:
+      watchdog:
+        status: dead_process
+        pid: 1236414
+        process_running: false
+        process_identity:
+          pid: 1236414
+          running: false
+        process_identity_mismatch: false
+        run_dir: null
+        latest_history_age_seconds: null
+        checkpoint:
+          path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt
+          available: true
+        triggers:
+        - type: dead_process
+          pid: 1236414
+        checked_at: '2026-07-31T11:54:45+00:00'
+        detector_version: watchdog-v1
+- id: op_253e2bb4444e
+  created_at: '2026-07-31T11:54:45+00:00'
+  actor: autonomous_controller
+  operation:
+    operation: create
+    path: entities.trials.cnn_pretrain_finetune_20260730_120254_2395da
+    value:
+      id: cnn_pretrain_finetune_20260730_120254_2395da
+      status: trial_completed
+      stage_experiment_ids:
+      - cnn_pretrain_finetune_20260730_120254_2395da:13C
+      purpose:
+        question_id: q_cnn_pretrain_finetune_objective
+        hypothesis_ids:
+        - hyp_cnn_pretrain_finetune_objective
+      configuration: &id022
+        10C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/configs/10C_10C_pretrain_next.yaml
+        13C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml
+      checkpoint_reuse:
+        checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_encoder_state.pt
+        config_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml
+        run_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329
+        source_experiment: cnn_pretrain_finetune_20260725_174326_4f984d:10C
+        source_stage: 10C
+      checkpoint_manifest: null
+      replicate_group_id: null
+      replicate_index: 0
+      replicate_seed: null
+      evaluation_protocol: three_seed_replicate_lockbox_v1
+      objective_eligibility: protocol_pending
+      lockbox_status: protected_not_evaluated
+      checkpoint_status: legacy_unverified
+      outcome:
+        trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+        trial_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da
+        status: trial_completed
+        score: 0.25011194192432884
+        ranking_score: 0.25011194192432884
+        ranking_values:
+        - 0.25011194192432884
+        - 0.7873719560204654
+        - null
+        - 0.3380281690140845
+        ranking_metric_order:
+        - compound.macro_f1
+        - compound.roc_auc_ovr_macro
+        - compound.balanced_accuracy
+        - compound.accuracy
+        objective_eligible: true
+        selected_metric: compound.macro_f1
+        guardrail_passed: true
+        guardrail_failures: {}
+        metrics_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_summary_metrics.csv
+        stage_runs:
+          13C: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257
+        trial_configs: *id022
+        metrics:
+          action.accuracy: 0.5211267605633803
+          action.macro_precision: 0.47549206349206347
+          action.macro_recall: 0.44399999999999995
+          action.macro_f1: 0.42483384932920537
+          action.weighted_precision: 0.46101050748938066
+          action.weighted_recall: 0.5211267605633803
+          action.weighted_f1: 0.4475937150249277
+          action.n_samples: 71.0
+          action.roc_auc_ovr_macro: 0.7064200603227145
+          action.average_precision_macro: 0.47903261758440924
+          compound.accuracy: 0.3380281690140845
+          compound.macro_precision: 0.24807692307692308
+          compound.macro_recall: 0.37358974358974356
+          compound.macro_f1: 0.25011194192432884
+          compound.weighted_precision: 0.3306338028169014
+          compound.weighted_recall: 0.3380281690140845
+          compound.weighted_f1: 0.30836239319670705
+          compound.n_samples: 71.0
+          compound.roc_auc_ovr_macro: 0.7873719560204654
+          compound.average_precision_macro: 0.3877337076147077
+          concentration.accuracy: 0.4788732394366197
+          concentration.macro_precision: 0.5603841536614645
+          concentration.macro_recall: 0.4711111111111111
+          concentration.macro_f1: 0.41890311363995575
+          concentration.weighted_precision: 0.5687570802969074
+          concentration.weighted_recall: 0.4788732394366197
+          concentration.weighted_f1: 0.42174717341507556
+          concentration.n_samples: 71.0
+          concentration.roc_auc_ovr_macro: 0.6433402346445826
+          concentration.average_precision_macro: 0.4854517232723273
+      provenance:
+        created_by: autonomous_controller
+        source: campaign_trial_summary
+      created_at: '2026-07-31T11:54:45+00:00'
+- id: op_47932e7e5978
+  created_at: '2026-07-31T11:54:59+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      status: autonomous_safe_stop
+      safe_stop_reason: The completed 13C intervention did not improve the campaign
+        primary metric versus the registered CNN baseline (compound.macro_f1 0.25011194192432884
+        vs 0.25280931819393354), even though the action guardrail passed. With no
+        protocol-complete base configuration hash/linkage available in the current
+        state for a new compliant candidate registration, the safest bounded decision
+        is to take no new trial action now.
+      last_decision: no_action
+      last_decision_at: '2026-07-31T12:54:59'
+- id: op_ec984213f0a8
+  created_at: '2026-07-31T11:54:59+00:00'
+  actor: controller
+  operation:
+    operation: controller_update
+    value:
+      active_trial_id: cnn_pretrain_finetune_20260730_120254_2395da
+      active_stage: 13C
+      last_poll_at: '2026-07-31T12:54:59'
+      last_controller_status: completed
 /candidate_experiments/-:
   id: cand_20260723_augmentation_gap_test
   title: Increase 13C rotation augmentation to counter observed generalisation gaps
@@ -26339,8 +28752,8 @@ audit_log:
     created_by: autonomous_controller
     reason: Observed 13C plateau plus generalisation gaps with best-scoring completed
       trial; test bounded augmentation-only change.
-state_revision: 53
+state_revision: 96
 protocol_version: scientific-loop-v3
 writer_protocol: scientific-loop-v3
 last_writer: emps-costa:1243257
-updated_at: '2026-07-31T11:30:15+00:00'
+updated_at: '2026-07-31T11:55:03+00:00'

@@ -1,0 +1,75 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Do not apply code changes in this cycle; trigger meta_controller_safe_stop and require a controlled, human-reviewed repair cycle with allowlisted verification configuration."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune",
+  "completed_at": "2026-07-31T11:40:23+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-07-31T11:40:23+00:00",
+    "last_run_id": "meta_20260731_114002_8bf03ae3",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 1277715,
+    "run_now_supported": true,
+    "status": "meta_controller_safe_stop",
+    "summary": "Meta-controller scheduled runs are repeatedly failing on evidence-reference validation and patch verification policy handling, so supervisory reliability is currently degraded; per mandate, repeated failures require a safe stop rather than further unverified autonomous repair."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "recent_meta_reports",
+      "recent_meta_reports[1].controller_status.status",
+      "recent_meta_reports[2].controller_status.status",
+      "recent_meta_reports[3].controller_status.status",
+      "recent_meta_reports[4].controller_status.summary",
+      "meta_controller.status",
+      "repository"
+    ],
+    "root_causes": [
+      "Repeated supervisory cycle failures occurred in consecutive scheduled runs, including MetaDecisionError on evidence reference validation and PatchSafetyError on non-allowlisted verification command handling.",
+      "Active repository modifications include meta-controller and tests, but this snapshot does not provide a bounded, verified, allowlisted patch path that can be safely applied now.",
+      "Continuing autonomous repair attempts in this state risks additional malformed/failed cycles, violating reliability and recoverability priorities."
+    ],
+    "severity": "critical",
+    "summary": "Meta-controller scheduled runs are repeatedly failing on evidence-reference validation and patch verification policy handling, so supervisory reliability is currently degraded; per mandate, repeated failures require a safe stop rather than further unverified autonomous repair."
+  },
+  "evidence_references": [
+    "recent_meta_reports",
+    "recent_meta_reports[1].controller_status.status",
+    "recent_meta_reports[2].controller_status.status",
+    "recent_meta_reports[3].controller_status.status",
+    "recent_meta_reports[4].controller_status.summary",
+    "meta_controller.status",
+    "repository"
+  ],
+  "id": "meta_20260731_114002_8bf03ae3",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No patch applied; rollback not required.",
+  "started_at": "2026-07-31T11:40:02+00:00",
+  "status": "meta_controller_safe_stop",
+  "unresolved_risks": [
+    "Supervisory coverage remains reduced until evidence-reference validation and verification-name selection are repaired and validated via allowlisted suite.",
+    "Campaign may continue running without reliable meta-supervision, reducing early detection of operational regressions.",
+    "Repository has in-progress local changes; applying future automated patches may conflict until workspace is reconciled."
+  ]
+}

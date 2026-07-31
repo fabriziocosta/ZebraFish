@@ -545,6 +545,8 @@ def _build_prompt(
         f"Architecture version: {architecture_version}",
         architecture_summary,
         "Diagnose only from the bounded evidence snapshot. Return strict JSON matching the response schema.",
+        "Evidence references must be either an observation id, one of the top-level evidence keys (controller_state, campaign_state, process, repository), or a field path that exists in the snapshot, such as campaign.status or campaign.status=running.",
+        "verification_names must use exact names from the configured verification list; individual pytest node ids are not valid verification names.",
         "Return both the mandate_version and architecture_version exactly as supplied. Patch actions must contain unified diffs only. Never include shell commands. Scientific objective changes are proposal-only.",
         f"Evidence snapshot:\n{json.dumps(snapshot, indent=2, sort_keys=True)}",
     ])
@@ -586,18 +588,67 @@ def request_decision(
 
 
 def _validate_decision_evidence(decision: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    """Ensure every diagnosis reference resolves to the supplied snapshot.
+
+    The model historically returned useful field-level references such as
+    ``campaign.status=running``.  Treating those as opaque ids caused valid
+    diagnoses to fail even though the referenced field was present in the
+    bounded snapshot.  Keep the strict evidence boundary, but resolve dotted
+    paths and optionally verify an ``=value`` assertion against the snapshot.
+    """
+
     known = {str(value) for value in snapshot.get("known_evidence_ids", [])}
-    for reference in decision.get("diagnosis", {}).get("evidence_references", []):
-        if str(reference) in {"controller_state", "campaign_state", "process", "repository"}:
+    top_level_references = {"controller_state", "campaign_state", "process", "repository"}
+
+    def resolve(path: str) -> tuple[bool, Any]:
+        value: Any = snapshot
+        components = path.replace("[", ".").replace("]", "").split(".")
+        for component in components:
+            if not component:
+                return False, None
+            if isinstance(value, dict):
+                if component not in value:
+                    return False, None
+                value = value[component]
+            elif isinstance(value, list) and component.isdigit():
+                index = int(component)
+                if index >= len(value):
+                    return False, None
+                value = value[index]
+            else:
+                return False, None
+        return True, value
+
+    for raw_reference in decision.get("diagnosis", {}).get("evidence_references", []):
+        reference = str(raw_reference).strip()
+        if reference in known or reference in top_level_references:
             continue
-        if str(reference) not in known:
-            raise MetaDecisionError(f"diagnosis references unavailable evidence: {reference}")
+
+        path, separator, expected = reference.partition("=")
+        path = path.strip()
+        available, actual = resolve(path)
+        if not available:
+            raise MetaDecisionError(f"diagnosis references unavailable evidence: {raw_reference}")
+        if separator:
+            expected = expected.strip()
+            rendered_actual = json.dumps(actual, sort_keys=True, separators=(",", ":"))
+            normalized_expected = expected
+            try:
+                normalized_expected = json.dumps(json.loads(expected), sort_keys=True, separators=(",", ":"))
+            except json.JSONDecodeError:
+                pass
+            if normalized_expected != rendered_actual and expected != str(actual):
+                raise MetaDecisionError(f"diagnosis evidence assertion does not match snapshot: {raw_reference}")
 
 
 def apply_patch_in_worktree(root: Path, config: dict[str, Any], patch: str, run_id: str, *, verification_names: Iterable[str] | None = None, runner: Callable[..., Any] | None = None) -> dict[str, Any]:
     paths = validate_patch(patch, config)
     deterministic_names = list(required_verification_names(paths, config))
-    requested_names = list(verification_names or [])
+    available_names = set(_verification_map(config))
+    # The deterministic path-based suites are authoritative.  A model may
+    # suggest a pytest node id even though the policy allowlist contains only
+    # suite names; discard such extras while retaining all required suites.
+    requested_names = [str(name) for name in (verification_names or []) if str(name) in available_names]
     names = list(dict.fromkeys(deterministic_names + requested_names))
     if not names:
         raise PatchSafetyError("patch action must select at least one allowlisted verification")
@@ -863,6 +914,13 @@ def _meta_state(root: Path, campaign_config: dict[str, Any]) -> dict[str, Any]:
     return load_state(state_path) if state_path.exists() else {"controller_state": {}}
 
 
+def _meta_loop_owns_state(root: Path, campaign_config: dict[str, Any], pid: int) -> bool:
+    """Return whether ``pid`` is still the loop recorded as meta-controller."""
+
+    meta = _meta_state(root, campaign_config).get("controller_state", {}).get("meta_controller", {})
+    return isinstance(meta, dict) and meta.get("pid") == pid
+
+
 def _set_meta_status(
     root: Path,
     campaign_config: dict[str, Any],
@@ -954,15 +1012,52 @@ def run_loop(root: str | Path, campaign_config: dict[str, Any], *, client: Any |
                 execution_mode="loop",
             )
             if report["status"] == "meta_controller_safe_stop":
+                if _meta_loop_owns_state(root_path, campaign_config, pid):
+                    _set_meta_status(
+                        root_path,
+                        campaign_config,
+                        {
+                            "status": "meta_controller_safe_stop",
+                            "pid": None,
+                            "next_run_at": None,
+                            "stopped_at": utc_now(),
+                            "stop_reason": "repeated supervisory failures",
+                        },
+                    )
                 return 2
             next_at = datetime.now(timezone.utc).timestamp() + int(config["interval_seconds"])
             _set_meta_status(root_path, campaign_config, {"status": "running", "pid": pid, "mode": "loop", "run_now_supported": RUN_NOW_SIGNAL is not None, "last_run_id": report["id"], "last_run_at": report["completed_at"], "next_run_at": datetime.fromtimestamp(next_at, timezone.utc).isoformat(timespec="seconds"), "mandate_version": report["mandate_version"], "architecture_version": report.get("architecture_version", "unavailable"), "summary": report["diagnosis"].get("summary", ""), "last_invocation_source": report.get("invocation_source", "scheduled")})
             if sleep_fn is time.sleep:
-                wake_event.wait(int(config["interval_seconds"]))
+                deadline = time.monotonic() + int(config["interval_seconds"])
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0 or wake_event.wait(min(30.0, remaining)):
+                        break
+                    if _meta_loop_owns_state(root_path, campaign_config, pid):
+                        _set_meta_status(
+                            root_path,
+                            campaign_config,
+                            {
+                                "status": "running",
+                                "pid": pid,
+                                "mode": "loop",
+                                "run_now_supported": RUN_NOW_SIGNAL is not None,
+                                "last_run_id": report["id"],
+                                "last_run_at": report["completed_at"],
+                                "next_run_at": datetime.fromtimestamp(next_at, timezone.utc).isoformat(timespec="seconds"),
+                                "mandate_version": report["mandate_version"],
+                                "architecture_version": report.get("architecture_version", "unavailable"),
+                                "summary": report["diagnosis"].get("summary", ""),
+                                "last_invocation_source": report.get("invocation_source", "scheduled"),
+                            },
+                        )
             else:
                 sleep_fn(int(config["interval_seconds"]))
     except KeyboardInterrupt:
-        _set_meta_status(root_path, campaign_config, {"status": "stopped", "pid": None, "stopped_at": utc_now(), "stop_reason": "stop requested"})
+        # A superseding loop may have taken ownership while this process was
+        # shutting down.  Do not let the old process overwrite its live state.
+        if _meta_loop_owns_state(root_path, campaign_config, pid):
+            _set_meta_status(root_path, campaign_config, {"status": "stopped", "pid": None, "stopped_at": utc_now(), "stop_reason": "stop requested"})
         return 0
 
 

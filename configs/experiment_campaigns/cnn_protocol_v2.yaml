@@ -1,0 +1,118 @@
+campaign:
+  id: cnn_pretrain_finetune_protocol_v2
+  loop_config: configs/agent_experiment_loop.yaml
+  poll_seconds: 60
+  trial_budget: 20
+  max_patch_leaf_count: 5
+  max_single_trial_gpu_hours: 20
+  compute_budget_gpu_hours: 60
+  remaining_gpu_hours: null
+  replicate_seeds: [0, 1, 2]
+  minimum_replicates: 3
+  lockbox_required: true
+  lockbox_path: null
+  evaluation_protocol: three_seed_replicate_lockbox_v1
+  require_protocol_compliance: true
+  split_seed: 0
+  minimum_effect: 0.02
+  alpha: 0.05
+  max_candidate_family_size: 10
+  multiplicity_policy: preregistered_sequential_fdr
+  lockbox_confirmation_required: true
+  reservation_grace_fraction: 0.10
+  enforce_candidate_lineage: true
+  max_decision_retries: 3
+  scientific_state_path: state/campaigns/cnn_pretrain_finetune_protocol_v2/scientific_state.yaml
+  stages: ["10C", "13C"]
+parameter_ranges:
+  10C:
+    model_config:
+      dropout: {min: 0.0, max: 0.8}
+    optimization_config:
+      epochs: {min: 20, max: 200}
+      batch_size: {min: 1, max: 64}
+      learning_rate: {min: 1.0e-6, max: 1.0e-3}
+      weight_decay: {min: 0.0, max: 0.02}
+      early_stopping_patience: {min: 3, max: 40}
+      early_stopping_min_delta: {min: 0.0, max: 0.1}
+      scheduler_patience: {min: 1, max: 12}
+      scheduler_factor: {min: 0.1, max: 0.9}
+    loss_weight_config:
+      action_weight: {min: 0.0, max: 3.0}
+      water_vs_other_weight: {min: 0.0, max: 1.0}
+      compound_weight: {min: 0.0, max: 3.0}
+      concentration_weight: {min: 0.0, max: 3.0}
+      lambda_cross: {min: 0.0, max: 3.0}
+      lambda_align: {min: 0.0, max: 3.0}
+      prototype_alignment_weight: {min: 0.0, max: 3.0}
+      latent_alignment_weight: {min: 0.0, max: 3.0}
+  13C:
+    holdout_fraction: {min: 0.1, max: 0.4}
+    validation_fraction_within_train: {min: 0.1, max: 0.4}
+    train_num_random_rotations: {min: 0, max: 32}
+    rotation_range_degrees: {min: 0.0, max: 45.0}
+    optimization_config:
+      epochs: {min: 20, max: 200}
+      batch_size: {min: 1, max: 64}
+      learning_rate: {min: 1.0e-7, max: 1.0e-3}
+      weight_decay: {min: 0.0, max: 0.02}
+      early_stopping_patience: {min: 3, max: 40}
+      early_stopping_min_delta: {min: 0.0, max: 0.1}
+      scheduler_patience: {min: 1, max: 12}
+      scheduler_factor: {min: 0.1, max: 0.9}
+    loss_weight_config:
+      action_weight: {min: 0.0, max: 3.0}
+      water_vs_other_weight: {min: 0.0, max: 1.0}
+      compound_weight: {min: 0.0, max: 3.0}
+      concentration_weight: {min: 0.0, max: 3.0}
+      lambda_cross: {min: 0.0, max: 3.0}
+      lambda_align: {min: 0.0, max: 3.0}
+      prototype_alignment_weight: {min: 0.0, max: 3.0}
+      latent_alignment_weight: {min: 0.0, max: 3.0}
+agent:
+  max_output_tokens: 6000
+objective:
+  target: compound
+  primary_metric: macro_f1
+  required_primary_metric: true
+  fallback_metrics: [balanced_accuracy, accuracy]
+  tie_breaker_metrics: [roc_auc_ovr_macro, balanced_accuracy, accuracy]
+  maximize: true
+  minimums:
+    action.accuracy: 0.30
+domain_guidance:
+  enabled: true
+  contract_path: configs/domain_guidance/cnn_action_domain_v1.yaml
+  calibration_profile_path: state/campaigns/cnn_pretrain_finetune_protocol_v2/domain_calibration.json
+  candidate_family_id: cnn_action_domain_family_v2
+  applicable_stages: [13C]
+  policy: mixed_hierarchy
+  umap_decision_role: visualization_only
+artifacts:
+  root: artifacts/campaigns/cnn_pretrain_finetune_protocol_v2
+logbook:
+  path: EXPERIMENTS_LOGBOOK_PROTOCOL_V2.md
+meta_controller:
+  report_root: state/meta_controller/cnn_pretrain_finetune_protocol_v2/reports
+  worktree_root: state/meta_controller/cnn_pretrain_finetune_protocol_v2/worktrees
+prompts:
+  analysis_policy: |
+    Analyze completed finetune trials, deterministic failures/staleness, and live runs at polling time when the live evidence is strong enough to justify semantic early stopping. A trial is the full 10C-to-13C chain.
+    Score trial success by downstream 13C compound performance, with action accuracy treated as a guardrail.
+    Return terminate_trial only when the current live run is clearly wasting compute or cannot produce useful evidence; otherwise return no_action and keep training.
+  update_logbook: |
+    Write exactly two plain-English paragraphs in logbook_markdown: first the conclusion on how the run went, second what to try next and why.
+    Do not include long file names or file paths in prose. The controller will put artifact links in the Files To Inspect table.
+  patch_parameters: |
+    Return small trial_patch mappings keyed by experiment id. Only patch allowlisted YAML paths from configs/agent_experiment_loop.yaml.
+    Prefer one or two attributable changes per trial. Paired loss weights count as one conceptual change.
+    For 10C model_config, only dropout and normalization are allowed; do not change architecture widths, kernels, grids, or embedding dimensions.
+  decision_schema: |
+    Return a single JSON object with this shape:
+    {
+      "decision": "no_action|propose_trial|terminate_trial|update_logbook|stop_campaign",
+      "reason": "short reason",
+      "logbook_markdown": "two plain-English paragraphs: conclusion, then next step and why",
+      "trial_patch": "JSON string, for example {\"10C\":{\"optimization_config\":{\"epochs\":3}}}. For terminate_trial this is the replacement trial patch."
+    }
+    Do not include markdown fences or text outside the JSON object.

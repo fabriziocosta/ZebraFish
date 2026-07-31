@@ -10,6 +10,7 @@ from src.scientific_state import (
     apply_operations,
     empty_state,
     load_state,
+    merge_nonconflicting_states,
     record_entity,
     save_state,
 )
@@ -30,6 +31,14 @@ class ScientificStateTests(unittest.TestCase):
             loaded = load_state(path)
             self.assertEqual(loaded["entities"]["hypotheses"]["hyp_1"]["statement"], "bounded change helps")
             self.assertTrue(loaded["audit_log"])
+
+    def test_campaign_merge_does_not_overwrite_live_meta_controller_state(self) -> None:
+        current = empty_state()
+        current["controller_state"]["meta_controller"] = {"status": "running", "pid": 222}
+        incoming = empty_state()
+        incoming["controller_state"]["meta_controller"] = {"status": "stopped", "pid": None}
+        merged = merge_nonconflicting_states(current, incoming)
+        self.assertEqual(merged["controller_state"]["meta_controller"], {"status": "running", "pid": 222})
 
     def test_update_requires_current_expected_value(self) -> None:
         state = record_entity(empty_state(), "hypotheses", "hyp_1", {"status": "active"})
