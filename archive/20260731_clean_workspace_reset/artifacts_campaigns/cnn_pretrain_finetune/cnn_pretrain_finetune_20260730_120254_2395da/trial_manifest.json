@@ -1,0 +1,41 @@
+{
+  "campaign_id": "cnn_pretrain_finetune",
+  "checkpoint_manifest": null,
+  "checkpoint_reuse": {
+    "checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_encoder_state.pt",
+    "config_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml",
+    "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329",
+    "source_experiment": "cnn_pretrain_finetune_20260725_174326_4f984d:10C",
+    "source_stage": "10C"
+  },
+  "executed_stages": [
+    "13C"
+  ],
+  "planned_stages": [
+    "10C",
+    "13C"
+  ],
+  "replicate_group_id": null,
+  "replicate_index": 0,
+  "replicate_seed": null,
+  "stage_runs": {
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257"
+  },
+  "stages": [
+    "10C",
+    "13C"
+  ],
+  "trial_configs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/configs/10C_10C_pretrain_next.yaml",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml"
+  },
+  "trial_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da",
+  "trial_id": "cnn_pretrain_finetune_20260730_120254_2395da",
+  "trial_patch": {
+    "13C": {
+      "rotation_range_degrees": 20,
+      "train_num_random_rotations": 8
+    }
+  },
+  "updated_at": "2026-07-31T12:54:45"
+}

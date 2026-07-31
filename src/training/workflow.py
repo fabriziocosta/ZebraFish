@@ -67,7 +67,7 @@ class ChunkedBinaryWaterVsOtherPretrainingResult:
 class ExperimentArtifacts:
     output_dir: str
     config_path: str
-    history_path: str
+    history_path: str | None
     summary_metrics_path: str
     per_class_dir: str
     checkpoint_path: str
@@ -397,11 +397,29 @@ def _copy_pdf_artifacts(
         if not source_path.exists():
             continue
         for pdf_path in sorted(source_path.rglob("*.pdf")):
+            if pdf_path.name != "latest.loss-curves.pdf":
+                continue
             relative_stem = "_".join(pdf_path.relative_to(source_path).with_suffix("").parts)
-            destination_path = destination_dir / f"{prefix}{_sanitize_experiment_prefix(relative_stem)}.pdf"
+            source_label = _sanitize_experiment_prefix(source_path.name)
+            destination_path = destination_dir / f"{prefix}{source_label}_{_sanitize_experiment_prefix(relative_stem)}.pdf"
             shutil.copy2(pdf_path, destination_path)
             copied_paths.append(destination_path)
     return copied_paths
+
+
+def _cleanup_intermediate_training_artifacts(source_dirs: list[str | Path] | None) -> None:
+    """Remove checkpoint-era plots/history after final artifacts are persisted."""
+
+    for source_dir in source_dirs or []:
+        source_path = Path(source_dir)
+        if not source_path.exists():
+            continue
+        for path in source_path.rglob("*"):
+            if not path.is_file():
+                continue
+            name = path.name
+            if name == "latest.history.csv" or name.startswith("epoch_") and name.endswith((".loss-curves.pdf", ".history.csv")):
+                path.unlink(missing_ok=True)
 
 
 def _latest_loss_pdf_paths(loss_plot_dir: Path) -> list[Path]:
@@ -850,11 +868,6 @@ def fit_chunked_water_vs_other_hot_start(
             history_df = pd.DataFrame(history_rows)
             save_training_history_pdf(
                 history_df,
-                output_dir / f"epoch_{epoch:03d}.loss-curves.pdf",
-                title=title,
-            )
-            save_training_history_pdf(
-                history_df,
                 output_dir / "latest.loss-curves.pdf",
                 title=title,
             )
@@ -1187,7 +1200,6 @@ def persist_experiment_artifacts(
     with config_path.open("w", encoding="utf-8") as handle:
         json.dump(_to_json_compatible(config), handle, indent=2, sort_keys=True)
 
-    estimator.history_.to_csv(history_path, index=False)
     for target, (per_class_df, summary_df) in reports.items():
         prefix = f"{resolved_experiment_id}_" if resolved_experiment_id else ""
         per_class_df.to_csv(per_class_dir / f"{prefix}{target}_per_class.csv")
@@ -1212,6 +1224,7 @@ def persist_experiment_artifacts(
         destination_dir=output_path / "loss_plots",
         experiment_id=resolved_experiment_id,
     )
+    _cleanup_intermediate_training_artifacts(loss_plot_dirs)
     torch.save(estimator.model_.state_dict(), checkpoint_path)
 
     logbook_output_path = _append_experiments_logbook_entry(
@@ -1220,7 +1233,6 @@ def persist_experiment_artifacts(
         artifact_dir=output_path,
         key_paths={
             "config": config_path,
-            "history": history_path,
             "summary_metrics": summary_path,
             "checkpoint": checkpoint_path,
             "per_class_reports": per_class_dir,
@@ -1240,7 +1252,7 @@ def persist_experiment_artifacts(
     return ExperimentArtifacts(
         output_dir=str(output_path),
         config_path=str(config_path),
-        history_path=str(history_path),
+        history_path=None,
         summary_metrics_path=str(summary_path),
         per_class_dir=str(per_class_dir),
         checkpoint_path=str(checkpoint_path),
@@ -1305,8 +1317,6 @@ def persist_pretraining_artifacts(
     with config_path.open("w", encoding="utf-8") as handle:
         json.dump(config_payload, handle, indent=2, sort_keys=True)
 
-    history_df = pd.DataFrame(getattr(estimator, "pretrain_history_", pd.DataFrame()))
-    history_df.to_csv(history_path, index=False)
     _build_pretraining_summary(estimator).to_csv(summary_path, index=False)
 
     if hasattr(estimator, "save_pretrained_encoder"):
@@ -1319,6 +1329,7 @@ def persist_pretraining_artifacts(
         destination_dir=output_path / "loss_plots",
         experiment_id=resolved_experiment_id,
     )
+    _cleanup_intermediate_training_artifacts(loss_plot_dirs)
 
     logbook_output_path = _append_experiments_logbook_entry(
         experiment_id=resolved_experiment_id or Path(output_path).name,
@@ -1326,7 +1337,6 @@ def persist_pretraining_artifacts(
         artifact_dir=output_path,
         key_paths={
             "config": config_path,
-            "history": history_path,
             "summary_metrics": summary_path,
             "checkpoint": checkpoint_path,
             "loss_pdfs": output_path / "loss_plots" if copied_loss_pdfs else None,
@@ -1342,7 +1352,7 @@ def persist_pretraining_artifacts(
     return ExperimentArtifacts(
         output_dir=str(output_path),
         config_path=str(config_path),
-        history_path=str(history_path),
+        history_path=None,
         summary_metrics_path=str(summary_path),
         per_class_dir="",
         checkpoint_path=str(checkpoint_path),

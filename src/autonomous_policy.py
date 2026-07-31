@@ -276,6 +276,7 @@ def validate_candidate(
         reasons.append(f"patch changes {len(total_leaves)} leaves; maximum is {max_leaves}")
 
     cost = candidate.get("cost") if isinstance(candidate.get("cost"), dict) else {}
+    gpu_budget_applicable = campaign_config.get("campaign", {}).get("gpu_budget_applicable", True) is not False
     estimated_cost = cost.get("estimated_gpu_hours", candidate.get("estimated_gpu_hours"))
     if estimated_cost is None:
         reasons.append("candidate requires estimated_gpu_hours")
@@ -285,10 +286,10 @@ def validate_candidate(
         except (TypeError, ValueError):
             reasons.append("estimated_gpu_hours must be numeric")
         else:
-            maximum = campaign_config.get("campaign", {}).get("max_single_trial_gpu_hours")
+            maximum = campaign_config.get("campaign", {}).get("max_single_trial_gpu_hours") if gpu_budget_applicable else None
             if maximum is not None and estimated_cost > float(maximum):
                 reasons.append("candidate exceeds maximum single-trial GPU budget")
-            remaining = campaign_config.get("campaign", {}).get("remaining_gpu_hours")
+            remaining = campaign_config.get("campaign", {}).get("remaining_gpu_hours") if gpu_budget_applicable else None
             replicate_count = len(candidate_seeds) if isinstance(candidate_seeds, list) else 1
             total_estimated = estimated_cost * replicate_count
             reservations = state.get("controller_state", {}).get("launch_reservations", {})
@@ -306,7 +307,7 @@ def validate_candidate(
                 if isinstance(value, (int, float)) and float(value) >= 0:
                     consumed += float(value)
             total_budget = remaining
-            if total_budget is None:
+            if total_budget is None and gpu_budget_applicable:
                 total_budget = campaign_config.get("campaign", {}).get("compute_budget_gpu_hours")
             if total_budget is not None and consumed + reserved + total_estimated > float(total_budget):
                 reasons.append("candidate exceeds remaining GPU budget")

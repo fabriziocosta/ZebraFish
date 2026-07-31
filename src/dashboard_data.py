@@ -497,13 +497,39 @@ def _hypothesis_quality(hypothesis: dict[str, Any] | None) -> dict[str, Any]:
         ("seed" in str(provenance.get("reason", "")).lower() and bool(missing))
         or "bounded optimisation change" in str(hypothesis.get("title", "")).lower()
     )
+    scope = hypothesis.get("scope")
+    if isinstance(scope, dict):
+        campaign = scope.get("campaign") or "campaign not recorded"
+        stages = ", ".join(str(stage) for stage in scope.get("stages", []) if stage)
+        scope = f"Campaign: {campaign}" + (f" · stages: {stages}" if stages else "")
+    assumptions = hypothesis.get("assumptions")
+    if isinstance(assumptions, list):
+        assumptions = "; ".join(str(item) for item in assumptions if item)
+    criteria = hypothesis.get("falsification_criteria") or []
+    if not criteria and hypothesis.get("falsification_criterion"):
+        criteria = [hypothesis["falsification_criterion"]]
+    formatted_criteria: list[str] = []
+    for item in criteria:
+        if isinstance(item, str):
+            formatted_criteria.append(item)
+            continue
+        if isinstance(item, dict):
+            metric = item.get("metric") or "metric"
+            direction = str(item.get("direction") or "change").replace("_", " ")
+            minimum_effect = item.get("minimum_effect")
+            detail = f"{metric}: {direction}"
+            if minimum_effect is not None:
+                detail += f" (minimum effect {minimum_effect})"
+            formatted_criteria.append(detail)
+            continue
+        formatted_criteria.append(str(item))
     return {
         "quality": "generic_seed" if is_seed else "specific" if not missing else "generic_seed",
         "missing_fields": missing,
         "mechanism": hypothesis.get("mechanism"),
-        "scope": hypothesis.get("scope"),
-        "assumptions": hypothesis.get("assumptions"),
-        "falsification_criteria": hypothesis.get("falsification_criteria", []),
+        "scope": scope,
+        "assumptions": assumptions,
+        "falsification_criteria": formatted_criteria,
     }
 
 
@@ -995,14 +1021,21 @@ def build_investigation(
     registered_replicate_group = (
         isinstance(replicate_group, dict)
         and bool(replicate_group.get("id"))
-        and isinstance(active_trial, dict)
-        and bool(active_trial.get("replicate_group_id"))
+        and bool(replicate_group.get("candidate_id"))
+        and (
+            not isinstance(active_trial, dict)
+            or not active_trial
+            or active_trial.get("replicate_group_id") == replicate_group.get("id")
+        )
     )
     # A legacy single-seed run must not appear as an empty 0/3 replicate
     # group merely because the current campaign configuration now requires
     # three replicates.
     replicate_status = (
-        (state.get("controller_state", {}).get("last_replicate_aggregate") or {}).get("score", {}).get("status", "not_started")
+        (state.get("controller_state", {}).get("last_replicate_aggregate") or {}).get("score", {}).get(
+            "status",
+            "running" if replicate_group.get("status") == "running" else "not_started",
+        )
         if registered_replicate_group
         else "legacy_single_seed"
     )

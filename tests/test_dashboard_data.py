@@ -14,9 +14,9 @@ from src.dashboard_data import (
 
 class DashboardDataTests(unittest.TestCase):
     def test_live_campaign_is_normalized_without_mutation(self) -> None:
-        payload = build_investigation(Path.cwd(), "cnn", level=3, relation_depth=1)
+        payload = build_investigation(Path.cwd(), "cnn-v2", level=3, relation_depth=1)
         self.assertEqual(payload["schema_version"], 1)
-        self.assertEqual(payload["campaign"]["id"], "cnn_pretrain_finetune")
+        self.assertEqual(payload["campaign"]["id"], "cnn_pretrain_finetune_protocol_v2")
         self.assertIn(payload["investigation"]["status"], {"running", "terminated", "stalled", "completed", "awaiting results"})
         self.assertIsNotNone(payload["current_experiment"]["stage"])
         self.assertIsInstance(payload["current_experiment"]["metric_series"], list)

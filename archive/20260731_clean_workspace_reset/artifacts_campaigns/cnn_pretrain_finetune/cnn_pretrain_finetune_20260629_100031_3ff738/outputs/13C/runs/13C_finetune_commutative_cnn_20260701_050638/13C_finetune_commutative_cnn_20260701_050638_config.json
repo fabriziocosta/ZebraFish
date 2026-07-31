@@ -1,0 +1,178 @@
+{
+  "binary_class_weighting": null,
+  "binary_learning_rate": 1e-05,
+  "binary_loss_plot_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/13C/runs/13C_finetune_commutative_cnn_20260701_050638/loss_plots/binary_hot_start",
+  "binary_pretraining_epochs": 2,
+  "binary_pretraining_excluded_holdout_count": null,
+  "binary_pretraining_label_map": null,
+  "binary_pretraining_train_count": null,
+  "binary_pretraining_val_count": null,
+  "binary_weight_decay": 0.00075,
+  "dataset_artifact_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/.dataset_cache/moa_GA_An_NM_Ac_AC_In_mA_Ag_c2_mca3_mtc16_t20_z5_y96_x96.pt",
+  "experiment_id": "13C_finetune_commutative_cnn_20260701_050638",
+  "experiment_output_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/13C",
+  "experiment_run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/13C/runs/13C_finetune_commutative_cnn_20260701_050638",
+  "fine_tune_loss_plot_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/13C/runs/13C_finetune_commutative_cnn_20260701_050638/loss_plots/fine_tune",
+  "freeze_backbone": false,
+  "holdout_fraction": 0.25,
+  "hot_start": true,
+  "loss_weight_config": {
+    "action_weight": 0.65,
+    "compound_weight": 0.8,
+    "concentration_weight": 0.05,
+    "cross_ramp_epochs": 5,
+    "cross_warmup_epochs": 5,
+    "lambda_align": 0.0,
+    "lambda_cross": 1.0,
+    "latent_alignment_weight": 0.0,
+    "probe_alpha_correlation": 1.0,
+    "probe_alpha_derivative": 1.0,
+    "probe_alpha_frequency": 1.0,
+    "probe_alpha_local": 1.0,
+    "probe_alpha_region_time": 1.0,
+    "probe_mask_probability": 0.25,
+    "prototype_alignment_weight": 1.0,
+    "prototype_ramp_epochs": 0,
+    "prototype_temperature": 0.1,
+    "prototype_warmup_epochs": 0,
+    "teacher_student_warmup_epochs": 0,
+    "water_vs_other_weight": 0.03
+  },
+  "model_config": {
+    "dropout": 0.25,
+    "embedding_dim": 64,
+    "normalization": "group",
+    "num_prototypes": 64,
+    "patch_size_xy": 16,
+    "patch_size_z": 1,
+    "probe_frequency_bins": 4,
+    "probe_region_grid": [
+      1,
+      2,
+      2
+    ],
+    "probe_time_bins": 8,
+    "spatial_agg_channels": [
+      32,
+      64
+    ],
+    "spatial_agg_kernel_size_xy": [
+      3,
+      3
+    ],
+    "spatial_agg_kernel_size_z": [
+      3,
+      1
+    ],
+    "spatial_agg_pool_kernel_xy": [
+      1,
+      2
+    ],
+    "spatial_agg_pool_kernel_z": [
+      1,
+      1
+    ],
+    "spatial_agg_pool_stride_xy": [
+      1,
+      2
+    ],
+    "spatial_agg_pool_stride_z": [
+      1,
+      1
+    ],
+    "spatial_agg_stride_xy": [
+      1,
+      1
+    ],
+    "spatial_agg_stride_z": [
+      1,
+      1
+    ],
+    "spatial_conv_channels": [
+      16,
+      32
+    ],
+    "spatial_kernel_size_xy": [
+      5,
+      3
+    ],
+    "spatial_kernel_size_z": [
+      3,
+      1
+    ],
+    "spatial_pool_kernel_xy": [
+      2,
+      2
+    ],
+    "spatial_pool_kernel_z": [
+      1,
+      1
+    ],
+    "spatial_pool_stride_xy": [
+      2,
+      2
+    ],
+    "spatial_pool_stride_z": [
+      1,
+      1
+    ],
+    "spatial_stride_xy": [
+      1,
+      1
+    ],
+    "spatial_stride_z": [
+      1,
+      1
+    ],
+    "temporal_st_channels": [
+      48,
+      64
+    ],
+    "temporal_st_kernel_sizes": [
+      5,
+      3
+    ],
+    "temporal_ts_channels": [
+      32,
+      48,
+      64
+    ],
+    "temporal_ts_kernel_sizes": [
+      7,
+      5,
+      3
+    ],
+    "verbose": true
+  },
+  "optimization_config": {
+    "batch_size": 8,
+    "class_weighting": "balanced",
+    "device": null,
+    "early_stopping_min_delta": 5e-05,
+    "early_stopping_monitor": "compound_loss",
+    "early_stopping_patience": 14,
+    "early_stopping_smoothing": "median",
+    "early_stopping_smoothing_window": 5,
+    "early_stopping_start_epoch": 12,
+    "epochs": 120,
+    "learning_rate": 8e-06,
+    "random_state": 0,
+    "scheduler_factor": 0.5,
+    "scheduler_min_lr": 1e-06,
+    "scheduler_patience": 3,
+    "standardize": true,
+    "training_plot_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/13C/runs/13C_finetune_commutative_cnn_20260701_050638/loss_plots/fine_tune",
+    "training_plot_every_n_epochs": 1,
+    "training_plot_smoothing_window": 5,
+    "validation_split": 0.0,
+    "verbose": true,
+    "weight_decay": 0.001
+  },
+  "pretrained_encoder_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/10C_pretrain_commutative_cnn_20260629_100055_encoder_state.pt",
+  "pretraining_config_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260629_100031_3ff738/outputs/10C/runs/10C_pretrain_commutative_cnn_20260629_100055/10C_pretrain_commutative_cnn_20260629_100055_config.yaml",
+  "rotation_range_degrees": 10.0,
+  "run_binary_hot_start": false,
+  "train_num_random_rotations": 8,
+  "unlabeled_dataset_path": ".dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks",
+  "validation_fraction_within_train": 0.2
+}

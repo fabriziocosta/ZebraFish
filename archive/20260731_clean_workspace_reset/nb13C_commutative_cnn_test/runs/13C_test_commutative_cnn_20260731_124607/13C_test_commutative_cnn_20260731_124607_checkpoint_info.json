@@ -1,0 +1,29 @@
+{
+  "best_epoch": 117,
+  "best_metric": 1.9778950554983956,
+  "checkpoint_format": "payload_with_model_state_dict",
+  "checkpoint_modified_at": "2026-07-31T12:08:47",
+  "checkpoint_name": "13C_finetune_commutative_cnn_20260730_120257_model_state.pt",
+  "checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_model_state.pt",
+  "checkpoint_resolved_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_model_state.pt",
+  "checkpoint_size_bytes": 768977,
+  "config_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml",
+  "experiment_id": "13C_finetune_commutative_cnn_20260730_120257",
+  "history_path": null,
+  "history_rows": null,
+  "monitor_key": "val_compound_loss",
+  "payload_keys": [
+    "best_epoch",
+    "best_metric",
+    "model_state_dict",
+    "monitor_key"
+  ],
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257",
+  "score": NaN,
+  "score_metric": null,
+  "selection_mode": "last_checkpoint",
+  "source_trial": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da",
+  "state_dict_key_count": 88,
+  "state_dict_tensor_count": 88,
+  "summary_path": null
+}

@@ -276,11 +276,9 @@ def _maybe_save_training_history_pdfs(
 
     output_dir = Path(str(plot_dir)).expanduser()
     title = str(getattr(estimator, "training_plot_title", "Training history"))
-    epoch_path = output_dir / f"epoch_{int(epoch):03d}.loss-curves.pdf"
     latest_path = output_dir / "latest.loss-curves.pdf"
     history_df = pd.DataFrame(history_rows)
     output_dir.mkdir(parents=True, exist_ok=True)
-    history_df.to_csv(output_dir / f"epoch_{int(epoch):03d}.history.csv", index=False)
     history_df.to_csv(output_dir / "latest.history.csv", index=False)
     excluded_loss_names = []
     for loss_name, weight_name in [
@@ -293,7 +291,6 @@ def _maybe_save_training_history_pdfs(
             excluded_loss_names.append(loss_name)
     if float(getattr(estimator, "latent_alignment_weight", 0.0) or getattr(estimator, "lambda_align", 0.0) or 0.0) == 0.0:
         excluded_loss_names.append("feature_alignment_loss")
-    save_training_history_pdf(history_df, epoch_path, title=title, excluded_loss_names=excluded_loss_names)
     save_training_history_pdf(history_df, latest_path, title=title, excluded_loss_names=excluded_loss_names)
 
 

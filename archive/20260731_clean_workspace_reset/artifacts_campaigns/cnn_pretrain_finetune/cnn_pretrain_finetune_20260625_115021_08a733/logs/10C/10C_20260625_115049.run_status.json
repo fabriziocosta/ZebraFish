@@ -1,0 +1,13 @@
+{
+  "experiment": "10C",
+  "experiment_id": "10C_pretrain_commutative_cnn_20260625_115052",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_115021_08a733/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_115052",
+  "status": "terminated",
+  "terminated_at": "2026-06-25T15:14:50",
+  "terminated_pid": 3725354,
+  "terminating_at": "2026-06-25T15:14:40",
+  "terminating_pid": 3725354,
+  "termination_reason": "terminated before campaign artifact layout migration",
+  "termination_signal": "SIGTERM",
+  "updated_at": "2026-06-25T11:50:52"
+}

@@ -184,6 +184,39 @@ def _git(root: Path, argv: list[str]) -> str:
     return result.stdout.strip() if result.returncode == 0 else f"git error: {result.stderr.strip()}"
 
 
+def _repository_snapshot(root: Path, campaign_config: dict[str, Any]) -> dict[str, Any]:
+    """Report source changes while excluding intentional runtime/archive storage.
+
+    Campaign state, artifacts, and dated archives are operational data rather
+    than source changes. Moving them during a clean campaign cut must not be
+    misdiagnosed as provenance loss while the new campaign is running.
+    """
+
+    meta = campaign_config.get("meta_controller", {})
+    configured = meta.get("repository_ignored_prefixes", []) if isinstance(meta, dict) else []
+    ignored = tuple(str(item).rstrip("/") for item in configured if str(item).strip())
+    status_lines = _git(root, ["status", "--short"]).splitlines()
+    visible_status: list[str] = []
+    ignored_status: list[str] = []
+    for line in status_lines:
+        path = line[2:].strip() if len(line) >= 2 else line.strip()
+        paths = [part.strip() for part in path.split(" -> ")]
+        if any(any(candidate == prefix or candidate.startswith(prefix + "/") for prefix in ignored) for candidate in paths):
+            ignored_status.append(line)
+        else:
+            visible_status.append(line)
+    diff_args = ["diff", "--stat", "--", "."]
+    diff_args.extend(f":(exclude){prefix}/**" for prefix in ignored if prefix in {"state", "artifacts", "archive"})
+    diff_args.extend(f":(exclude){prefix}" for prefix in ignored if prefix not in {"state", "artifacts", "archive"})
+    return {
+        "revision": _git(root, ["rev-parse", "HEAD"]),
+        "status": "\n".join(visible_status),
+        "diff_stat": _git(root, diff_args),
+        "ignored_operational_changes": len(ignored_status),
+        "ignored_prefixes": list(ignored),
+    }
+
+
 def collect_snapshot(
     root: str | Path,
     campaign_config: dict[str, Any],
@@ -242,11 +275,7 @@ def collect_snapshot(
             "summary": "Architecture context was not loaded for this snapshot.",
         },
         "recent_meta_reports": reports,
-        "repository": {
-            "revision": _git(root_path, ["rev-parse", "HEAD"]),
-            "status": _git(root_path, ["status", "--short"]),
-            "diff_stat": _git(root_path, ["diff", "--stat"]),
-        },
+        "repository": _repository_snapshot(root_path, campaign_config),
     }
 
 
@@ -546,6 +575,7 @@ def _build_prompt(
         architecture_summary,
         "Diagnose only from the bounded evidence snapshot. Return strict JSON matching the response schema.",
         "Evidence references must be either an observation id, one of the top-level evidence keys (controller_state, campaign_state, process, repository), or a field path that exists in the snapshot, such as campaign.status or campaign.status=running.",
+        "The repository snapshot may contain intentional user changes made as part of the current clean campaign setup. Do not treat visible uncommitted source changes alone as a campaign or controller failure; use them only as a patch-safety constraint when a concrete fault is otherwise evidenced. If that is the only concern, report severity info and do not describe it as a failure or unresolved campaign risk.",
         "verification_names must use exact names from the configured verification list; individual pytest node ids are not valid verification names.",
         "Return both the mandate_version and architecture_version exactly as supplied. Patch actions must contain unified diffs only. Never include shell commands. Scientific objective changes are proposal-only.",
         f"Evidence snapshot:\n{json.dumps(snapshot, indent=2, sort_keys=True)}",

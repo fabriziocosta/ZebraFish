@@ -1,0 +1,6 @@
+true_class,Water,GABAAR_Antagonist,NMDAR_Activation,AChE_Inhibitor_Reversible,mAChR_Agonist_NonSelective
+Water,12,5,0,8,0
+GABAAR_Antagonist,4,4,2,0,2
+NMDAR_Activation,2,0,8,0,0
+AChE_Inhibitor_Reversible,6,5,0,0,1
+mAChR_Agonist_NonSelective,7,0,0,1,4

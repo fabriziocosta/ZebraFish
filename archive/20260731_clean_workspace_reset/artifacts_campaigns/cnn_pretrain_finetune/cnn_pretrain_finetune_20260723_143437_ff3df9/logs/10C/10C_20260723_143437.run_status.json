@@ -1,0 +1,15 @@
+{
+  "experiment": "10C",
+  "experiment_id": "10C_pretrain_commutative_cnn_20260723_143440",
+  "resume_checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440",
+  "status": "terminated",
+  "suspend_marker_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/control/10C_pretrain_commutative_cnn_20260723_143440.suspend",
+  "terminated_at": "2026-07-25T17:23:17",
+  "terminated_pid": 3281820,
+  "terminating_at": "2026-07-25T17:23:17",
+  "terminating_pid": 3281820,
+  "termination_reason": "terminated by run_campaign CLI",
+  "termination_signal": "SIGTERM",
+  "updated_at": "2026-07-23T14:34:40"
+}

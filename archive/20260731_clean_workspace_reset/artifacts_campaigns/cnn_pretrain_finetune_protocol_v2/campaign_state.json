@@ -1,0 +1,57 @@
+{
+  "active_launch_state": {
+    "active_experiment": "10C",
+    "command": [
+      "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/.venv/bin/python",
+      "10C_pretrain_commutative_cnn_encoder.py",
+      "--config",
+      "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/10C_10C_pretrain_next.yaml"
+    ],
+    "command_hash": "2cfa34594d4ed3578f8b493b0a86161d7192b7e0bdd99bc3524e51fc544db664",
+    "log_path": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/logs/10C/10C_20260731_131101.log",
+    "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/10C_10C_pretrain_next.yaml",
+    "pid": 1306250,
+    "process_start_ticks": "147704155",
+    "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/logs/10C/10C_20260731_131101.run_status.json",
+    "runner": "10C_pretrain_commutative_cnn_encoder.py",
+    "started_at": "2026-07-31T13:11:01",
+    "status": "terminated",
+    "terminated_at": "2026-07-31T13:24:32",
+    "terminating_at": "2026-07-31T13:24:27"
+  },
+  "campaign_id": "cnn_pretrain_finetune_protocol_v2",
+  "checkpoint_manifest": null,
+  "checkpoint_reuse": null,
+  "current_stage": "10C",
+  "current_stage_index": 0,
+  "current_trial_dir": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9",
+  "current_trial_id": "cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9",
+  "executed_stages": [],
+  "phase": "terminated",
+  "planned_stages": [
+    "10C",
+    "13C"
+  ],
+  "protocol_version": "three_seed_replicate_lockbox_v1",
+  "replicate_group_id": "baseline_calibration_cnn_pretrain_finetune_protocol_v2",
+  "replicate_index": 0,
+  "replicate_seed": 0,
+  "split_seed": 0,
+  "stage_state_path": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/stage_state/10C.json",
+  "started_at": "2026-07-31T13:11:01",
+  "status": "terminated",
+  "terminated_at": "2026-07-31T13:24:32",
+  "terminated_pid": 1306250,
+  "terminating_at": "2026-07-31T13:24:27",
+  "terminating_pid": 1306250,
+  "termination_reason": "clean workspace reset: archive current v2 and restart from a new hypothesis",
+  "termination_signal": "SIGTERM",
+  "trial_configs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/10C_10C_pretrain_next.yaml",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/13C_13C_finetune_next.yaml"
+  },
+  "trial_patch": {},
+  "trials": [],
+  "updated_at": "2026-07-31T13:24:32",
+  "writer_protocol": "campaign-controller-v3"
+}

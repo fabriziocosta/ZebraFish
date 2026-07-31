@@ -1,0 +1,599 @@
+{
+  "artifacts": {
+    "diagnostics": [],
+    "latent_embeddings": {
+      "hash": "008acc30002882683a1cbd10a32c62e807e937a985021d9c6f4034863a543b4a",
+      "path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/domain_guidance/latent_embeddings.npz"
+    },
+    "metadata": {
+      "hash": "ea3d99ec2f6ff144ed882f4227913c8b23cbaefe46409b0a3a157941f8fb6028",
+      "path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/domain_guidance/latent_metadata.csv"
+    },
+    "predictions": {
+      "hash": "a3502ed237d5b5ae1ffb8622b203f37ed6c9f2f838398c926a5fe64555d4b9f0",
+      "path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/domain_guidance/domain_predictions.csv"
+    },
+    "visual_projections": [
+      {
+        "decision_role": "visualization_only",
+        "hash": "713ea31bc3706640d345dbf2ff54a6cade20f88a3a45d430d69d9f455972e6b4",
+        "path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/figures/13C_finetune_commutative_cnn_20260730_120257_holdout_embedding_umap.csv"
+      },
+      {
+        "decision_role": "visualization_only",
+        "hash": "5f78434a742dc0ad9448190557049189d42d6fd26fd9d68b70be8b06b3e8fa35",
+        "path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/figures/13C_finetune_commutative_cnn_20260730_120257_holdout_embedding_umap.pdf"
+      },
+      {
+        "decision_role": "visualization_only",
+        "hash": "95e6e568b58232cb2337329715f72ba7e2af872732747b83b5e7af6c63edf4d2",
+        "path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/figures/13C_finetune_commutative_cnn_20260730_120257_all_labeled_embedding_umap.csv"
+      },
+      {
+        "decision_role": "visualization_only",
+        "hash": "5760859de38306955e72ec2f114182068113471c688edc81518f8456cc5afe74",
+        "path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/figures/13C_finetune_commutative_cnn_20260730_120257_all_labeled_embedding_umap_controls_hidden.pdf"
+      }
+    ]
+  },
+  "calibration_id": null,
+  "constraints": [
+    {
+      "checks": [
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.0,
+            0.0
+          ],
+          "method": "cluster_aware_classification",
+          "metric": "worst_class_recall",
+          "reason": "value is below absolute hard floor 0.05",
+          "status": "fail",
+          "value": 0.0
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.25,
+            0.75
+          ],
+          "method": "cluster_aware_classification",
+          "metric": "prediction_coverage",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.75
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.40540540540540543,
+            0.8097402597402598
+          ],
+          "method": "cluster_aware_classification",
+          "metric": "prediction_collapse_index",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.5869565217391305
+        }
+      ],
+      "id": "action_identifiability",
+      "kind": "classification_guardrail",
+      "labels": [
+        "GABAAR_Antagonist",
+        "NMDAR_Activation",
+        "AChE_Inhibitor_Reversible",
+        "mAChR_Agonist_NonSelective"
+      ],
+      "role": "hard_guardrail",
+      "status": "fail",
+      "support": {
+        "by_class": {
+          "AChE_Inhibitor_Reversible": {
+            "compounds": 3,
+            "experimental_runs": 6,
+            "rows": 12,
+            "sufficient": true
+          },
+          "GABAAR_Antagonist": {
+            "compounds": 3,
+            "experimental_runs": 5,
+            "rows": 12,
+            "sufficient": true
+          },
+          "NMDAR_Activation": {
+            "compounds": 3,
+            "experimental_runs": 5,
+            "rows": 10,
+            "sufficient": true
+          },
+          "mAChR_Agonist_NonSelective": {
+            "compounds": 3,
+            "experimental_runs": 6,
+            "rows": 12,
+            "sufficient": true
+          }
+        },
+        "minimum_compounds_per_class": 2,
+        "minimum_runs_per_class": 2,
+        "sufficient": true
+      },
+      "title": "All non-control action classes remain identifiable"
+    },
+    {
+      "checks": [
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.0,
+            0.24243421052631556
+          ],
+          "method": "pairwise_confusion",
+          "metric": "pairwise_balanced_accuracy",
+          "reason": "value is below absolute hard floor 0.5",
+          "status": "fail",
+          "value": 0.125
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": null,
+          "method": "leave_one_compound_out_linear_probe",
+          "metric": "leave_one_compound_out_balanced_accuracy",
+          "reason": "value is below absolute hard floor 0.5",
+          "status": "fail",
+          "value": 0.4166666666666667
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.0,
+            0.2692424242424241
+          ],
+          "method": "pairwise_confusion",
+          "metric": "symmetric_confusion_rate",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.08333333333333333
+        }
+      ],
+      "id": "ache_machr_separability",
+      "kind": "pairwise_separability",
+      "labels": [
+        "AChE_Inhibitor_Reversible",
+        "mAChR_Agonist_NonSelective"
+      ],
+      "role": "hard_guardrail",
+      "status": "fail",
+      "support": {
+        "by_class": {
+          "AChE_Inhibitor_Reversible": {
+            "compounds": 3,
+            "experimental_runs": 6,
+            "rows": 12,
+            "sufficient": true
+          },
+          "mAChR_Agonist_NonSelective": {
+            "compounds": 3,
+            "experimental_runs": 6,
+            "rows": 12,
+            "sufficient": true
+          }
+        },
+        "minimum_compounds_per_class": 2,
+        "minimum_runs_per_class": 2,
+        "sufficient": true
+      },
+      "title": "AChE and mAChR remain locally distinguishable"
+    },
+    {
+      "checks": [
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.6465130053578637,
+            5.323729675943964
+          ],
+          "method": "original_standardized_latent_space",
+          "metric": "normalized_centroid_distance",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 1.1560170244288113
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.0,
+            0.6
+          ],
+          "method": "original_standardized_latent_space",
+          "metric": "related_distance_rank_score",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.4
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": null,
+          "method": "original_standardized_latent_space",
+          "metric": "neighbourhood_pair_affinity",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.37121212121212116
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.33333333333333326,
+            0.9006959033613442
+          ],
+          "method": "original_standardized_latent_space",
+          "metric": "neighbourhood_purity",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.5454545454545454
+        }
+      ],
+      "id": "gaba_nmda_related_geometry",
+      "kind": "related_geometry",
+      "labels": [
+        "GABAAR_Antagonist",
+        "NMDAR_Activation"
+      ],
+      "role": "secondary_evidence",
+      "status": "calibrating",
+      "support": {
+        "by_class": {
+          "GABAAR_Antagonist": {
+            "compounds": 3,
+            "experimental_runs": 5,
+            "rows": 12,
+            "sufficient": true
+          },
+          "NMDAR_Activation": {
+            "compounds": 3,
+            "experimental_runs": 5,
+            "rows": 10,
+            "sufficient": true
+          }
+        },
+        "minimum_compounds_per_class": 2,
+        "minimum_runs_per_class": 2,
+        "sufficient": true
+      },
+      "title": "GABAAR and NMDAR occupy related representation neighbourhoods"
+    },
+    {
+      "checks": [
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.2166668137143251,
+            1.8851068163288829
+          ],
+          "method": "original_standardized_latent_space",
+          "metric": "normalized_centroid_distance",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.30902781500690185
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.6,
+            1.0
+          ],
+          "method": "original_standardized_latent_space",
+          "metric": "related_distance_rank_score",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 1.0
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": null,
+          "method": "original_standardized_latent_space",
+          "metric": "neighbourhood_pair_affinity",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.5097222222222223
+        },
+        {
+          "baseline": null,
+          "confidence_interval_95": [
+            0.3845535714285714,
+            1.0
+          ],
+          "method": "original_standardized_latent_space",
+          "metric": "neighbourhood_purity",
+          "reason": "frozen baseline profile unavailable",
+          "status": "calibrating",
+          "value": 0.6488095238095237
+        }
+      ],
+      "id": "ache_machr_related_geometry",
+      "kind": "related_geometry",
+      "labels": [
+        "AChE_Inhibitor_Reversible",
+        "mAChR_Agonist_NonSelective"
+      ],
+      "role": "secondary_evidence",
+      "status": "calibrating",
+      "support": {
+        "by_class": {
+          "AChE_Inhibitor_Reversible": {
+            "compounds": 3,
+            "experimental_runs": 6,
+            "rows": 12,
+            "sufficient": true
+          },
+          "mAChR_Agonist_NonSelective": {
+            "compounds": 3,
+            "experimental_runs": 6,
+            "rows": 12,
+            "sufficient": true
+          }
+        },
+        "minimum_compounds_per_class": 2,
+        "minimum_runs_per_class": 2,
+        "sufficient": true
+      },
+      "title": "AChE and mAChR remain globally related while locally separable"
+    }
+  ],
+  "contract_hash": "aad78e5eb5cfee2cb1847257f2a8f4d47ea319c64d879b000b4e6d08fcd7ec96",
+  "contract_id": "cnn_action_domain_v1",
+  "contract_path": "configs/domain_guidance/cnn_action_domain_v1.yaml",
+  "created_at": "2026-07-31T11:53:39+00:00",
+  "evaluation_protocol": "legacy_single_seed",
+  "experiment_id": "13C_finetune_commutative_cnn_20260730_120257",
+  "id": "domain_eval_6731079f07216caaabdf",
+  "metrics": {
+    "ache_machr_related_geometry::neighbourhood_pair_affinity": {
+      "confidence_interval_95": null,
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 0.5097222222222223
+    },
+    "ache_machr_related_geometry::neighbourhood_purity": {
+      "confidence_interval_95": [
+        0.3845535714285714,
+        1.0
+      ],
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 0.6488095238095237
+    },
+    "ache_machr_related_geometry::normalized_centroid_distance": {
+      "confidence_interval_95": [
+        0.2166668137143251,
+        1.8851068163288829
+      ],
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 0.30902781500690185
+    },
+    "ache_machr_related_geometry::related_distance_rank_score": {
+      "confidence_interval_95": [
+        0.6,
+        1.0
+      ],
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 1.0
+    },
+    "ache_machr_separability::leave_one_compound_out_balanced_accuracy": {
+      "confidence_interval_95": null,
+      "method": "leave_one_compound_out_linear_probe",
+      "status": "measured",
+      "value": 0.4166666666666667
+    },
+    "ache_machr_separability::pairwise_balanced_accuracy": {
+      "confidence_interval_95": [
+        0.0,
+        0.24243421052631556
+      ],
+      "method": "pairwise_confusion",
+      "status": "measured",
+      "value": 0.125
+    },
+    "ache_machr_separability::symmetric_confusion_rate": {
+      "confidence_interval_95": [
+        0.0,
+        0.2692424242424241
+      ],
+      "method": "pairwise_confusion",
+      "status": "measured",
+      "value": 0.08333333333333333
+    },
+    "action_identifiability::prediction_collapse_index": {
+      "confidence_interval_95": [
+        0.40540540540540543,
+        0.8097402597402598
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.5869565217391305
+    },
+    "action_identifiability::prediction_coverage": {
+      "confidence_interval_95": [
+        0.25,
+        0.75
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.75
+    },
+    "action_identifiability::worst_class_recall": {
+      "confidence_interval_95": [
+        0.0,
+        0.0
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.0
+    },
+    "classification::class_f1::AChE_Inhibitor_Reversible": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.0
+    },
+    "classification::class_f1::GABAAR_Antagonist": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.4
+    },
+    "classification::class_f1::NMDAR_Activation": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.8421052631578948
+    },
+    "classification::class_f1::mAChR_Agonist_NonSelective": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.3157894736842105
+    },
+    "classification::class_recall::AChE_Inhibitor_Reversible": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.0
+    },
+    "classification::class_recall::GABAAR_Antagonist": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.25
+    },
+    "classification::class_recall::NMDAR_Activation": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.8
+    },
+    "classification::class_recall::mAChR_Agonist_NonSelective": {
+      "confidence_interval_95": null,
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.25
+    },
+    "classification::effective_predicted_classes": {
+      "confidence_interval_95": [
+        1.698131263141411,
+        3.5786576869272078
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 2.993583901648883
+    },
+    "classification::macro_class_f1": {
+      "confidence_interval_95": [
+        0.13350243506493506,
+        0.6201084656084657
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.3894736842105263
+    },
+    "classification::macro_class_recall": {
+      "confidence_interval_95": [
+        0.10593297101449275,
+        0.566791958041958
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.325
+    },
+    "classification::prediction_collapse_index": {
+      "confidence_interval_95": [
+        0.40540540540540543,
+        0.8097402597402598
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.5869565217391305
+    },
+    "classification::prediction_coverage": {
+      "confidence_interval_95": [
+        0.25,
+        0.75
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.75
+    },
+    "classification::worst_class_recall": {
+      "confidence_interval_95": [
+        0.0,
+        0.0
+      ],
+      "method": "cluster_aware_classification",
+      "status": "measured",
+      "value": 0.0
+    },
+    "gaba_nmda_related_geometry::neighbourhood_pair_affinity": {
+      "confidence_interval_95": null,
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 0.37121212121212116
+    },
+    "gaba_nmda_related_geometry::neighbourhood_purity": {
+      "confidence_interval_95": [
+        0.33333333333333326,
+        0.9006959033613442
+      ],
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 0.5454545454545454
+    },
+    "gaba_nmda_related_geometry::normalized_centroid_distance": {
+      "confidence_interval_95": [
+        0.6465130053578637,
+        5.323729675943964
+      ],
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 1.1560170244288113
+    },
+    "gaba_nmda_related_geometry::related_distance_rank_score": {
+      "confidence_interval_95": [
+        0.0,
+        0.6
+      ],
+      "method": "original_standardized_latent_space",
+      "status": "measured",
+      "value": 0.4
+    }
+  },
+  "objective_eligibility": "legacy_descriptive",
+  "provenance": {
+    "created_by": "domain_guidance_evaluator",
+    "deterministic": true,
+    "latent_space": "original_standardized",
+    "projection_role": "visualization_only"
+  },
+  "sample_coverage": {
+    "class_counts": {
+      "AChE_Inhibitor_Reversible": 12,
+      "GABAAR_Antagonist": 12,
+      "NMDAR_Activation": 10,
+      "mAChR_Agonist_NonSelective": 12
+    },
+    "compounds": 12,
+    "experimental_runs": 22,
+    "rows": 46
+  },
+  "split": "holdout",
+  "split_hash": "c26692de85704e7bfe24685eeaa4abc66b6f1746d5635e75889d50a9e0b99728",
+  "training_seed": 0,
+  "umap_used_for_decision": false,
+  "unit_of_analysis": {
+    "frame_rows_are_independent": false,
+    "inner": "experimental_run_id",
+    "outer": "compound"
+  },
+  "version": "domain-guidance-v1"
+}

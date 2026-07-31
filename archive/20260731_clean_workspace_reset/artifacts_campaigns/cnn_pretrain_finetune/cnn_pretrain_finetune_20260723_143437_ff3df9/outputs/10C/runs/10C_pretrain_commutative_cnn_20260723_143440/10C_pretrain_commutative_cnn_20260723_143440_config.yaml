@@ -1,0 +1,133 @@
+unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+pretrained_encoder_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/10C_pretrain_commutative_cnn_20260723_143440_encoder_state.pt
+validation_fraction: 0.15
+train_num_random_rotations: 0
+rotation_range_degrees: 0.0
+model_config:
+  spatial_conv_channels:
+  - 16
+  - 32
+  spatial_kernel_size_z:
+  - 3
+  - 1
+  spatial_kernel_size_xy:
+  - 5
+  - 3
+  spatial_stride_z:
+  - 1
+  - 1
+  spatial_stride_xy:
+  - 1
+  - 1
+  spatial_pool_kernel_z:
+  - 1
+  - 1
+  spatial_pool_kernel_xy:
+  - 2
+  - 2
+  spatial_pool_stride_z:
+  - 1
+  - 1
+  spatial_pool_stride_xy:
+  - 2
+  - 2
+  temporal_st_channels:
+  - 48
+  - 64
+  temporal_st_kernel_sizes:
+  - 5
+  - 3
+  temporal_ts_channels:
+  - 32
+  - 48
+  - 64
+  temporal_ts_kernel_sizes:
+  - 7
+  - 5
+  - 3
+  spatial_agg_channels:
+  - 32
+  - 64
+  spatial_agg_kernel_size_z:
+  - 3
+  - 1
+  spatial_agg_kernel_size_xy:
+  - 3
+  - 3
+  spatial_agg_stride_z:
+  - 1
+  - 1
+  spatial_agg_stride_xy:
+  - 1
+  - 1
+  spatial_agg_pool_kernel_z:
+  - 1
+  - 1
+  spatial_agg_pool_kernel_xy:
+  - 1
+  - 2
+  spatial_agg_pool_stride_z:
+  - 1
+  - 1
+  spatial_agg_pool_stride_xy:
+  - 1
+  - 2
+  patch_size_z: 1
+  patch_size_xy: 16
+  embedding_dim: 64
+  num_prototypes: 64
+  probe_region_grid:
+  - 1
+  - 2
+  - 2
+  probe_time_bins: 8
+  probe_frequency_bins: 4
+  dropout: 0.25
+  normalization: group
+  verbose: true
+optimization_config:
+  batch_size: 8
+  epochs: 140
+  learning_rate: 3.0e-05
+  weight_decay: 0.001
+  early_stopping_patience: 16
+  early_stopping_min_delta: 5.0e-05
+  early_stopping_start_epoch: 20
+  early_stopping_monitor: self_probe_loss
+  early_stopping_smoothing: median
+  early_stopping_smoothing_window: 3
+  scheduler_patience: 3
+  scheduler_factor: 0.5
+  scheduler_min_lr: 1.0e-06
+  training_plot_dir: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/loss_plots/pretraining
+  training_plot_every_n_epochs: 2
+  training_plot_smoothing_window: 5
+  validation_split: 0.0
+  random_state: 0
+  standardize: true
+  device: null
+  verbose: true
+  class_weighting: null
+  resume_checkpoint_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/resume/10C_pretrain_commutative_cnn_20260723_143440_training_resume.pt
+  suspend_marker_path: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260723_143437_ff3df9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260723_143440/control/10C_pretrain_commutative_cnn_20260723_143440.suspend
+loss_weight_config:
+  action_weight: 1.0
+  water_vs_other_weight: 0.0
+  compound_weight: 0.2
+  concentration_weight: 0.2
+  lambda_cross: 0.0
+  lambda_align: 0.0
+  prototype_temperature: 0.25
+  prototype_alignment_weight: 0.0
+  prototype_warmup_epochs: 16
+  prototype_ramp_epochs: 36
+  latent_alignment_weight: 0.0
+  cross_warmup_epochs: 0
+  cross_ramp_epochs: 0
+  teacher_student_warmup_epochs: 0
+  probe_mask_probability: 1.0
+  probe_alpha_local: 1.0
+  probe_alpha_region_time: 1.0
+  probe_alpha_derivative: 0.25
+  probe_alpha_frequency: 0.1
+  probe_alpha_correlation: 0.05

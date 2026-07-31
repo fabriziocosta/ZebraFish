@@ -1,0 +1,4 @@
+Experiment id: 10C_pretrain_commutative_cnn_20260705_232042
+Experiment run folder: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf/outputs/10C/runs/10C_pretrain_commutative_cnn_20260705_232042
+Per-run commutative CNN pretraining config: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf/outputs/10C/runs/10C_pretrain_commutative_cnn_20260705_232042/10C_pretrain_commutative_cnn_20260705_232042_config.yaml
+{'all_tensors': (2144, 20, 5, 96, 96), 'train_base_tensors': (1822, 20, 5, 96, 96), 'train_tensors': (1822, 20, 5, 96, 96), 'val_tensors': (322, 20, 5, 96, 96)}

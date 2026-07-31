@@ -1,0 +1,64 @@
+{
+  "guardrail_failures": {},
+  "guardrail_passed": true,
+  "metrics": {
+    "action.accuracy": 0.4788732394366197,
+    "action.average_precision_macro": 0.4872489596752974,
+    "action.macro_f1": 0.3678104575163399,
+    "action.macro_precision": 0.4453030303030303,
+    "action.macro_recall": 0.3906666666666666,
+    "action.n_samples": 71.0,
+    "action.roc_auc_ovr_macro": 0.7294350846249562,
+    "action.weighted_f1": 0.394198195710209,
+    "action.weighted_precision": 0.4282330345710627,
+    "action.weighted_recall": 0.4788732394366197,
+    "compound.accuracy": 0.39436619718309857,
+    "compound.average_precision_macro": 0.36577956343561335,
+    "compound.macro_f1": 0.23323936337634965,
+    "compound.macro_precision": 0.22371794871794876,
+    "compound.macro_recall": 0.2765384615384615,
+    "compound.n_samples": 71.0,
+    "compound.roc_auc_ovr_macro": 0.7632599969835737,
+    "compound.weighted_f1": 0.3058011831887965,
+    "compound.weighted_precision": 0.27664319248826297,
+    "compound.weighted_recall": 0.39436619718309857,
+    "concentration.accuracy": 0.39436619718309857,
+    "concentration.average_precision_macro": 0.39858769298485547,
+    "concentration.macro_f1": 0.30938375350140057,
+    "concentration.macro_precision": 0.4581196581196581,
+    "concentration.macro_recall": 0.3834920634920635,
+    "concentration.n_samples": 71.0,
+    "concentration.roc_auc_ovr_macro": 0.5212836438923395,
+    "concentration.weighted_f1": 0.3135578174931945,
+    "concentration.weighted_precision": 0.4665944384254243,
+    "concentration.weighted_recall": 0.39436619718309857
+  },
+  "metrics_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260701_130749_69a864/outputs/13C/runs/13C_finetune_commutative_cnn_20260702_151104/13C_finetune_commutative_cnn_20260702_151104_summary_metrics.csv",
+  "objective_eligible": true,
+  "ranking_metric_order": [
+    "compound.macro_f1",
+    "compound.roc_auc_ovr_macro",
+    "compound.balanced_accuracy",
+    "compound.accuracy"
+  ],
+  "ranking_score": 0.23323936337634965,
+  "ranking_values": [
+    0.23323936337634965,
+    0.7632599969835737,
+    null,
+    0.39436619718309857
+  ],
+  "score": 0.23323936337634965,
+  "selected_metric": "compound.macro_f1",
+  "stage_runs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260701_130749_69a864/outputs/10C/runs/10C_pretrain_commutative_cnn_20260701_130752",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260701_130749_69a864/outputs/13C/runs/13C_finetune_commutative_cnn_20260702_151104"
+  },
+  "status": "running",
+  "trial_configs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260701_130749_69a864/configs/10C_10C_pretrain_next.yaml",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260701_130749_69a864/configs/13C_13C_finetune_next.yaml"
+  },
+  "trial_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260701_130749_69a864",
+  "trial_id": "cnn_pretrain_finetune_20260701_130749_69a864"
+}

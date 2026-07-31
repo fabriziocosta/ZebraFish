@@ -1,0 +1,83 @@
+{
+  "actions": [
+    {
+      "campaign_action": "stop",
+      "kind": "campaign_control",
+      "result": {
+        "action": "stop",
+        "detail": "campaign terminated campaign=cnn_pretrain_finetune_protocol_v2 trial=cnn_pretrain_finetune_protocol_v2_20260731_132918_79c2c2 stage=10C pid=1328907 pid_source=stage_state signal=SIGTERM\nautonomous initialization recovery reason=launched candidate baseline_calibration_cnn_pretrain_finetune_protocol_v2\n[2026-07-31T13:29:47] autonomous campaign=cnn_pretrain_finetune_protocol_v2 trial=cnn_pretrain_finetune_protocol_v2_20260731_132946_19cc33 stage=10C controller=running_wait action=wait reason=process is running; waiting for the next artifact update\n",
+        "recovery_returncode": 0,
+        "replacement_running": true,
+        "returncode": 0,
+        "stop_returncode": 0
+      },
+      "status": "recorded",
+      "summary": "Issue deterministic lifecycle stop request for the active campaign/controller loop to prevent further writes until evidence/state reconciliation is completed."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-07-31T12:29:47+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-07-31T12:29:47+00:00",
+    "last_run_id": "meta_20260731_122931_1f785a75",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 1329027,
+    "run_now_supported": true,
+    "status": "meta_controller_safe_stop",
+    "summary": "Critical evidence-integrity risk detected: the repository contains large uncommitted deletions of scientific state and prior meta-controller reports while the campaign and controller are running. Automatic repair cannot be safely validated from the provided snapshot without risking provenance loss or conflicting with active user changes."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "repository",
+      "repository.status",
+      "repository.diff_stat",
+      "campaign.status=running",
+      "scientific_controller.status=running",
+      "process.running",
+      "meta_controller.status=running"
+    ],
+    "root_causes": [
+      "Working tree is not in a safe supervisory-repair condition due to extensive deletions and modifications, including state/scientific_state.yaml and meta-controller report files.",
+      "Immutable/provenance artifacts appear removed from the working tree during an active run, creating potential evidence loss or reconciliation ambiguity.",
+      "No bounded, allowlisted, verification-backed patch is evident that can restore integrity without first halting lifecycle activity and reconciling repository/state ownership."
+    ],
+    "severity": "critical",
+    "summary": "Critical evidence-integrity risk detected: the repository contains large uncommitted deletions of scientific state and prior meta-controller reports while the campaign and controller are running. Automatic repair cannot be safely validated from the provided snapshot without risking provenance loss or conflicting with active user changes."
+  },
+  "evidence_references": [
+    "repository",
+    "repository.status",
+    "repository.diff_stat",
+    "campaign.status=running",
+    "scientific_controller.status=running",
+    "process.running",
+    "meta_controller.status=running"
+  ],
+  "id": "meta_20260731_122931_1f785a75",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No code patch applied. If stop request is enacted, resume only after repository/state reconciliation confirms scientific_state and meta-controller report provenance are intact or recoverably restored from authoritative records.",
+  "started_at": "2026-07-31T12:29:31+00:00",
+  "status": "meta_controller_safe_stop",
+  "unresolved_risks": [
+    "If deleted state/report files are true data loss (not merely uncommitted workspace moves), historical reproducibility may already be degraded.",
+    "Active processes may continue writing inconsistent state until deterministic stop is executed.",
+    "Without a reconciled authoritative state snapshot, subsequent automated repairs could compound provenance ambiguity."
+  ]
+}

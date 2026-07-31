@@ -1,0 +1,29 @@
+Experiment id: 13C_finetune_commutative_cnn_20260730_120257
+Experiment run folder: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257
+Using pretrained encoder checkpoint: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_encoder_state.pt
+Fine-tune loss PDFs: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/loss_plots/fine_tune
+Commutative CNN model: parameters=183,903 trainable=183,903 size=0.70 MB
+cols:
+    ep=epoch
+    lr=learning_rate
+    eta=estimated_time_remaining
+    trL=train_loss
+    trA=train_action_loss
+    trWO=train_water_vs_other_loss
+    trFA=train_feature_alignment_loss
+    trCo=train_compound_loss
+    trCn=train_concentration_loss
+    vaL=val_loss
+    vaA=val_action_loss
+    vaWO=val_water_vs_other_loss
+    vaFA=val_feature_alignment_loss
+    vaCo=val_compound_loss
+    vaCn=val_concentration_loss
+     ep       lr       eta |      trL      trA     trWO     trFA     trCo     trCn |      vaL      vaA     vaWO     vaFA     vaCo     vaCn
+resuming supervised training from epoch 117/120
+117/120 8.00e-06     38:27 |   2.0739   0.9317   0.5794   2.3516   1.7566   1.0331 |   2.2954   1.0022   0.7012   2.9643   1.9659   1.1518
+118/120 8.00e-06     25:23 |   2.0812   0.9340   0.5819   2.3537   1.7637   1.0354 |   2.3174   1.0018   0.7029   2.9167   1.9935   1.1545
+119/120 8.00e-06     13:23 |   2.0669   0.9210   0.5819   2.4118   1.7565   1.0352 |   2.3075   0.9983   0.7038   2.9223   1.9840   1.1532
+120/120 8.00e-06     00:00 |   2.0577   0.9252   0.5819   2.4473   1.7414   1.0361 |   2.2941   1.0042   0.6992   2.9479   1.9629   1.1497
+select_best epoch=120 best_epoch=117 best_metric=1.9779
+13C run complete: artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257

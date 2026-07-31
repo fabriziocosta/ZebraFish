@@ -1,0 +1,23 @@
+{
+  "active_experiment": "10C",
+  "controller_reason": "process is stopped before required final artifacts were found",
+  "controller_status": "failed",
+  "failed_at": "2026-07-23T14:33:57",
+  "last_artifact_max_mtime": 1783350387.5071971,
+  "last_poll_at": "2026-07-23T14:33:57",
+  "log_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf/logs/10C/10C_20260705_232039.log",
+  "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf/configs/10C_10C_pretrain_next.yaml",
+  "pid": 1005701,
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf/outputs/10C/runs/10C_pretrain_commutative_cnn_20260705_232042",
+  "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260705_232039_eadccf/logs/10C/10C_20260705_232039.run_status.json",
+  "runner": "10C_pretrain_commutative_cnn_encoder.py",
+  "stale_polls": 0,
+  "started_at": "2026-07-05T23:20:39",
+  "status": "failed",
+  "terminated_at": "2026-07-06T16:09:01",
+  "terminated_pid": 1005701,
+  "terminating_at": "2026-07-06T16:09:01",
+  "terminating_pid": 1005701,
+  "termination_reason": "terminated by run_campaign CLI",
+  "termination_signal": "SIGTERM"
+}

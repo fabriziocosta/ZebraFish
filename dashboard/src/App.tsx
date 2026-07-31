@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { controlController, fetchInvestigation, runMetaControllerNow } from "./api";
 import type { Candidate, Evidence } from "./model";
 import { ActiveHypothesisCard, AlertPanel, BeliefTimeline, CurrentExperimentCard, DecisionQueue, DetailDrawer, DomainGuidanceCard, EvidencePanel, ExpectedOutcomes, FocusedGraph, InvestigationHeader, MetaControllerCard } from "./components";
 import "./styles.css";
 
-const campaignOptions = ["cnn", "transformer"];
+const campaignOptions = ["cnn-v2"];
+const defaultAccents = { accent: "#21815c", success: "#187a5b", running: "#ff8e1c", attention: "#7a315b", warning: "#936000", info: "#3e83bd", critical: "#9c2f62" };
+type AccentColors = typeof defaultAccents;
+const accentLabels: Array<[keyof typeof defaultAccents, string]> = [["accent", "Accent"], ["success", "Success"], ["running", "Running"], ["attention", "Attention"], ["warning", "Warning"], ["info", "Info"], ["critical", "Critical"]];
+
+function GearIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.55-2-3.46-2.43.98a7.5 7.5 0 0 0-1.73-1L14.9 3h-4l-.34 2.97a7.5 7.5 0 0 0-1.73 1L6.4 5.99l-2 3.46L6.4 11a7.7 7.7 0 0 0 0 2l-2 1.55 2 3.46 2.43-.98a7.5 7.5 0 0 0 1.73 1L10.9 21h4l.34-2.97a7.5 7.5 0 0 0 1.73-1l2.43.98 2-3.46-2-1.55ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" /></svg>;
+}
 
 export default function App() {
-  const [campaign, setCampaign] = useState(new URLSearchParams(window.location.search).get("campaign") || "cnn");
+  const [campaign, setCampaign] = useState(new URLSearchParams(window.location.search).get("campaign") || "cnn-v2");
   const [view, setView] = useState("current");
   const [level, setLevel] = useState(3);
   const [relationDepth, setRelationDepth] = useState(1);
@@ -17,6 +24,14 @@ export default function App() {
   const [dark, setDark] = useState(() => {
     const saved = window.localStorage.getItem("mission-control-theme");
     return saved ? saved === "dark" : (window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true);
+  });
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [accents, setAccents] = useState<AccentColors>(() => {
+    try {
+      const saved = window.localStorage.getItem("mission-control-accent-colors");
+      const parsed = saved ? JSON.parse(saved) : {};
+      return { ...defaultAccents, ...(parsed && typeof parsed === "object" ? parsed : {}) } as AccentColors;
+    } catch { return defaultAccents; }
   });
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchInvestigation>> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +58,9 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("mission-control-theme", dark ? "dark" : "light");
   }, [dark]);
+  useEffect(() => {
+    window.localStorage.setItem("mission-control-accent-colors", JSON.stringify(accents));
+  }, [accents]);
 
   const titleDetail = (title: string, value: unknown) => setDetail({ title, value });
   const handleControl = async (controller: "meta" | "campaign", action: "start" | "stop" | "continue") => {
@@ -65,12 +83,13 @@ export default function App() {
     }
   };
   const theme = dark ? "theme-dark" : "theme-light";
+  const accentStyle = Object.fromEntries(Object.entries(accents).map(([key, value]) => [`--${key === "info" ? "blue" : key}`, value])) as CSSProperties;
   const hasData = Boolean(data);
   const diagnostics = useMemo(() => data?.diagnostics.errors || [], [data]);
 
   const cardsCommand = (open: boolean) => window.dispatchEvent(new CustomEvent("mission-control:cards", { detail: { open } }));
-  return <main className={theme}>
-    <nav className="topbar"><div className="brand-mark">ZF</div><div className="nav-controls"><label>campaign <select value={campaign} onChange={(event) => setCampaign(event.target.value)}>{campaignOptions.map((option) => <option key={option}>{option}</option>)}</select></label><div className="view-tabs">{["current", "history", "full"].map((option) => <button className={view === option ? "selected" : ""} key={option} onClick={() => setView(option)}>{option}</button>)}</div><div className="collapse-controls"><button onClick={() => cardsCommand(false)}>collapse all</button><button onClick={() => cardsCommand(true)}>expand all</button></div><button className="theme-toggle" onClick={() => setDark((value) => !value)} aria-label="Toggle theme">{dark ? "☼" : "☾"}</button></div></nav>
+  return <main className={theme} style={accentStyle}>
+    <nav className="topbar"><div className="brand-mark">ZF</div><div className="nav-controls"><label>campaign <select value={campaign} onChange={(event) => setCampaign(event.target.value)}>{campaignOptions.map((option) => <option key={option}>{option}</option>)}</select></label><div className="view-tabs">{["current", "history", "full"].map((option) => <button className={view === option ? "selected" : ""} key={option} onClick={() => setView(option)}>{option}</button>)}</div><div className="collapse-controls"><button title="Collapse every dashboard card." data-tooltip="Collapse all cards." onClick={() => cardsCommand(false)}>collapse all</button><button title="Expand every dashboard card." data-tooltip="Expand all cards." onClick={() => cardsCommand(true)}>expand all</button></div><button className="setup-button" onClick={() => setSetupOpen(true)} aria-label="Open dashboard setup" title="Open dashboard setup" data-tooltip="Open dashboard setup"><GearIcon /></button></div></nav>
     {loading && !hasData && <div className="page-state"><div className="loader" /><h2>Reading scientific state…</h2><p>Connecting to the local campaign adapter.</p></div>}
     {error && !hasData && <div className="page-state error-state"><h2>Dashboard unavailable</h2><p>{error}</p><p>Start the API with <code>./run_campaign dashboard {campaign}</code>.</p></div>}
     {data && <div className="page-shell">
@@ -86,5 +105,6 @@ export default function App() {
       <FocusedGraph data={data} level={level} relationDepth={relationDepth} scale={graphScale} entityType={entityType} relationType={relationType} onLevel={setLevel} onDepth={setRelationDepth} onScale={setGraphScale} onEntityType={setEntityType} onRelationType={setRelationType} onNodeSelect={(node) => titleDetail(String(node.label || node.tooltip || node.id).replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim(), node)} />
     </div>}
     <DetailDrawer detail={detail} onClose={() => setDetail(null)} />
+    {setupOpen && <div className="setup-backdrop" role="presentation" onClick={() => setSetupOpen(false)}><section className="setup-dialog" role="dialog" aria-modal="true" aria-labelledby="setup-title" onClick={(event) => event.stopPropagation()}><div className="setup-dialog-heading"><div><span className="eyebrow">DASHBOARD PREFERENCES</span><h2 id="setup-title">Setup</h2></div><button className="close-button" onClick={() => setSetupOpen(false)} aria-label="Close setup">×</button></div><div className="setup-section"><span className="eyebrow">APPEARANCE</span><div className="theme-choice"><button className={!dark ? "selected" : ""} onClick={() => setDark(false)}>Light</button><button className={dark ? "selected" : ""} onClick={() => setDark(true)}>Dark</button></div></div><div className="setup-section"><span className="eyebrow">SEMANTIC ACCENTS</span><p className="muted">Choose the color used for each status and semantic role across the dashboard.</p><div className="accent-grid">{accentLabels.map(([key, label]) => <label key={key}><span>{label}</span><input type="color" value={accents[key]} aria-label={`${label} color`} onChange={(event) => setAccents((current) => ({ ...current, [key]: event.target.value }))} /><code>{accents[key]}</code></label>)}</div></div><div className="setup-actions"><button onClick={() => setAccents(defaultAccents)}>Reset colors</button><button className="primary-button" onClick={() => setSetupOpen(false)}>Done</button></div></section></div>}
   </main>;
 }

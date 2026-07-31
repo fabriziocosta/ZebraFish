@@ -1,0 +1,77 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Take no code or lifecycle action this cycle; maintain current campaign execution and await stronger fault evidence or a clean, verifiable repair window."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-07-31T12:32:44+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-07-31T12:32:44+00:00",
+    "last_run_id": "meta_20260731_123233_f9f21982",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 1332251,
+    "run_now_supported": true,
+    "status": "completed",
+    "summary": "No explicit controller/campaign failure is evidenced in the snapshot, and autonomous repair is not justified. The repository contains active uncommitted modifications across controller, policy, dashboard, and meta-controller files, which creates overlap/rollback risk for any automatic patch without a verified failure target."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status=running",
+      "scientific_controller.status=running",
+      "process.running",
+      "meta_controller.status=running",
+      "repository.status",
+      "repository.diff_stat",
+      "observations",
+      "recent_meta_reports"
+    ],
+    "root_causes": [
+      "No concrete fault signal is present in the bounded evidence snapshot (no failed tests, crashes, or reconciliation errors shown).",
+      "Working tree is dirty in operational code paths, so autonomous patching would risk conflicting with existing user changes and violate safe-application constraints.",
+      "Observation/report context is sparse (empty observations and no recent meta reports), limiting confidence for any inferred remediation."
+    ],
+    "severity": "warning",
+    "summary": "No explicit controller/campaign failure is evidenced in the snapshot, and autonomous repair is not justified. The repository contains active uncommitted modifications across controller, policy, dashboard, and meta-controller files, which creates overlap/rollback risk for any automatic patch without a verified failure target."
+  },
+  "evidence_references": [
+    "campaign.status=running",
+    "scientific_controller.status=running",
+    "process.running",
+    "meta_controller.status=running",
+    "repository.status",
+    "repository.diff_stat",
+    "observations",
+    "recent_meta_reports"
+  ],
+  "id": "meta_20260731_123233_f9f21982",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No changes applied; rollback not required.",
+  "started_at": "2026-07-31T12:32:33+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "If hidden failures exist outside this snapshot, they remain unaddressed until surfaced by deterministic observations/audits.",
+    "Uncommitted repository changes may continue to block safe autonomous remediation in subsequent runs.",
+    "Lack of recent meta reports and empty observations may indicate reduced observability, but this cannot be confirmed from current evidence."
+  ]
+}

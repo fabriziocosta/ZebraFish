@@ -1,0 +1,28 @@
+{
+  "campaign_id": "cnn_pretrain_finetune",
+  "stage_runs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/outputs/10C/runs/10C_pretrain_commutative_cnn_20260703_031245",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/outputs/13C/runs/13C_finetune_commutative_cnn_20260704_051554"
+  },
+  "stages": [
+    "10C",
+    "13C"
+  ],
+  "trial_configs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/configs/10C_10C_pretrain_next.yaml",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/configs/13C_13C_finetune_next.yaml"
+  },
+  "trial_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28",
+  "trial_id": "cnn_pretrain_finetune_20260703_031242_495f28",
+  "trial_patch": {
+    "13C": {
+      "loss_weight_config": {
+        "action_weight": 0.35,
+        "compound_weight": 1.3,
+        "concentration_weight": 0.02,
+        "water_vs_other_weight": 0.01
+      }
+    }
+  },
+  "updated_at": "2026-07-04T14:16:49"
+}

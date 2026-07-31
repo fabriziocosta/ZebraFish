@@ -1,0 +1,30 @@
+{
+  "active_experiment": "10C",
+  "command": [
+    "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/.venv/bin/python",
+    "10C_pretrain_commutative_cnn_encoder.py",
+    "--config",
+    "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/10C_10C_pretrain_next.yaml"
+  ],
+  "command_hash": "2cfa34594d4ed3578f8b493b0a86161d7192b7e0bdd99bc3524e51fc544db664",
+  "controller_reason": "process is running but artifacts have not advanced for 11 poll(s)",
+  "controller_status": "running_stale",
+  "last_artifact_max_mtime": 1785499864.6031044,
+  "last_poll_at": "2026-07-31T13:24:08",
+  "log_path": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/logs/10C/10C_20260731_131101.log",
+  "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/10C_10C_pretrain_next.yaml",
+  "pid": 1306250,
+  "process_start_ticks": "147704155",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/outputs/10C/runs/10C_pretrain_commutative_cnn_20260731_131104",
+  "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/logs/10C/10C_20260731_131101.run_status.json",
+  "runner": "10C_pretrain_commutative_cnn_encoder.py",
+  "stale_polls": 12,
+  "started_at": "2026-07-31T13:11:01",
+  "status": "terminated",
+  "terminated_at": "2026-07-31T13:24:32",
+  "terminated_pid": 1306250,
+  "terminating_at": "2026-07-31T13:24:27",
+  "terminating_pid": 1306250,
+  "termination_reason": "clean workspace reset: archive current v2 and restart from a new hypothesis",
+  "termination_signal": "SIGTERM"
+}

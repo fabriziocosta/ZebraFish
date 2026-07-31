@@ -1,0 +1,84 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Record diagnosis only; continue campaign execution and monitoring without code or lifecycle changes."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-07-31T12:38:44+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "cli",
+    "last_run_at": "2026-07-31T12:38:44+00:00",
+    "last_run_id": "meta_20260731_123836_6e6c9d99",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "once",
+    "next_run_at": null,
+    "pid": null,
+    "run_now_supported": false,
+    "status": "completed",
+    "summary": "No concrete controller/campaign fault is evidenced in the bounded snapshot; autonomous repair is not justified this cycle."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status",
+      "campaign.status=running",
+      "scientific_controller.status",
+      "scientific_controller.status=running",
+      "scientific_controller.safe_stop_reason",
+      "process.running",
+      "meta_controller.status",
+      "observations",
+      "repository.status",
+      "repository.diff_stat",
+      "recent_meta_reports"
+    ],
+    "root_causes": [
+      "Campaign and scientific controller are both running, and no safe-stop reason is present.",
+      "No deterministic test/verification failure or reconciliation error is provided in the snapshot.",
+      "Observations are empty, which limits confidence for inferred remediation.",
+      "Repository contains uncommitted operational code changes, making automatic patch application high-risk without a concrete fault target."
+    ],
+    "severity": "warning",
+    "summary": "No concrete controller/campaign fault is evidenced in the bounded snapshot; autonomous repair is not justified this cycle."
+  },
+  "evidence_references": [
+    "campaign.status",
+    "campaign.status=running",
+    "scientific_controller.status",
+    "scientific_controller.status=running",
+    "scientific_controller.safe_stop_reason",
+    "process.running",
+    "meta_controller.status",
+    "observations",
+    "repository.status",
+    "repository.diff_stat",
+    "recent_meta_reports"
+  ],
+  "id": "meta_20260731_123836_6e6c9d99",
+  "invocation_source": "cli",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "cli",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No changes applied; rollback not required.",
+  "started_at": "2026-07-31T12:38:36+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "If failures exist outside this bounded snapshot, they remain unaddressed until surfaced by deterministic observations/audits.",
+    "Empty observations may indicate reduced observability, but this cannot be confirmed from current evidence alone.",
+    "Uncommitted repository changes may continue to block safe autonomous remediation in later cycles when faults are detected."
+  ]
+}

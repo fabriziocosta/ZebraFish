@@ -710,7 +710,5 @@ def run_13c_finetune(config_path: str | Path = DEFAULT_13C_CONFIG_PATH) -> Path:
             "separation remains the limiting failure mode."
         ),
     )
-    if binary_pretraining_history is not None:
-        binary_pretraining_history.to_csv(run_dir / f"{experiment_run.experiment_id}_binary_pretraining_history.csv", index=False)
     update_agent_run_status(status="completed", experiment="13C", experiment_id=experiment_run.experiment_id, run_dir=run_dir)
     return run_dir

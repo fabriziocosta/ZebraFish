@@ -1,0 +1,73 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Retain current execution state and continue normal deterministic supervision."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-07-31T12:11:48+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "clean-cut-verification",
+    "last_run_at": "2026-07-31T12:11:48+00:00",
+    "last_run_id": "meta_20260731_121139_1f47fe6d",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "once",
+    "next_run_at": null,
+    "pid": null,
+    "run_now_supported": false,
+    "status": "completed",
+    "summary": "No verified operational fault is evidenced in the snapshot. Campaign and controller processes are running, and no deterministic evidence indicates reconciliation failure, observation corruption, or unsafe lifecycle state."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status",
+      "scientific_controller.status",
+      "process.running",
+      "meta_controller.status",
+      "repository.status",
+      "observations",
+      "recent_meta_reports"
+    ],
+    "root_causes": [
+      "No failure signal is present in bounded evidence.",
+      "Repository changes appear limited to runtime lock/state artifacts, with no demonstrated impact on current execution."
+    ],
+    "severity": "info",
+    "summary": "No verified operational fault is evidenced in the snapshot. Campaign and controller processes are running, and no deterministic evidence indicates reconciliation failure, observation corruption, or unsafe lifecycle state."
+  },
+  "evidence_references": [
+    "campaign.status",
+    "scientific_controller.status",
+    "process.running",
+    "meta_controller.status",
+    "repository.status",
+    "observations",
+    "recent_meta_reports"
+  ],
+  "id": "meta_20260731_121139_1f47fe6d",
+  "invocation_source": "clean-cut-verification",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "clean-cut-verification",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No changes applied; rollback not required.",
+  "started_at": "2026-07-31T12:11:39+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "Observations list is currently empty in this snapshot, so scientific progress/freshness cannot be confirmed from this evidence alone.",
+    "Working tree is not clean due to lock/state files, which could block future patch application if overlap checks fail."
+  ]
+}

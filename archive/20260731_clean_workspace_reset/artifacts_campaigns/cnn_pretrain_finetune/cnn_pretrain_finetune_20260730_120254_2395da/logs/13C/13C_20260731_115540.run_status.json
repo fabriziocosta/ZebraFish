@@ -1,0 +1,9 @@
+{
+  "experiment": "13C",
+  "experiment_id": "13C_finetune_commutative_cnn_20260730_120257",
+  "resume_checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257",
+  "status": "completed",
+  "suspend_marker_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/control/13C_finetune_commutative_cnn_20260730_120257.suspend",
+  "updated_at": "2026-07-31T12:53:39"
+}

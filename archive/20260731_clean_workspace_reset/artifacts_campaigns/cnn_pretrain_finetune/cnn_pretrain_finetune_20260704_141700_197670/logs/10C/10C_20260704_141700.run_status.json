@@ -1,0 +1,8 @@
+{
+  "checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260704_141700_197670/outputs/10C/runs/10C_pretrain_commutative_cnn_20260704_141703/10C_pretrain_commutative_cnn_20260704_141703_encoder_state.pt",
+  "experiment": "10C",
+  "experiment_id": "10C_pretrain_commutative_cnn_20260704_141703",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260704_141700_197670/outputs/10C/runs/10C_pretrain_commutative_cnn_20260704_141703",
+  "status": "completed",
+  "updated_at": "2026-07-05T12:56:32"
+}

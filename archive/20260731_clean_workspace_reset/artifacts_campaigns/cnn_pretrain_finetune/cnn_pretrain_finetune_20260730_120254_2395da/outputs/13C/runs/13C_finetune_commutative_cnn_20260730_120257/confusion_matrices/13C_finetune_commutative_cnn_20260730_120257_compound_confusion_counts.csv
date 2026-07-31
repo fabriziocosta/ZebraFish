@@ -1,0 +1,14 @@
+true_class,Control,Bemegride,Bicuculline,Gabazine,(RS)-(Tetrazol-5-yl)glycine,Cis-ACPD,N-methyl-D-aspartate,Donepezil,Galantamine,Phenserine,Bethanechol,Muscarine,Pilocarpine
+Control,11,0,2,3,0,0,0,0,0,0,7,2,0
+Bemegride,3,0,0,0,1,0,0,0,0,0,0,1,1
+Bicuculline,0,0,3,0,0,0,0,0,0,0,0,0,0
+Gabazine,2,0,0,0,0,0,0,0,0,0,0,1,0
+(RS)-(Tetrazol-5-yl)glycine,0,0,0,0,3,0,0,0,0,0,0,0,0
+Cis-ACPD,0,1,0,0,0,0,0,0,0,0,2,0,0
+N-methyl-D-aspartate,0,0,0,0,2,0,2,0,0,0,0,0,0
+Donepezil,2,0,0,0,0,0,0,0,0,0,1,0,1
+Galantamine,0,0,0,0,0,0,0,0,0,0,1,2,1
+Phenserine,0,0,0,0,0,0,0,0,0,0,3,1,0
+Bethanechol,1,0,0,0,0,0,0,0,0,0,2,0,0
+Muscarine,0,0,0,0,0,0,0,0,0,0,0,1,0
+Pilocarpine,3,0,0,0,0,0,0,1,0,0,0,2,2

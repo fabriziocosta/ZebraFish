@@ -151,15 +151,33 @@ def _ensure_seed_knowledge(
     """Create minimal objective-linked knowledge so the first trial is valid."""
 
     campaign_id = str(campaign_config["campaign"]["id"])
+    scientific_seed = campaign_config.get("scientific_seed", {})
+    if not isinstance(scientific_seed, dict):
+        scientific_seed = {}
+    hypothesis_seed = scientific_seed.get("hypothesis", {})
+    if not isinstance(hypothesis_seed, dict):
+        hypothesis_seed = {}
+    default_question = "Which permitted training change most improves downstream compound discrimination while preserving action performance?"
+    default_title = "A bounded optimisation change can improve the campaign objective."
+    default_statement = "At least one allowlisted optimisation or loss-weight change will improve compound macro-F1 without violating the action guardrail."
+    default_mechanism = "A bounded training intervention changes representation learning enough to improve compound discrimination while leaving the action decision boundary within the registered guardrail."
     question_id = f"q_{campaign_id}_objective"
     hypothesis_id = f"hyp_{campaign_id}_objective"
+    scope = {"campaign": campaign_id, "stages": list(campaign_config["campaign"].get("stages", []))}
+    falsification_criteria = [
+        {
+            "metric": "compound.macro_f1",
+            "direction": "no_improvement",
+            "minimum_effect": float(campaign_config.get("campaign", {}).get("minimum_effect", 0.02)),
+        }
+    ]
     if question_id not in state["entities"]["questions"]:
         state = record_entity(
             state,
             "questions",
             question_id,
             {
-                "question": "Which permitted training change most improves downstream compound discrimination while preserving action performance?",
+                "question": str(scientific_seed.get("question", default_question)),
                 "status": "open",
                 "importance": 1.0,
                 "decision_relevance": 1.0,
@@ -173,15 +191,15 @@ def _ensure_seed_knowledge(
             "hypotheses",
             hypothesis_id,
             {
-                "title": "A bounded optimisation change can improve the campaign objective.",
-                "statement": "At least one allowlisted optimisation or loss-weight change will improve compound macro-F1 without violating the action guardrail.",
-                "mechanism": "A bounded training intervention changes representation learning enough to improve compound discrimination while leaving the action decision boundary within the registered guardrail.",
-                "scope": {"campaign": campaign_id, "stages": list(campaign_config["campaign"].get("stages", []))},
+                "title": str(hypothesis_seed.get("title", default_title)),
+                "statement": str(hypothesis_seed.get("statement", default_statement)),
+                "mechanism": str(hypothesis_seed.get("mechanism", default_mechanism)),
+                "scope": scope,
                 "assumptions": ["the fixed split is representative", "the registered primary metric is available at the evaluation stage", "the baseline comparison is paired"],
                 "intervention": "one allowlisted configuration leaf or one explicitly paired loss-weight change",
                 "expected_primary_metric": {"metric": "compound.macro_f1", "direction": "increase", "minimum_effect": float(campaign_config.get("campaign", {}).get("minimum_effect", 0.02))},
                 "expected_guardrail": {"metric": "action.accuracy", "direction": "no_decrease", "minimum": 0.30},
-                "falsification_criterion": {"metric": "compound.macro_f1", "direction": "no_improvement", "minimum_effect": float(campaign_config.get("campaign", {}).get("minimum_effect", 0.02))},
+                "falsification_criteria": falsification_criteria,
                 "baseline": "registered paired baseline required before confirmatory interpretation",
                 "status": "active",
                 "belief": {"score": 0.5, "interpretation": "heuristic_decision_score", "confidence": "initial"},
@@ -190,6 +208,27 @@ def _ensure_seed_knowledge(
             },
             actor="autonomous_controller",
         )
+    else:
+        existing_hypothesis = state["entities"]["hypotheses"][hypothesis_id]
+        normalized_hypothesis = dict(existing_hypothesis)
+        if not normalized_hypothesis.get("scope"):
+            normalized_hypothesis["scope"] = scope
+        if not normalized_hypothesis.get("falsification_criteria"):
+            legacy_criterion = normalized_hypothesis.pop("falsification_criterion", None)
+            normalized_hypothesis["falsification_criteria"] = [legacy_criterion] if legacy_criterion else falsification_criteria
+        elif "falsification_criterion" in normalized_hypothesis:
+            normalized_hypothesis.pop("falsification_criterion", None)
+        if normalized_hypothesis != existing_hypothesis:
+            state = apply_operations(
+                state,
+                [{
+                    "operation": "update",
+                    "path": f"entities.hypotheses.{hypothesis_id}",
+                    "value": normalized_hypothesis,
+                    "expected_old": existing_hypothesis,
+                }],
+                actor="autonomous_controller",
+            )
     # A clean protocol campaign needs an explicit starting reference before
     # the LLM is allowed to propose an intervention.  Register the unchanged
     # stage templates as a planned baseline; its three fixed-seed executions
@@ -197,10 +236,11 @@ def _ensure_seed_knowledge(
     # registration record, not a completed experiment and cannot provide a
     # checkpoint for a later direct-stage launch.
     campaign_policy = campaign_config.get("campaign", {})
+    baseline_id = f"baseline_registration_{campaign_id}"
     if (
         campaign_policy.get("require_protocol_compliance")
         and isinstance(loop_config, dict)
-        and "baseline_registration" not in state["entities"]["experiments"]
+        and baseline_id not in state["entities"]["experiments"]
     ):
         resolved: dict[str, Any] = {}
         for stage in campaign_policy.get("stages", []):
@@ -211,7 +251,6 @@ def _ensure_seed_knowledge(
                     resolved[str(stage)] = read_yaml_mapping(Path(str(params_path)))
                 except (OSError, ValueError):
                     resolved[str(stage)] = {"params_yaml": str(params_path)}
-        baseline_id = f"baseline_registration_{campaign_id}"
         state = record_entity(
             state,
             "experiments",
@@ -282,7 +321,7 @@ def _ensure_seed_knowledge(
                 "resolved_base_configuration_hash": config_hash(resolved),
                 "source_checkpoint": "not_applicable_full_chain_baseline",
                 "replicate_seeds": [int(seed) for seed in campaign_policy.get("replicate_seeds", [0, 1, 2])],
-                "estimated_gpu_hours": float(campaign_policy.get("max_single_trial_gpu_hours", 20.0)),
+                "estimated_gpu_hours": 0.0 if campaign_policy.get("gpu_budget_applicable", True) is False else float(campaign_policy.get("max_single_trial_gpu_hours", 20.0)),
                 "estimated_wall_hours": 24.0,
                 "risks": ["baseline calibration consumes the registered replicate budget"],
                 "allowed_stages": list(campaign_policy.get("stages", [])),
@@ -536,6 +575,7 @@ def _build_prompt(
         "Encode operation value and expected_old as JSON strings. Encode candidate configuration_patch and fixed_variables as JSON strings.",
         "Every created hypothesis, belief, question, or candidate must include created_at and provenance; every update must use expected_old when changing existing state.",
         "If no safe evidence-based trial is available, return stop_campaign or no_action.",
+        "GPU budget accounting is not applicable for this campaign; do not use compute cost to rank or reject candidates and set estimated_gpu_hours to 0 when required by the schema.",
         f"Campaign objective:\n{json.dumps(campaign_config.get('objective', {}), indent=2, sort_keys=True)}",
         f"Campaign policy:\n{json.dumps(policy, indent=2, sort_keys=True)}",
         f"Stage configuration allowlists:\n{json.dumps({stage: loop_config['experiments'][stage].get('allowed_patch_paths', []) for stage in campaign_config['campaign']['stages']}, indent=2, sort_keys=True)}",
@@ -1963,7 +2003,13 @@ def _run_autonomous_campaign_body(
     if not dry_run:
         experiment_loop.validate_api_key({"agent": campaign_config["agent"]})
     scientific_path = _state_path(campaign_config)
-    scientific_state = _ensure_seed_knowledge(load_state(scientific_path), campaign_config, loop_config)
+    if dry_run:
+        scientific_state = _ensure_seed_knowledge(load_state(scientific_path), campaign_config, loop_config)
+    else:
+        scientific_state = transactional_update(
+            scientific_path,
+            lambda current: _ensure_seed_knowledge(current, campaign_config, loop_config),
+        )
     legacy_state = legacy._read_json(legacy._campaign_state_path(campaign_config))
     # A resumed child is an explicit recovery path.  Do not let a stale
     # controller safe-stop flag prevent the supervisor from collecting the

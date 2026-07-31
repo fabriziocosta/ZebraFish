@@ -1,0 +1,23 @@
+{
+  "active_experiment": "13C",
+  "controller_reason": "process is stopped before required final artifacts were found",
+  "controller_status": "failed",
+  "failed_at": "2026-07-30T11:37:28",
+  "last_artifact_max_mtime": 1785407131.946904,
+  "last_poll_at": "2026-07-30T11:37:28",
+  "log_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/logs/13C/13C_20260730_103351.log",
+  "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/configs/13C_13C_finetune_next.yaml",
+  "pid": 533638,
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_103354",
+  "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/logs/13C/13C_20260730_103351.run_status.json",
+  "runner": "13C_finetune_pretrained_commutative_cnn_classifier.py",
+  "stale_polls": 0,
+  "started_at": "2026-07-30T10:33:51",
+  "status": "failed",
+  "terminated_at": "2026-07-30T11:27:02",
+  "terminated_pid": 533638,
+  "terminating_at": "2026-07-30T11:26:57",
+  "terminating_pid": 533638,
+  "termination_reason": "meta-controller requested stop from deterministic evidence",
+  "termination_signal": "SIGTERM"
+}

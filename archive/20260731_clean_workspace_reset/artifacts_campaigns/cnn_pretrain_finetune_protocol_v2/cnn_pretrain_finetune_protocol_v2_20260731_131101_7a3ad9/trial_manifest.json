@@ -1,0 +1,26 @@
+{
+  "campaign_id": "cnn_pretrain_finetune_protocol_v2",
+  "checkpoint_manifest": null,
+  "checkpoint_reuse": null,
+  "executed_stages": [],
+  "planned_stages": [
+    "10C",
+    "13C"
+  ],
+  "replicate_group_id": "baseline_calibration_cnn_pretrain_finetune_protocol_v2",
+  "replicate_index": 0,
+  "replicate_seed": 0,
+  "stage_runs": {},
+  "stages": [
+    "10C",
+    "13C"
+  ],
+  "trial_configs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/10C_10C_pretrain_next.yaml",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9/configs/13C_13C_finetune_next.yaml"
+  },
+  "trial_dir": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9",
+  "trial_id": "cnn_pretrain_finetune_protocol_v2_20260731_131101_7a3ad9",
+  "trial_patch": {},
+  "updated_at": "2026-07-31T13:24:32"
+}

@@ -1,0 +1,27 @@
+{
+  "campaign_id": "cnn_pretrain_finetune",
+  "checkpoint_reuse": null,
+  "executed_stages": [],
+  "planned_stages": [
+    "10C",
+    "13C"
+  ],
+  "stage_runs": {},
+  "stages": [
+    "10C",
+    "13C"
+  ],
+  "trial_configs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/configs/10C_10C_pretrain_next.yaml",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/configs/13C_13C_finetune_next.yaml"
+  },
+  "trial_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60",
+  "trial_id": "cnn_pretrain_finetune_20260730_113949_4d2c60",
+  "trial_patch": {
+    "13C": {
+      "rotation_range_degrees": 20,
+      "train_num_random_rotations": 8
+    }
+  },
+  "updated_at": "2026-07-30T12:00:38"
+}

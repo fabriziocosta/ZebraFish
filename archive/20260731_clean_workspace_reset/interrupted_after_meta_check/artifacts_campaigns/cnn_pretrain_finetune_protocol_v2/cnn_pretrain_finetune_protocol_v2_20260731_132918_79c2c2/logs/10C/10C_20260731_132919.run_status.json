@@ -1,0 +1,15 @@
+{
+  "experiment": "10C",
+  "experiment_id": "10C_pretrain_commutative_cnn_20260731_132922",
+  "resume_checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_132918_79c2c2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260731_132922/resume/10C_pretrain_commutative_cnn_20260731_132922_training_resume.pt",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_132918_79c2c2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260731_132922",
+  "status": "terminated",
+  "suspend_marker_path": "artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_132918_79c2c2/outputs/10C/runs/10C_pretrain_commutative_cnn_20260731_132922/control/10C_pretrain_commutative_cnn_20260731_132922.suspend",
+  "terminated_at": "2026-07-31T13:29:46",
+  "terminated_pid": 1328907,
+  "terminating_at": "2026-07-31T13:29:41",
+  "terminating_pid": 1328907,
+  "termination_reason": "meta-controller requested stop from deterministic evidence",
+  "termination_signal": "SIGTERM",
+  "updated_at": "2026-07-31T13:29:22"
+}

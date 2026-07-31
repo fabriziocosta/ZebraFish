@@ -1,0 +1,71 @@
+{
+  "active_launch_state": {
+    "active_experiment": "13C",
+    "command": [
+      "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/.venv/bin/python",
+      "13C_finetune_pretrained_commutative_cnn_classifier.py",
+      "--config",
+      "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml"
+    ],
+    "command_hash": "821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942",
+    "log_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/logs/13C/13C_20260731_115540.log",
+    "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml",
+    "pid": 1236414,
+    "process_start_ticks": "147252086",
+    "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/logs/13C/13C_20260731_115540.run_status.json",
+    "runner": "13C_finetune_pretrained_commutative_cnn_classifier.py",
+    "started_at": "2026-07-31T11:55:40",
+    "status": "running"
+  },
+  "campaign_id": "cnn_pretrain_finetune",
+  "checkpoint_reuse": {
+    "checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_encoder_state.pt",
+    "config_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329/10C_pretrain_commutative_cnn_20260725_174329_config.yaml",
+    "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260725_174326_4f984d/outputs/10C/runs/10C_pretrain_commutative_cnn_20260725_174329",
+    "source_experiment": "cnn_pretrain_finetune_20260725_174326_4f984d:10C",
+    "source_stage": "10C"
+  },
+  "completed_at": "2026-07-31T12:54:45",
+  "current_stage": "13C",
+  "current_stage_index": 1,
+  "current_trial_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da",
+  "current_trial_id": "cnn_pretrain_finetune_20260730_120254_2395da",
+  "executed_stages": [
+    "13C"
+  ],
+  "objective_eligible": true,
+  "objective_metric_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_summary_metrics.csv",
+  "phase": "terminated",
+  "planned_stages": [
+    "10C",
+    "13C"
+  ],
+  "ranking_score": 0.25011194192432884,
+  "resume_checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/resume/13C_finetune_commutative_cnn_20260730_120257_training_resume.pt",
+  "resume_requested_at": "2026-07-31T11:55:40",
+  "score": 0.25011194192432884,
+  "stage_runs": {
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257"
+  },
+  "stage_state_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/stage_state/13C.json",
+  "started_at": "2026-07-30T12:02:54",
+  "status": "trial_completed",
+  "terminated_at": "2026-07-31T11:18:32",
+  "terminated_pid": 606840,
+  "terminating_at": "2026-07-31T11:18:27",
+  "terminating_pid": 606840,
+  "termination_reason": "meta-controller requested stop from deterministic evidence",
+  "termination_signal": "SIGTERM",
+  "trial_configs": {
+    "10C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/configs/10C_10C_pretrain_next.yaml",
+    "13C": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml"
+  },
+  "trial_patch": {
+    "13C": {
+      "rotation_range_degrees": 20,
+      "train_num_random_rotations": 8
+    }
+  },
+  "trials": [],
+  "updated_at": "2026-07-31T12:54:45"
+}

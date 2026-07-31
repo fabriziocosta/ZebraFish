@@ -1,0 +1,9 @@
+campaign_id,trial_id,status,score,ranking_score,ranking_values,ranking_metric_order,objective_eligible,selected_metric,guardrail_passed,trial_dir,metrics_path,updated_at
+,cnn_pretrain_finetune_20260625_115021_08a733,imported,,,,,,,,,,
+,cnn_pretrain_finetune_20260625_152652_a8e2d2,imported,,,,,,,,,,
+,cnn_pretrain_finetune_20260629_100031_3ff738,running,0.23576760791950666,0.23576760791950666,,,True,compound.macro_f1,True,,,
+,cnn_pretrain_finetune_20260701_130749_69a864,running,0.23323936337634965,0.23323936337634965,,,True,compound.macro_f1,True,,,
+,cnn_pretrain_finetune_20260703_031242_495f28,running,0.1297409444900265,0.1297409444900265,,,True,compound.macro_f1,True,,,
+,cnn_pretrain_finetune_20260704_141700_197670,running,0.25280931819393354,0.25280931819393354,,,True,compound.macro_f1,True,,,
+,cnn_pretrain_finetune_20260705_232039_eadccf,imported,,,,,,,,,,
+cnn_pretrain_finetune,cnn_pretrain_finetune_20260730_120254_2395da,trial_completed,0.25011194192432884,0.25011194192432884,"[0.25011194192432884, 0.7873719560204654, null, 0.3380281690140845]","[""compound.macro_f1"", ""compound.roc_auc_ovr_macro"", ""compound.balanced_accuracy"", ""compound.accuracy""]",True,compound.macro_f1,True,artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da,artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_summary_metrics.csv,2026-07-31T12:54:45

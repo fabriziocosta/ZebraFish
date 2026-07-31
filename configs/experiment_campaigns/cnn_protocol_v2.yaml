@@ -4,9 +4,7 @@ campaign:
   poll_seconds: 60
   trial_budget: 20
   max_patch_leaf_count: 5
-  max_single_trial_gpu_hours: 20
-  compute_budget_gpu_hours: 60
-  remaining_gpu_hours: null
+  gpu_budget_applicable: false
   replicate_seeds: [0, 1, 2]
   minimum_replicates: 3
   lockbox_required: true
@@ -84,7 +82,7 @@ domain_guidance:
   enabled: true
   contract_path: configs/domain_guidance/cnn_action_domain_v1.yaml
   calibration_profile_path: state/campaigns/cnn_pretrain_finetune_protocol_v2/domain_calibration.json
-  candidate_family_id: cnn_action_domain_family_v2
+  candidate_family_id: cnn_action_domain_family_v2_clean
   applicable_stages: [13C]
   policy: mixed_hierarchy
   umap_decision_role: visualization_only
@@ -95,6 +93,7 @@ logbook:
 meta_controller:
   report_root: state/meta_controller/cnn_pretrain_finetune_protocol_v2/reports
   worktree_root: state/meta_controller/cnn_pretrain_finetune_protocol_v2/worktrees
+  repository_ignored_prefixes: [state/, artifacts/, archive/, EXPERIMENTS_LOGBOOK.md]
 prompts:
   analysis_policy: |
     Analyze completed finetune trials, deterministic failures/staleness, and live runs at polling time when the live evidence is strong enough to justify semantic early stopping. A trial is the full 10C-to-13C chain.
@@ -116,3 +115,9 @@ prompts:
       "trial_patch": "JSON string, for example {\"10C\":{\"optimization_config\":{\"epochs\":3}}}. For terminate_trial this is the replacement trial patch."
     }
     Do not include markdown fences or text outside the JSON object.
+scientific_seed:
+  question: Which bounded commutative representation change improves compound discrimination while preserving action identifiability under fixed-seed evaluation?
+  hypothesis:
+    title: Bounded commutative pretraining can improve compound discrimination without reducing action identifiability.
+    statement: A bounded change to commutative representation pretraining will improve downstream compound macro-F1 while preserving the registered action guardrail.
+    mechanism: Controlled representation regularisation can separate compound-specific signal before fine-tuning, while fixed-seed evaluation reveals whether action identifiability is preserved.

@@ -1,0 +1,22 @@
+{
+  "active_experiment": "10C",
+  "controller_reason": "process is running; waiting for the next artifact update",
+  "controller_status": "running_wait",
+  "last_artifact_max_mtime": 1782377936.1981478,
+  "last_poll_at": "2026-06-25T14:52:58",
+  "log_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_115021_08a733/logs/10C/10C_20260625_115049.log",
+  "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_115021_08a733/configs/10C_10C_pretrain_next.yaml",
+  "pid": 3725354,
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_115021_08a733/outputs/10C/runs/10C_pretrain_commutative_cnn_20260625_115052",
+  "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260625_115021_08a733/logs/10C/10C_20260625_115049.run_status.json",
+  "runner": "10C_pretrain_commutative_cnn_encoder.py",
+  "stale_polls": 1,
+  "started_at": "2026-06-25T11:50:49",
+  "status": "terminated",
+  "terminated_at": "2026-06-25T15:14:50",
+  "terminated_pid": 3725354,
+  "terminating_at": "2026-06-25T15:14:40",
+  "terminating_pid": 3725354,
+  "termination_reason": "terminated before campaign artifact layout migration",
+  "termination_signal": "SIGTERM"
+}

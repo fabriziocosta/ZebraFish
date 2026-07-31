@@ -1,0 +1,73 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Retain current execution state and continue deterministic supervision without applying code or configuration changes."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-07-31T12:12:08+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-07-31T12:12:08+00:00",
+    "last_run_id": "meta_20260731_121201_09ad99bc",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 1307305,
+    "run_now_supported": true,
+    "status": "completed",
+    "summary": "No verified operational fault is evidenced in the bounded snapshot. Campaign, scientific controller, and meta-controller are running, and there is no deterministic evidence of reconciliation failure or unsafe lifecycle state requiring intervention."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status",
+      "scientific_controller.status",
+      "meta_controller.status",
+      "process.running",
+      "repository.status",
+      "observations",
+      "recent_meta_reports"
+    ],
+    "root_causes": [
+      "No explicit failure signal is present in campaign/process/controller status fields.",
+      "Repository modifications appear limited to lock/state runtime artifacts, with no evidence in this snapshot of active execution impact."
+    ],
+    "severity": "info",
+    "summary": "No verified operational fault is evidenced in the bounded snapshot. Campaign, scientific controller, and meta-controller are running, and there is no deterministic evidence of reconciliation failure or unsafe lifecycle state requiring intervention."
+  },
+  "evidence_references": [
+    "campaign.status",
+    "scientific_controller.status",
+    "meta_controller.status",
+    "process.running",
+    "repository.status",
+    "observations",
+    "recent_meta_reports"
+  ],
+  "id": "meta_20260731_121201_09ad99bc",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No changes applied; rollback not required.",
+  "started_at": "2026-07-31T12:12:01+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "observations is empty in this snapshot, so observation freshness and scientific progress cannot be confirmed from bounded evidence alone.",
+    "repository.status is not clean due to lock/state artifacts, which could complicate later patch overlap checks if repairs become necessary."
+  ]
+}

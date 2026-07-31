@@ -1,0 +1,15 @@
+{
+  "experiment": "10C",
+  "experiment_id": "10C_pretrain_commutative_cnn_20260730_113952",
+  "resume_checkpoint_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/resume/10C_pretrain_commutative_cnn_20260730_113952_training_resume.pt",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952",
+  "status": "terminated",
+  "suspend_marker_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952/control/10C_pretrain_commutative_cnn_20260730_113952.suspend",
+  "terminated_at": "2026-07-30T12:00:38",
+  "terminated_pid": 581330,
+  "terminating_at": "2026-07-30T12:00:38",
+  "terminating_pid": 581330,
+  "termination_reason": "replaced redundant 10C restart with direct 13C checkpoint-reuse trial",
+  "termination_signal": "SIGTERM",
+  "updated_at": "2026-07-30T11:39:52"
+}

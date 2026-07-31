@@ -1,0 +1,66 @@
+dataset_artifact_path: null
+unlabeled_dataset_path: .dataset_cache/unlabeled_active_high_mid_low_t20_z5_y96_x96_chunks
+pretraining_config_path: artifacts/pretrained_commutative_cnn/config.yaml
+experiment_output_dir: artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_132749_078679/outputs/13C
+holdout_fraction: 0.25
+lockbox_fraction: 0.1
+lockbox_evaluation: true
+validation_fraction_within_train: 0.2
+split_random_state: 0
+train_num_random_rotations: 8
+rotation_range_degrees: 10.0
+freeze_backbone: false
+hot_start: true
+run_binary_hot_start: false
+binary_pretraining_epochs: 2
+binary_learning_rate: 1.0e-05
+binary_weight_decay: 0.00075
+binary_class_weighting: null
+domain_guidance_contract: configs/domain_guidance/cnn_action_domain_v1.yaml
+domain_guidance_calibration: state/campaigns/cnn_pretrain_finetune_protocol_v2/domain_calibration.json
+evaluation_protocol: three_seed_replicate_lockbox_v1
+domain_guidance_live_enabled: true
+optimization_config:
+  batch_size: 8
+  epochs: 120
+  learning_rate: 8.0e-06
+  weight_decay: 0.001
+  early_stopping_patience: 14
+  early_stopping_min_delta: 5.0e-05
+  early_stopping_start_epoch: 12
+  early_stopping_monitor: compound_loss
+  early_stopping_smoothing: median
+  early_stopping_smoothing_window: 5
+  scheduler_patience: 3
+  scheduler_factor: 0.5
+  scheduler_min_lr: 1.0e-06
+  training_plot_dir: null
+  training_plot_every_n_epochs: 1
+  training_plot_smoothing_window: 5
+  validation_split: 0.0
+  random_state: 0
+  standardize: true
+  device: null
+  verbose: true
+  class_weighting: balanced
+loss_weight_config:
+  action_weight: 0.65
+  water_vs_other_weight: 0.03
+  compound_weight: 0.8
+  concentration_weight: 0.05
+  lambda_cross: 1.0
+  lambda_align: 0.0
+  prototype_temperature: 0.1
+  prototype_alignment_weight: 1.0
+  prototype_warmup_epochs: 0
+  prototype_ramp_epochs: 0
+  latent_alignment_weight: 0.0
+  cross_warmup_epochs: 5
+  cross_ramp_epochs: 5
+  teacher_student_warmup_epochs: 0
+  probe_mask_probability: 0.25
+  probe_alpha_local: 1.0
+  probe_alpha_region_time: 1.0
+  probe_alpha_derivative: 1.0
+  probe_alpha_frequency: 1.0
+  probe_alpha_correlation: 1.0

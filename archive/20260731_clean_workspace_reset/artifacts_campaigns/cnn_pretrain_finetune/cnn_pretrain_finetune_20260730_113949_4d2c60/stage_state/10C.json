@@ -1,0 +1,23 @@
+{
+  "active_experiment": "10C",
+  "controller_reason": "process is stopped before required final artifacts were found",
+  "controller_status": "failed",
+  "failed_at": "2026-07-30T12:01:20",
+  "last_artifact_max_mtime": 1785407992.7943861,
+  "last_poll_at": "2026-07-30T12:01:20",
+  "log_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/logs/10C/10C_20260730_113949.log",
+  "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/configs/10C_10C_pretrain_next.yaml",
+  "pid": 581330,
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/outputs/10C/runs/10C_pretrain_commutative_cnn_20260730_113952",
+  "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_113949_4d2c60/logs/10C/10C_20260730_113949.run_status.json",
+  "runner": "10C_pretrain_commutative_cnn_encoder.py",
+  "stale_polls": 1,
+  "started_at": "2026-07-30T11:39:49",
+  "status": "failed",
+  "terminated_at": "2026-07-30T12:00:38",
+  "terminated_pid": 581330,
+  "terminating_at": "2026-07-30T12:00:38",
+  "terminating_pid": 581330,
+  "termination_reason": "replaced redundant 10C restart with direct 13C checkpoint-reuse trial",
+  "termination_signal": "SIGTERM"
+}

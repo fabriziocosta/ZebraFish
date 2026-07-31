@@ -1,0 +1,17 @@
+{
+  "active_experiment": "13C",
+  "completed_at": "2026-07-04T14:16:49",
+  "controller_reason": "runner reported completion and history artifacts exist",
+  "controller_status": "completed",
+  "last_artifact_max_mtime": 1783168918.146421,
+  "last_poll_at": "2026-07-04T14:16:49",
+  "log_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/logs/13C/13C_20260704_051551.log",
+  "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/configs/13C_13C_finetune_next.yaml",
+  "pid": 3644684,
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/outputs/13C/runs/13C_finetune_commutative_cnn_20260704_051554",
+  "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260703_031242_495f28/logs/13C/13C_20260704_051551.run_status.json",
+  "runner": "13C_finetune_pretrained_commutative_cnn_classifier.py",
+  "stale_polls": 0,
+  "started_at": "2026-07-04T05:15:51",
+  "status": "completed"
+}

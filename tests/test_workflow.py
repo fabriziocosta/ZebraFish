@@ -101,7 +101,7 @@ class WorkflowTests(unittest.TestCase):
                 },
             )
             self.assertTrue(Path(artifacts.config_path).exists())
-            self.assertTrue(Path(artifacts.history_path).exists())
+            self.assertIsNone(artifacts.history_path)
             self.assertTrue(Path(artifacts.summary_metrics_path).exists())
             self.assertTrue(Path(artifacts.checkpoint_path).exists())
             persisted_config = json.loads(Path(artifacts.config_path).read_text(encoding="utf-8"))
@@ -163,7 +163,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue((Path(artifacts.predictions_dir) / "test_finetune_20260101_010203_action_predictions.csv").exists())
             self.assertIn("Observed test analysis.", logbook_path.read_text(encoding="utf-8"))
 
-    def test_persist_pretraining_artifacts_writes_timestamped_history_and_summary(self) -> None:
+    def test_persist_pretraining_artifacts_writes_timestamped_summary_without_history(self) -> None:
         class FakePretrainingEstimator:
             def __init__(self) -> None:
                 self.pretrain_history_ = pd.DataFrame(
@@ -192,7 +192,7 @@ class WorkflowTests(unittest.TestCase):
                 next_round_proposal="Pretraining proposal.",
                 logbook_path=logbook_path,
             )
-            self.assertTrue(Path(artifacts.history_path).exists())
+            self.assertIsNone(artifacts.history_path)
             self.assertTrue(Path(artifacts.summary_metrics_path).exists())
             self.assertTrue(Path(artifacts.checkpoint_path).exists())
             summary = pd.read_csv(artifacts.summary_metrics_path)

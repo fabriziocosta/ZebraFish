@@ -1,0 +1,14 @@
+class,precision,recall,f1-score,support
+Control,0.23076923076923078,0.12,0.15789473684210525,25.0
+Bemegride,0.0,0.0,0.0,6.0
+Bicuculline,0.2857142857142857,0.6666666666666666,0.4,3.0
+Gabazine,0.05,0.6666666666666666,0.09302325581395349,3.0
+(RS)-(Tetrazol-5-yl)glycine,0.0,0.0,0.0,3.0
+Cis-ACPD,0.0,0.0,0.0,3.0
+N-methyl-D-aspartate,0.75,0.75,0.75,4.0
+Donepezil,0.0,0.0,0.0,4.0
+Galantamine,0.0,0.0,0.0,4.0
+Phenserine,0.0,0.0,0.0,4.0
+Bethanechol,0.0,0.0,0.0,3.0
+Muscarine,0.0,0.0,0.0,1.0
+Pilocarpine,0.3333333333333333,0.25,0.2857142857142857,8.0

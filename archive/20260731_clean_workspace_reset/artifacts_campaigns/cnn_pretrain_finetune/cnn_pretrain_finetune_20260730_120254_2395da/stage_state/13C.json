@@ -1,0 +1,25 @@
+{
+  "active_experiment": "13C",
+  "command": [
+    "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/.venv/bin/python",
+    "13C_finetune_pretrained_commutative_cnn_classifier.py",
+    "--config",
+    "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml"
+  ],
+  "command_hash": "821be1608852e34055ae0b0939f343a26b7c4ee6637e81f6c3ac43874c400942",
+  "completed_at": "2026-07-31T12:54:45",
+  "controller_reason": "runner reported completion and history artifacts exist",
+  "controller_status": "completed",
+  "last_artifact_max_mtime": 1785498819.772871,
+  "last_poll_at": "2026-07-31T12:54:45",
+  "log_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/logs/13C/13C_20260731_115540.log",
+  "params_yaml": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257/13C_finetune_commutative_cnn_20260730_120257_config.yaml",
+  "pid": 1236414,
+  "process_start_ticks": "147252086",
+  "run_dir": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/outputs/13C/runs/13C_finetune_commutative_cnn_20260730_120257",
+  "run_status_path": "artifacts/campaigns/cnn_pretrain_finetune/cnn_pretrain_finetune_20260730_120254_2395da/logs/13C/13C_20260731_115540.run_status.json",
+  "runner": "13C_finetune_pretrained_commutative_cnn_classifier.py",
+  "stale_polls": 0,
+  "started_at": "2026-07-31T11:55:40",
+  "status": "completed"
+}

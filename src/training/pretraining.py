@@ -258,13 +258,10 @@ def _maybe_save_pretraining_loss_pdfs(estimator, history_rows: list[dict[str, fl
         return
     output_dir = Path(str(plot_dir)).expanduser()
     smoothing_window = max(1, int(getattr(estimator, "training_plot_smoothing_window", 5) or 5))
-    epoch_path = output_dir / f"epoch_{int(epoch):03d}.loss-curves.pdf"
     latest_path = output_dir / "latest.loss-curves.pdf"
     history_df = pd.DataFrame(history_rows)
     output_dir.mkdir(parents=True, exist_ok=True)
-    history_df.to_csv(output_dir / f"epoch_{int(epoch):03d}.history.csv", index=False)
     history_df.to_csv(output_dir / "latest.history.csv", index=False)
-    _save_pretraining_loss_pdf(history_rows, epoch_path, smoothing_window=smoothing_window, estimator=estimator)
     _save_pretraining_loss_pdf(history_rows, latest_path, smoothing_window=smoothing_window, estimator=estimator)
 
 
