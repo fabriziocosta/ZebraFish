@@ -27,6 +27,10 @@ except ModuleNotFoundError:  # pragma: no cover - JSON fallback is useful in min
 
 STATE_VERSION = 2
 PROTOCOL_VERSION = "scientific-loop-v3"
+# Controller status is useful as current state, but recording every poll
+# forever makes the YAML snapshot increasingly expensive to parse and rewrite.
+# Keep all substantive audit entries and only the recent operational updates.
+CONTROLLER_AUDIT_RETENTION = 200
 ENTITY_COLLECTIONS = (
     "components",
     "datasets",
@@ -296,9 +300,46 @@ def _lock_path(path: Path) -> Path:
     return path.with_name(f".{path.name}.lock")
 
 
+def _lock_metadata(lock_target: Path) -> dict[str, Any]:
+    try:
+        lock_target.seek(0)
+        raw = lock_target.read()
+        payload = json.loads(raw) if raw else {}
+        return payload if isinstance(payload, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _lock_owner_summary(lock_target: Path) -> str:
+    metadata = _lock_metadata(lock_target)
+    pid = metadata.get("pid")
+    alive = False
+    if isinstance(pid, int) and pid > 0:
+        try:
+            os.kill(pid, 0)
+            alive = True
+        except OSError:
+            alive = False
+    if not metadata:
+        return "owner=unknown"
+    return (
+        f"owner_pid={pid!r}, owner_alive={alive}, "
+        f"owner_host={metadata.get('host', 'unknown')!r}, "
+        f"acquired_at={metadata.get('acquired_at', 'unknown')!r}, "
+        f"mode={metadata.get('mode', 'unknown')!r}"
+    )
+
+
 @contextmanager
 def state_lock(path: str | Path, *, timeout_seconds: float = 30.0, shared: bool = False) -> Iterator[None]:
-    """Serialize scientific-state access using an advisory shared/exclusive lock."""
+    """Serialize a short scientific-state file operation.
+
+    The lock is deliberately advisory and never recovered by unlinking the
+    lock file: POSIX releases an ``flock`` when its owning process exits, while
+    unlinking a held lock creates a second inode and permits split-brain
+    writers. Callers should do parsing and other slow work outside this
+    context. Timeout errors include the recorded owner for diagnosis.
+    """
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -315,32 +356,70 @@ def state_lock(path: str | Path, *, timeout_seconds: float = 30.0, shared: bool 
                 if not shared:
                     handle.seek(0)
                     handle.truncate()
-                    handle.write(json.dumps({"pid": os.getpid(), "writer": _state_writer_id()}))
+                    handle.write(json.dumps({
+                        "pid": os.getpid(),
+                        "writer": _state_writer_id(),
+                        "host": socket.gethostname(),
+                        "acquired_at": utc_now(),
+                        "mode": "exclusive",
+                    }))
                     handle.flush()
                 yield
                 break
             except BlockingIOError:
                 time.sleep(0.05)
         else:
-            raise StateLockError(f"timed out acquiring scientific state lock: {lock_target}")
+            raise StateLockError(
+                f"timed out acquiring scientific state lock: {lock_target} "
+                f"({ _lock_owner_summary(handle) })"
+            )
     finally:
         if acquired:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         handle.close()
 
 
-def _save_state_unlocked(target: Path, state: dict[str, Any], *, expected_revision: int | None = None) -> None:
-    disk_revision = 0
-    if target.exists():
+def _file_token(target: Path) -> tuple[int, int, int] | None:
+    try:
+        stat = target.stat()
+    except FileNotFoundError:
+        return None
+    return (int(stat.st_ino), int(stat.st_size), int(stat.st_mtime_ns))
+
+
+def _read_state_snapshot(target: Path) -> tuple[dict[str, Any], tuple[int, int, int] | None]:
+    """Read and validate a complete snapshot without holding an exclusive lock."""
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        return empty_state(), None
+    with state_lock(target, shared=True):
         text = target.read_text(encoding="utf-8")
-        disk_payload = yaml.safe_load(text) if yaml is not None else json.loads(text)
-        disk_revision = int(ensure_state(disk_payload).get("state_revision", 0))
-    supplied_revision = state.get("state_revision", 0) if expected_revision is None else expected_revision
-    if int(supplied_revision) != disk_revision:
-        raise StateRevisionConflictError(
-            f"stale scientific state revision: expected {supplied_revision}, found {disk_revision}"
-        )
+        token = _file_token(target)
+    payload = yaml.safe_load(text) if yaml is not None else json.loads(text)
+    return validate_state(ensure_state(payload)), token
+
+
+def _compact_audit_log(audit_log: list[Any]) -> list[Any]:
+    substantive = [
+        item for item in audit_log
+        if not (isinstance(item, dict) and item.get("operation", {}).get("operation") == "controller_update")
+    ]
+    telemetry = [
+        item for item in audit_log
+        if isinstance(item, dict) and item.get("operation", {}).get("operation") == "controller_update"
+    ]
+    retained_ids = {id(item) for item in substantive}
+    retained = [item for item in audit_log if id(item) in retained_ids]
+    retained.extend(telemetry[-CONTROLLER_AUDIT_RETENTION:])
+    order = {id(item): index for index, item in enumerate(audit_log)}
+    retained.sort(key=lambda item: order[id(item)])
+    return retained
+
+
+def _prepare_state_file(target: Path, state: dict[str, Any], *, disk_revision: int) -> tuple[Path, dict[str, Any]]:
     normalized = validate_state(state)
+    normalized["audit_log"] = _compact_audit_log(normalized.get("audit_log", []))
     normalized["state_revision"] = disk_revision + 1
     normalized["last_writer"] = _state_writer_id()
     normalized["writer_protocol"] = PROTOCOL_VERSION
@@ -351,27 +430,60 @@ def _save_state_unlocked(target: Path, state: dict[str, Any], *, expected_revisi
     else:
         rendered = json.dumps(normalized, indent=2, sort_keys=False)
     temporary = target.with_name(f".{target.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        handle.write(rendered)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return temporary, normalized
+
+
+def _commit_state_file(target: Path, temporary: Path, expected_token: tuple[int, int, int] | None) -> None:
+    """Atomically commit a prepared file while holding the lock briefly."""
+
     try:
-        with temporary.open("w", encoding="utf-8") as handle:
-            handle.write(rendered)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
+        with state_lock(target):
+            if _file_token(target) != expected_token:
+                raise StateRevisionConflictError("scientific state changed while the update was prepared")
+            os.replace(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
+    # Directory durability is important, but must not extend the exclusive
+    # lock while a slow filesystem flushes.
     directory_fd = os.open(str(target.parent), os.O_RDONLY)
     try:
         os.fsync(directory_fd)
     finally:
         os.close(directory_fd)
+
+
+def _save_state_unlocked(target: Path, state: dict[str, Any], *, expected_revision: int | None = None) -> None:
+    # Kept as a compatibility helper for callers outside this module. New
+    # writes use the optimistic short-lock path below.
+    disk_revision = 0
+    if target.exists():
+        text = target.read_text(encoding="utf-8")
+        disk_payload = yaml.safe_load(text) if yaml is not None else json.loads(text)
+        disk_revision = int(ensure_state(disk_payload).get("state_revision", 0))
+    supplied_revision = state.get("state_revision", 0) if expected_revision is None else expected_revision
+    if int(supplied_revision) != disk_revision:
+        raise StateRevisionConflictError(f"stale scientific state revision: expected {supplied_revision}, found {disk_revision}")
+    temporary, normalized = _prepare_state_file(target, state, disk_revision=disk_revision)
+    _commit_state_file(target, temporary, _file_token(target))
     state.clear()
     state.update(normalized)
 
 
 def save_state(path: str | Path, state: dict[str, Any], *, expected_revision: int | None = None) -> None:
     target = Path(path)
-    with state_lock(target):
-        _save_state_unlocked(target, state, expected_revision=expected_revision)
+    current, token = _read_state_snapshot(target)
+    disk_revision = int(current.get("state_revision", 0))
+    supplied_revision = state.get("state_revision", 0) if expected_revision is None else expected_revision
+    if int(supplied_revision) != disk_revision:
+        raise StateRevisionConflictError(f"stale scientific state revision: expected {supplied_revision}, found {disk_revision}")
+    temporary, normalized = _prepare_state_file(target, state, disk_revision=disk_revision)
+    _commit_state_file(target, temporary, token)
+    state.clear()
+    state.update(normalized)
 
 
 @contextmanager
@@ -379,18 +491,13 @@ def state_transaction(path: str | Path) -> Iterator[dict[str, Any]]:
     """Read, mutate, validate, and commit one scientific-state transaction."""
 
     target = Path(path)
-    with state_lock(target):
-        if target.exists():
-            text = target.read_text(encoding="utf-8")
-            payload = yaml.safe_load(text) if yaml is not None else json.loads(text)
-            state = validate_state(ensure_state(payload))
-        else:
-            state = empty_state()
-        revision = int(state.get("state_revision", 0))
-        yield state
-        normalized = validate_state(state)
-        normalized["state_revision"] = revision
-        _save_state_unlocked(target, normalized, expected_revision=revision)
+    state, token = _read_state_snapshot(target)
+    revision = int(state.get("state_revision", 0))
+    yield state
+    temporary, normalized = _prepare_state_file(target, state, disk_revision=revision)
+    _commit_state_file(target, temporary, token)
+    state.clear()
+    state.update(normalized)
 
 
 def transactional_update(

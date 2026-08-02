@@ -1,0 +1,81 @@
+{
+  "actions": [
+    {
+      "campaign_action": "reconcile",
+      "kind": "campaign_control",
+      "result": {
+        "action": "reconcile",
+        "detail": "autonomous safe stop: decision protocol failure StateRevisionConflictError: stale scientific state revision: expected 3497, found 3498\n",
+        "recovery_returncode": null,
+        "replacement_running": false,
+        "returncode": 1,
+        "stop_returncode": 1
+      },
+      "status": "control_failed",
+      "summary": "Request deterministic campaign reconciliation to align campaign state with actual runtime process state before any further launch decisions."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-08-02T10:10:06+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 1,
+    "invocation_source": "dashboard_user",
+    "last_run_at": "2026-08-02T10:10:06+00:00",
+    "last_run_id": "meta_20260802_100829_43b5c78a",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 2508248,
+    "run_now_supported": true,
+    "status": "verification_failed",
+    "summary": "Operational state is inconsistent: campaign/scientific controller report running while the tracked process is not running. This indicates a likely stale lifecycle state or missed reconciliation event, so deterministic reconciliation should be requested."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status",
+      "campaign.trial_id",
+      "scientific_controller.status",
+      "scientific_controller.safe_stop_reason",
+      "process.running",
+      "process.pid"
+    ],
+    "root_causes": [
+      "campaign.status is 'running' and scientific_controller.status is 'running' with no safe_stop_reason, but process.running is false for the tracked pid.",
+      "This mismatch is a control-plane/runtime consistency issue rather than a scientific-objective issue.",
+      "No deterministic test failure evidence is provided that would justify a code patch in this cycle; safest bounded action is lifecycle reconciliation."
+    ],
+    "severity": "warning",
+    "summary": "Operational state is inconsistent: campaign/scientific controller report running while the tracked process is not running. This indicates a likely stale lifecycle state or missed reconciliation event, so deterministic reconciliation should be requested."
+  },
+  "evidence_references": [
+    "campaign.status",
+    "campaign.trial_id",
+    "scientific_controller.status",
+    "scientific_controller.safe_stop_reason",
+    "process.running",
+    "process.pid"
+  ],
+  "id": "meta_20260802_100829_43b5c78a",
+  "invocation_source": "dashboard_user",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "dashboard_user",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No repository patch applied; rollback not required. If reconciliation worsens state, use deterministic lifecycle controls to stop and then resume after state review.",
+  "started_at": "2026-08-02T10:08:29+00:00",
+  "status": "verification_failed",
+  "unresolved_risks": [
+    "If process telemetry is stale or points to the wrong pid, reconciliation may not fully resolve the inconsistency.",
+    "If the runner crashed outside this snapshot, root cause remains unknown until controller/audit artifacts surface deterministic failure details.",
+    "Uncommitted dashboard changes remain a patch-safety constraint for future code repairs, but no code change was attempted in this run."
+  ]
+}

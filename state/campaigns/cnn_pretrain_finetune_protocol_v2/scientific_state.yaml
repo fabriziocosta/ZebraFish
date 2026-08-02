@@ -1,9 +1,9 @@
 version: 2
 protocol_version: scientific-loop-v3
 writer_protocol: scientific-loop-v3
-state_revision: 3495
+state_revision: 3501
 last_writer: emps-costa:2508248
-updated_at: '2026-08-02T10:07:20+00:00'
+updated_at: '2026-08-02T10:10:52+00:00'
 project: {}
 entities:
   components: {}
@@ -7199,6 +7199,88 @@ entities:
         invocation_source: scheduled
         consecutive_failures: 0
       created_at: '2026-08-01T17:58:16+00:00'
+    meta_20260802_100829_43b5c78a:
+      id: meta_20260802_100829_43b5c78a
+      campaign: cnn_pretrain_finetune_protocol_v2
+      status: verification_failed
+      invocation_source: dashboard_user
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-08-02T10:08:29+00:00'
+      completed_at: '2026-08-02T10:10:06+00:00'
+      diagnosis:
+        summary: 'Operational state is inconsistent: campaign/scientific controller
+          report running while the tracked process is not running. This indicates
+          a likely stale lifecycle state or missed reconciliation event, so deterministic
+          reconciliation should be requested.'
+        severity: warning
+        evidence_references: &id009
+        - campaign.status
+        - campaign.trial_id
+        - scientific_controller.status
+        - scientific_controller.safe_stop_reason
+        - process.running
+        - process.pid
+        root_causes:
+        - campaign.status is 'running' and scientific_controller.status is 'running'
+          with no safe_stop_reason, but process.running is false for the tracked pid.
+        - This mismatch is a control-plane/runtime consistency issue rather than a
+          scientific-objective issue.
+        - No deterministic test failure evidence is provided that would justify a
+          code patch in this cycle; safest bounded action is lifecycle reconciliation.
+      evidence_references: *id009
+      actions:
+      - kind: campaign_control
+        summary: Request deterministic campaign reconciliation to align campaign state
+          with actual runtime process state before any further launch decisions.
+        campaign_action: reconcile
+        status: control_failed
+        result:
+          action: reconcile
+          returncode: 1
+          stop_returncode: 1
+          recovery_returncode: null
+          replacement_running: false
+          detail: 'autonomous safe stop: decision protocol failure StateRevisionConflictError:
+            stale scientific state revision: expected 3497, found 3498
+
+            '
+      proposal_only_changes: []
+      rollback_plan: No repository patch applied; rollback not required. If reconciliation
+        worsens state, use deterministic lifecycle controls to stop and then resume
+        after state review.
+      unresolved_risks:
+      - If process telemetry is stale or points to the wrong pid, reconciliation may
+        not fully resolve the inconsistency.
+      - If the runner crashed outside this snapshot, root cause remains unknown until
+        controller/audit artifacts surface deterministic failure details.
+      - Uncommitted dashboard changes remain a patch-safety constraint for future
+        code repairs, but no code change was attempted in this run.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        snapshot: compact
+        invocation_source: dashboard_user
+      controller_status:
+        status: verification_failed
+        last_run_id: meta_20260802_100829_43b5c78a
+        last_run_at: '2026-08-02T10:10:06+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Operational state is inconsistent: campaign/scientific controller
+          report running while the tracked process is not running. This indicates
+          a likely stale lifecycle state or missed reconciliation event, so deterministic
+          reconciliation should be requested.'
+        next_run_at: null
+        pid: 2508248
+        mode: loop
+        run_now_supported: true
+        invocation_source: dashboard_user
+        consecutive_failures: 1
+      created_at: '2026-08-02T10:10:22+00:00'
   candidate_events: {}
   replicate_group_events:
     replicate_group_event_1cd8fcd5033e0140b30a:
@@ -7248,13 +7330,14 @@ controller_state:
         created_by: autonomous_controller
         created_at: '2026-07-31T12:32:21+00:00'
       updated_at: '2026-07-31T12:32:21+00:00'
-  status: running
+  status: autonomous_safe_stop
   active_trial_id: cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be
   last_decision: no_action
   last_decision_at: '2026-08-01T13:42:55'
   decision_rejections: 0
   last_rejection_reason: null
-  safe_stop_reason: null
+  safe_stop_reason: 'decision protocol failure: StateRevisionConflictError: stale
+    scientific state revision: expected 3497, found 3498'
   active_replicate_group:
     id: baseline_calibration_cnn_pretrain_finetune_protocol_v2
     candidate_id: baseline_calibration_cnn_pretrain_finetune_protocol_v2
@@ -7295,20 +7378,21 @@ controller_state:
     pid: 2508248
     mode: loop
     run_now_supported: true
-    last_run_id: meta_20260801_175728_80587393
-    last_run_at: '2026-08-01T17:58:01+00:00'
-    next_run_at: '2026-08-02T17:58:28+00:00'
+    last_run_id: meta_20260802_100829_43b5c78a
+    last_run_at: '2026-08-02T10:10:06+00:00'
+    next_run_at: '2026-08-03T10:10:36+00:00'
     mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
     architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
-    summary: No deterministic operational fault is evidenced in the bounded snapshot;
-      campaign, controller, and process are running, observations are fresh, and no
-      reconciliation/test failure signal is present. Autonomous repair is not justified
-      this cycle.
-    last_invocation_source: scheduled
+    summary: 'Operational state is inconsistent: campaign/scientific controller report
+      running while the tracked process is not running. This indicates a likely stale
+      lifecycle state or missed reconciliation event, so deterministic reconciliation
+      should be requested.'
+    last_invocation_source: dashboard_user
   last_live_llm_intervention_at: '2026-08-01T13:42:55'
   last_live_decision: no_action
   last_live_intervention_error: null
   last_live_intervention_error_at: null
+  last_decision_error_at: '2026-08-02T11:09:44'
 audit_log:
 - id: op_f0a0233c5cb8
   created_at: '2026-07-31T12:32:21+00:00'
@@ -7857,7 +7941,7 @@ audit_log:
           files, which creates overlap/rollback risk for any automatic patch without
           a verified failure target.
         severity: warning
-        evidence_references: &id009
+        evidence_references: &id010
         - campaign.status=running
         - scientific_controller.status=running
         - process.running
@@ -7874,7 +7958,7 @@ audit_log:
           constraints.
         - Observation/report context is sparse (empty observations and no recent meta
           reports), limiting confidence for any inferred remediation.
-      evidence_references: *id009
+      evidence_references: *id010
       actions:
       - kind: no_action
         summary: Take no code or lifecycle action this cycle; maintain current campaign
@@ -8299,7 +8383,7 @@ audit_log:
       stage: 10C
       status: running_stale
       configuration:
-        resolved_config_paths: &id010
+        resolved_config_paths: &id011
         - artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be/outputs/10C/runs/10C_pretrain_commutative_cnn_20260731_133224/10C_pretrain_commutative_cnn_20260731_133224_config.yaml
         trial_config: artifacts/campaigns/cnn_pretrain_finetune_protocol_v2/cnn_pretrain_finetune_protocol_v2_20260731_133221_4918be/configs/10C_10C_pretrain_next.yaml
         resolved_configuration:
@@ -8448,7 +8532,7 @@ audit_log:
           latest_history_csvs: []
           latest_history_tail: null
           latest_pdfs: []
-          latest_config_yamls: *id010
+          latest_config_yamls: *id011
           latest_metrics: []
           checkpoints: []
           confusion_matrices: []
@@ -8703,7 +8787,7 @@ audit_log:
         summary: No concrete controller or campaign fault is evidenced in the bounded
           snapshot, so autonomous repair is not justified this cycle.
         severity: warning
-        evidence_references: &id011
+        evidence_references: &id012
         - campaign.status
         - campaign.status=running
         - scientific_controller.status
@@ -8724,7 +8808,7 @@ audit_log:
           target.
         - Observation context is currently empty, limiting confidence for inferred
           remediation beyond conservative no-action.
-      evidence_references: *id011
+      evidence_references: *id012
       actions:
       - kind: no_action
         summary: Take no code or lifecycle action this cycle; continue monitoring
@@ -8907,7 +8991,7 @@ audit_log:
         summary: No concrete controller/campaign fault is evidenced in the bounded
           snapshot; autonomous repair is not justified this cycle.
         severity: warning
-        evidence_references: &id012
+        evidence_references: &id013
         - campaign.status
         - campaign.status=running
         - scientific_controller.status
@@ -8927,7 +9011,7 @@ audit_log:
         - Observations are empty, which limits confidence for inferred remediation.
         - Repository contains uncommitted operational code changes, making automatic
           patch application high-risk without a concrete fault target.
-      evidence_references: *id012
+      evidence_references: *id013
       actions:
       - kind: no_action
         summary: Record diagnosis only; continue campaign execution and monitoring
@@ -9020,7 +9104,7 @@ audit_log:
         summary: No deterministic controller or campaign fault is evidenced in the
           bounded snapshot, so autonomous repair is not justified in this cycle.
         severity: info
-        evidence_references: &id013
+        evidence_references: &id014
         - campaign.status
         - campaign.status=running
         - scientific_controller.status
@@ -9041,7 +9125,7 @@ audit_log:
           for inferred remediation but does not by itself prove a fault.
         - Repository has active uncommitted changes; without a concrete fault target,
           patching would add avoidable overlap/rollback risk.
-      evidence_references: *id013
+      evidence_references: *id014
       actions:
       - kind: no_action
         summary: Record diagnosis only; continue deterministic campaign execution
@@ -9186,7 +9270,7 @@ audit_log:
           safe-stop reason or test/reconciliation failure evidence, so autonomous
           repair is not justified this cycle.
         severity: info
-        evidence_references: &id014
+        evidence_references: &id015
         - campaign.status
         - campaign.status=running
         - scientific_controller.status
@@ -9206,7 +9290,7 @@ audit_log:
           confidence for inferred remediation but does not by itself prove a fault.
         - Repository has uncommitted operational changes; this is a patch-safety constraint,
           not standalone failure evidence.
-      evidence_references: *id014
+      evidence_references: *id015
       actions:
       - kind: no_action
         summary: Record diagnosis only; continue deterministic campaign execution
@@ -9625,39 +9709,39 @@ audit_log:
       mechanism: Controlled representation regularisation can separate compound-specific
         signal before fine-tuning, while fixed-seed evaluation reveals whether action
         identifiability is preserved.
-      scope: &id015
+      scope: &id016
         campaign: cnn_pretrain_finetune_protocol_v2
         stages:
         - 10C
         - 13C
-      assumptions: &id016
+      assumptions: &id017
       - the fixed split is representative
       - the registered primary metric is available at the evaluation stage
       - the baseline comparison is paired
       intervention: one allowlisted configuration leaf or one explicitly paired loss-weight
         change
-      expected_primary_metric: &id017
+      expected_primary_metric: &id018
         metric: compound.macro_f1
         direction: increase
         minimum_effect: 0.02
-      expected_guardrail: &id018
+      expected_guardrail: &id019
         metric: action.accuracy
         direction: no_decrease
         minimum: 0.3
       baseline: registered paired baseline required before confirmatory interpretation
       status: active
-      belief: &id020
+      belief: &id021
         score: 0.5
         interpretation: heuristic_decision_score
         confidence: initial
       question_id: q_cnn_pretrain_finetune_protocol_v2_objective
-      provenance: &id021
+      provenance: &id022
         created_by: autonomous_controller
         reason: campaign objective seed
       id: hyp_cnn_pretrain_finetune_protocol_v2_objective
       created_at: '2026-07-31T12:32:21+00:00'
       falsification_criteria:
-      - &id019
+      - &id020
         metric: compound.macro_f1
         direction: no_improvement
         minimum_effect: 0.02
@@ -9669,18 +9753,18 @@ audit_log:
       mechanism: Controlled representation regularisation can separate compound-specific
         signal before fine-tuning, while fixed-seed evaluation reveals whether action
         identifiability is preserved.
-      scope: *id015
-      assumptions: *id016
+      scope: *id016
+      assumptions: *id017
       intervention: one allowlisted configuration leaf or one explicitly paired loss-weight
         change
-      expected_primary_metric: *id017
-      expected_guardrail: *id018
-      falsification_criterion: *id019
+      expected_primary_metric: *id018
+      expected_guardrail: *id019
+      falsification_criterion: *id020
       baseline: registered paired baseline required before confirmatory interpretation
       status: active
-      belief: *id020
+      belief: *id021
       question_id: q_cnn_pretrain_finetune_protocol_v2_objective
-      provenance: *id021
+      provenance: *id022
       id: hyp_cnn_pretrain_finetune_protocol_v2_objective
       created_at: '2026-07-31T12:32:21+00:00'
 - id: op_39a56c9fcdc5
@@ -91521,7 +91605,7 @@ audit_log:
           is active; and no reconciliation/test failure signal is present. Autonomous
           repair is not justified this cycle.'
         severity: info
-        evidence_references: &id022
+        evidence_references: &id023
         - campaign.status=running
         - scientific_controller.status=running
         - scientific_controller.safe_stop_reason
@@ -91539,7 +91623,7 @@ audit_log:
         - Repository has uncommitted operational code changes, which is a patch-safety
           constraint only; without a concrete fault target, applying an automatic
           patch would add avoidable overlap/rollback risk.
-      evidence_references: *id022
+      evidence_references: *id023
       actions:
       - kind: no_action
         summary: Record diagnosis only and continue deterministic campaign execution/monitoring
@@ -91756,7 +91840,7 @@ audit_log:
           no reconciliation/test failure signal is present. Autonomous repair is not
           justified this cycle.
         severity: info
-        evidence_references: &id023
+        evidence_references: &id024
         - campaign.status=running
         - scientific_controller.status=running
         - scientific_controller.safe_stop_reason
@@ -91776,7 +91860,7 @@ audit_log:
           is provided in this snapshot.
         - Uncommitted repository changes are present but are a patch-safety constraint
           only, not standalone failure evidence.
-      evidence_references: *id023
+      evidence_references: *id024
       actions:
       - kind: no_action
         summary: Record diagnosis and continue deterministic campaign execution/monitoring
@@ -112317,3 +112401,180 @@ audit_log:
           no reconciliation/test failure signal is present. Autonomous repair is not
           justified this cycle.
         last_invocation_source: scheduled
+- id: op_0154414123bb
+  created_at: '2026-08-02T10:08:14+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 2508248
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260801_175728_80587393
+        last_run_at: '2026-08-01T17:58:01+00:00'
+        next_run_at: '2026-08-02T17:58:28+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: No deterministic operational fault is evidenced in the bounded snapshot;
+          campaign, controller, and process are running, observations are fresh, and
+          no reconciliation/test failure signal is present. Autonomous repair is not
+          justified this cycle.
+        last_invocation_source: scheduled
+- id: op_0a9820dd7e7c
+  created_at: '2026-08-02T10:08:38+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        run_id: meta_20260802_100829_43b5c78a
+        active_run_id: meta_20260802_100829_43b5c78a
+        pid: 2508248
+        mode: loop
+        run_now_supported: true
+        started_at: '2026-08-02T10:08:29+00:00'
+        invocation_source: dashboard_user
+- id: op_6feec22aec1b
+  created_at: '2026-08-02T10:09:44+00:00'
+  actor: autonomous_controller
+  operation:
+    operation: controller_update
+    value:
+      status: autonomous_safe_stop
+      safe_stop_reason: 'decision protocol failure: StateRevisionConflictError: stale
+        scientific state revision: expected 3497, found 3498'
+      last_decision_error_at: '2026-08-02T11:09:44'
+- id: op_bc1961fcc978
+  created_at: '2026-08-02T10:10:22+00:00'
+  actor: meta_controller
+  operation:
+    operation: create
+    path: entities.meta_controller_runs.meta_20260802_100829_43b5c78a
+    value:
+      id: meta_20260802_100829_43b5c78a
+      campaign: cnn_pretrain_finetune_protocol_v2
+      status: verification_failed
+      invocation_source: dashboard_user
+      mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+      mandate_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md
+      architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+      architecture_path: /run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md
+      started_at: '2026-08-02T10:08:29+00:00'
+      completed_at: '2026-08-02T10:10:06+00:00'
+      diagnosis:
+        summary: 'Operational state is inconsistent: campaign/scientific controller
+          report running while the tracked process is not running. This indicates
+          a likely stale lifecycle state or missed reconciliation event, so deterministic
+          reconciliation should be requested.'
+        severity: warning
+        evidence_references: &id025
+        - campaign.status
+        - campaign.trial_id
+        - scientific_controller.status
+        - scientific_controller.safe_stop_reason
+        - process.running
+        - process.pid
+        root_causes:
+        - campaign.status is 'running' and scientific_controller.status is 'running'
+          with no safe_stop_reason, but process.running is false for the tracked pid.
+        - This mismatch is a control-plane/runtime consistency issue rather than a
+          scientific-objective issue.
+        - No deterministic test failure evidence is provided that would justify a
+          code patch in this cycle; safest bounded action is lifecycle reconciliation.
+      evidence_references: *id025
+      actions:
+      - kind: campaign_control
+        summary: Request deterministic campaign reconciliation to align campaign state
+          with actual runtime process state before any further launch decisions.
+        campaign_action: reconcile
+        status: control_failed
+        result:
+          action: reconcile
+          returncode: 1
+          stop_returncode: 1
+          recovery_returncode: null
+          replacement_running: false
+          detail: 'autonomous safe stop: decision protocol failure StateRevisionConflictError:
+            stale scientific state revision: expected 3497, found 3498
+
+            '
+      proposal_only_changes: []
+      rollback_plan: No repository patch applied; rollback not required. If reconciliation
+        worsens state, use deterministic lifecycle controls to stop and then resume
+        after state review.
+      unresolved_risks:
+      - If process telemetry is stale or points to the wrong pid, reconciliation may
+        not fully resolve the inconsistency.
+      - If the runner crashed outside this snapshot, root cause remains unknown until
+        controller/audit artifacts surface deterministic failure details.
+      - Uncommitted dashboard changes remain a patch-safety constraint for future
+        code repairs, but no code change was attempted in this run.
+      provenance:
+        created_by: meta_controller
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        snapshot: compact
+        invocation_source: dashboard_user
+      controller_status:
+        status: verification_failed
+        last_run_id: meta_20260802_100829_43b5c78a
+        last_run_at: '2026-08-02T10:10:06+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Operational state is inconsistent: campaign/scientific controller
+          report running while the tracked process is not running. This indicates
+          a likely stale lifecycle state or missed reconciliation event, so deterministic
+          reconciliation should be requested.'
+        next_run_at: null
+        pid: 2508248
+        mode: loop
+        run_now_supported: true
+        invocation_source: dashboard_user
+        consecutive_failures: 1
+      created_at: '2026-08-02T10:10:22+00:00'
+- id: op_8b9f72f960c9
+  created_at: '2026-08-02T10:10:23+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: verification_failed
+        last_run_id: meta_20260802_100829_43b5c78a
+        last_run_at: '2026-08-02T10:10:06+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Operational state is inconsistent: campaign/scientific controller
+          report running while the tracked process is not running. This indicates
+          a likely stale lifecycle state or missed reconciliation event, so deterministic
+          reconciliation should be requested.'
+        next_run_at: null
+        pid: 2508248
+        mode: loop
+        run_now_supported: true
+        invocation_source: dashboard_user
+        consecutive_failures: 1
+- id: op_c13977699de4
+  created_at: '2026-08-02T10:10:44+00:00'
+  actor: meta_controller
+  operation:
+    operation: controller_update
+    value:
+      meta_controller:
+        status: running
+        pid: 2508248
+        mode: loop
+        run_now_supported: true
+        last_run_id: meta_20260802_100829_43b5c78a
+        last_run_at: '2026-08-02T10:10:06+00:00'
+        next_run_at: '2026-08-03T10:10:36+00:00'
+        mandate_version: sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea
+        architecture_version: sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653
+        summary: 'Operational state is inconsistent: campaign/scientific controller
+          report running while the tracked process is not running. This indicates
+          a likely stale lifecycle state or missed reconciliation event, so deterministic
+          reconciliation should be requested.'
+        last_invocation_source: dashboard_user

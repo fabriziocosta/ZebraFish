@@ -41,6 +41,8 @@ export default function App() {
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<{ title: string; value: unknown } | null>(null);
   const [controlMessage, setControlMessage] = useState<string | null>(null);
+  const [metaRunPending, setMetaRunPending] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +57,7 @@ export default function App() {
     setLoading(true); void load();
     const timer = window.setInterval(load, 10000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [campaign, view, level, relationDepth, entityType, relationType]);
+  }, [campaign, view, level, relationDepth, entityType, relationType, refreshToken]);
 
   useEffect(() => {
     window.localStorage.setItem("mission-control-theme", dark ? "dark" : "light");
@@ -79,12 +81,25 @@ export default function App() {
     }
   };
   const handleMetaRunNow = async () => {
+    if (metaRunPending) return;
+    setMetaRunPending(true);
+    setControlMessage("Meta-controller run now: contacting the controller…");
     try {
       const result = await runMetaControllerNow(campaign);
-      setControlMessage(`meta-controller run now: ${String(result.status || "requested")}`);
-      setTimeout(() => setControlMessage(null), 5000);
+      const status = String(result.status || "requested");
+      const detail = status === "requested"
+        ? "The controller was woken and is starting a bounded run."
+        : status === "started"
+          ? "A bounded meta-controller run was started."
+          : status === "already_running"
+            ? "A meta-controller run is already in progress."
+            : `The controller returned ${status}.`;
+      setControlMessage(`Meta-controller run now: ${detail} The dashboard will refresh automatically.`);
+      setRefreshToken((current) => current + 1);
     } catch (err) {
       setControlMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMetaRunPending(false);
     }
   };
   const theme = dark ? "theme-dark" : "theme-light";
@@ -99,8 +114,8 @@ export default function App() {
     {error && !hasData && <div className="page-state error-state"><h2>Dashboard unavailable</h2><p>{error}</p><p>Start the API with <code>./run_campaign dashboard {campaign}</code>.</p></div>}
     {data && <div className="page-shell">
       <InvestigationHeader data={data} controls={dashboardControls} />
-      {controlMessage && <div className="control-message">{controlMessage}</div>}
-      <MetaControllerCard data={data} onControl={handleControl} onRunNow={handleMetaRunNow} />
+      {controlMessage && <div className="control-message" role="status" aria-live="polite">{controlMessage}</div>}
+      <MetaControllerCard data={data} onControl={handleControl} onRunNow={handleMetaRunNow} runNowPending={metaRunPending} />
       {diagnostics.length > 0 && <div className="schema-strip"><strong>Degraded data:</strong> {diagnostics.join(" · ")}</div>}
       <div className="story-grid"><ActiveHypothesisCard data={data} onSelect={(id) => titleDetail("Hypothesis", data.active_hypothesis)} /><CurrentExperimentCard data={data} /></div>
       <DomainGuidanceCard data={data} onSelect={titleDetail} />

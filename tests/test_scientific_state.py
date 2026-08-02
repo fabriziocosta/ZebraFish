@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
 from src.scientific_state import (
@@ -13,6 +16,9 @@ from src.scientific_state import (
     merge_nonconflicting_states,
     record_entity,
     save_state,
+    StateLockError,
+    state_lock,
+    state_transaction,
 )
 
 
@@ -98,6 +104,44 @@ class ScientificStateTests(unittest.TestCase):
                 state,
                 [{"operation": "update", "path": "entities.domain_constraints.contract:constraint.title", "value": "Changed"}],
             )
+
+    def test_state_transaction_does_not_hold_exclusive_lock_while_mutating(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "state.yaml"
+            save_state(path, empty_state())
+            with state_transaction(path) as state:
+                # A slow caller must not prevent readers or another writer
+                # from acquiring the kernel lock while it prepares a change.
+                with state_lock(path, timeout_seconds=0.2):
+                    pass
+                state["controller_state"]["test_marker"] = "recorded"
+            self.assertEqual(load_state(path)["controller_state"]["test_marker"], "recorded")
+
+    def test_lock_timeout_reports_the_live_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "state.yaml"
+            save_state(path, empty_state())
+            script = """
+from pathlib import Path
+import sys
+import time
+from src.scientific_state import state_lock
+
+with state_lock(Path(sys.argv[1])):
+    print('ready', flush=True)
+    time.sleep(2)
+"""
+            child = subprocess.Popen([sys.executable, "-c", script, str(path)], stdout=subprocess.PIPE, text=True)
+            try:
+                assert child.stdout is not None
+                self.assertEqual(child.stdout.readline().strip(), "ready")
+                with self.assertRaisesRegex(StateLockError, "owner_pid=.*owner_alive=True"):
+                    with state_lock(path, timeout_seconds=0.15):
+                        pass
+            finally:
+                child.terminate()
+                child.wait(timeout=5)
+                time.sleep(0.05)
 
 
 if __name__ == "__main__":
