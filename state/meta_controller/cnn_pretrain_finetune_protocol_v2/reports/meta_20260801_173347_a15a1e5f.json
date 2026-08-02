@@ -1,0 +1,78 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Record diagnosis only and continue deterministic campaign execution/monitoring without code or lifecycle changes."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-08-01T17:34:38+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-08-01T17:34:38+00:00",
+    "last_run_id": "meta_20260801_173347_a15a1e5f",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 2483792,
+    "run_now_supported": true,
+    "status": "completed",
+    "summary": "No deterministic operational fault is evidenced in the bounded snapshot: campaign, scientific controller, and process are running; observation generation is active; and no reconciliation/test failure signal is present. Autonomous repair is not justified this cycle."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status=running",
+      "scientific_controller.status=running",
+      "scientific_controller.safe_stop_reason",
+      "process.running",
+      "meta_controller.status=running",
+      "observations",
+      "obs_d9501c01600cb96c",
+      "obs_1303ab0e631ca473",
+      "repository.status"
+    ],
+    "root_causes": [
+      "Operational lifecycle signals are healthy in-snapshot (running states and no safe-stop reason).",
+      "Deterministic observations are being produced at multiple recent timestamps, indicating observation pipeline freshness rather than an observability outage.",
+      "Repository has uncommitted operational code changes, which is a patch-safety constraint only; without a concrete fault target, applying an automatic patch would add avoidable overlap/rollback risk."
+    ],
+    "severity": "info",
+    "summary": "No deterministic operational fault is evidenced in the bounded snapshot: campaign, scientific controller, and process are running; observation generation is active; and no reconciliation/test failure signal is present. Autonomous repair is not justified this cycle."
+  },
+  "evidence_references": [
+    "campaign.status=running",
+    "scientific_controller.status=running",
+    "scientific_controller.safe_stop_reason",
+    "process.running",
+    "meta_controller.status=running",
+    "observations",
+    "obs_d9501c01600cb96c",
+    "obs_1303ab0e631ca473",
+    "repository.status"
+  ],
+  "id": "meta_20260801_173347_a15a1e5f",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No changes applied; rollback not required.",
+  "started_at": "2026-08-01T17:33:47+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "Scientific performance risk remains: generalisation-gap observations are still above threshold (e.g., obs_d9501c01600cb96c), but this is not an operational reliability fault for meta-controller auto-repair.",
+    "If hidden failures exist outside this bounded snapshot, they remain unaddressed until surfaced by deterministic observations, audits, or verification results."
+  ]
+}

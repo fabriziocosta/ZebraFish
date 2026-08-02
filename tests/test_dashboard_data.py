@@ -8,11 +8,21 @@ from src.dashboard_data import (
     _evidence,
     _hypothesis_quality,
     _metric_descriptor,
+    _meta_controller_summary,
     build_investigation,
 )
 
 
 class DashboardDataTests(unittest.TestCase):
+    def test_dead_meta_controller_pid_is_reported_as_stale(self) -> None:
+        state = {"controller_state": {"meta_controller": {"status": "running", "pid": 99999999, "next_run_at": "2026-08-01T12:39:44+00:00"}}, "entities": {"meta_controller_runs": {}}}
+        summary = _meta_controller_summary(state, "campaign")
+        self.assertEqual(summary["status"], "stale")
+        self.assertFalse(summary["running"])
+        self.assertFalse(summary["process_live"])
+        self.assertTrue(summary["stale"])
+        self.assertIsNone(summary["next_run_at"])
+
     def test_live_campaign_is_normalized_without_mutation(self) -> None:
         payload = build_investigation(Path.cwd(), "cnn-v2", level=3, relation_depth=1)
         self.assertEqual(payload["schema_version"], 1)

@@ -1089,6 +1089,24 @@ def run_loop(root: str | Path, campaign_config: dict[str, Any], *, client: Any |
         if _meta_loop_owns_state(root_path, campaign_config, pid):
             _set_meta_status(root_path, campaign_config, {"status": "stopped", "pid": None, "stopped_at": utc_now(), "stop_reason": "stop requested"})
         return 0
+    except Exception as exc:
+        # Preserve an actionable state if an unexpected scheduler-level error
+        # occurs outside run_once's bounded error report. Without this, the
+        # last successful cycle leaves a false running status forever.
+        if _meta_loop_owns_state(root_path, campaign_config, pid):
+            _set_meta_status(
+                root_path,
+                campaign_config,
+                {
+                    "status": "failed",
+                    "pid": None,
+                    "failed_at": utc_now(),
+                    "next_run_at": None,
+                    "stop_reason": f"scheduler exited unexpectedly: {type(exc).__name__}: {exc}",
+                    "summary": f"Meta-controller scheduler exited unexpectedly: {type(exc).__name__}: {exc}",
+                },
+            )
+        return 1
 
 
 def cli(argv: list[str], *, root: str | Path) -> int:

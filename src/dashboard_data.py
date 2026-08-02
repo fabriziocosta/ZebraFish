@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from src.observation_engine import read_history, read_summary_metrics
+from src.campaign_watchdog import _process_identity, _running
 from src.domain_guidance import DomainGuidanceError, load_domain_contract
 from src.scientific_dashboard import RELATION_COLORS, _graphviz_svg, build_reasoning_graph
 from src.scientific_state import load_state
@@ -35,6 +36,62 @@ CAMPAIGN_CONFIGS = {
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _pid_running(pid: Any) -> bool:
+    """Return whether the recorded PID currently exists."""
+
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _live_watchdog_identity(snapshot: Any, campaign_state: dict[str, Any]) -> dict[str, Any]:
+    """Refresh only the process identity portion of persisted watchdog data."""
+
+    result = dict(snapshot) if isinstance(snapshot, dict) else {}
+    launch = campaign_state.get("active_launch_state", {})
+    launch = launch if isinstance(launch, dict) else {}
+    pid = launch.get("pid")
+    process_running = _running(pid)
+    identity = _process_identity(pid)
+    expected_hash = launch.get("command_hash")
+    expected_ticks = launch.get("process_start_ticks")
+    mismatch = bool(
+        process_running
+        and (
+            (expected_hash and identity.get("command_hash") != expected_hash)
+            or (expected_ticks and identity.get("process_start_ticks") != expected_ticks)
+        )
+    )
+    triggers = [item for item in result.get("triggers", []) if item.get("type") != "process_identity_mismatch"]
+    if mismatch:
+        triggers.append(
+            {
+                "type": "process_identity_mismatch",
+                "expected_command_hash": expected_hash,
+                "observed_command_hash": identity.get("command_hash"),
+                "expected_start_ticks": expected_ticks,
+                "observed_start_ticks": identity.get("process_start_ticks"),
+            }
+        )
+    result.update(
+        {
+            "pid": pid,
+            "process_running": process_running,
+            "process_identity": identity,
+            "process_identity_mismatch": mismatch,
+            "triggers": triggers,
+            "live_identity_checked_at": _now().isoformat(timespec="seconds"),
+        }
+    )
+    return result
 
 
 def _local_timezone():
@@ -164,24 +221,37 @@ def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[st
     records.sort(key=lambda item: str(item.get("completed_at") or item.get("created_at") or ""), reverse=True)
     latest = records[0] if records else None
     status = str(current.get("status") or (latest or {}).get("status") or "not_started")
+    process_live = _pid_running(current.get("pid"))
+    stale = status in {"running", "run_now_requested", "stopping"} and not process_live
     latest_status = str((latest or {}).get("status") or "not_started")
     latest_summary = (latest or {}).get("diagnosis", {}).get("summary", "No meta-controller run recorded.")
+    next_run_at = current.get("next_run_at")
+    if stale:
+        status = "stale"
+        next_run_at = None
+        latest_summary = "The meta-controller scheduler is not running; its recorded process has exited. Start the scheduler to resume daily checks."
+    elif process_live and status in {"running", "run_now_requested"} and not next_run_at:
+        latest_summary = "The meta-controller is completing its current scheduled cycle. The next run time will appear when this cycle finishes."
     historical_failure = latest_status == "failed" and status not in {"running", "starting", "stopping"}
     if historical_failure:
         latest_summary = f"Historical last-run failure; meta-controller is currently {status}: {latest_summary}"
     return {
         "status": status,
-        "running": status in {"running", "starting", "stopping"},
+        "running": process_live and status in {"running", "starting", "stopping"},
         "pid": current.get("pid"),
+        "process_live": process_live,
+        "stale": stale,
+        "started_at": current.get("started_at"),
+        "interval_seconds": current.get("interval_seconds"),
         "last_run_at": current.get("last_run_at") or (latest or {}).get("completed_at"),
-        "next_run_at": current.get("next_run_at"),
+        "next_run_at": next_run_at,
         "last_invocation_source": current.get("last_invocation_source") or (latest or {}).get("invocation_source"),
         "run_now_supported": bool(current.get("run_now_supported", False)),
         "mandate_version": current.get("mandate_version") or (latest or {}).get("mandate_version"),
         "architecture_version": current.get("architecture_version") or (latest or {}).get("architecture_version"),
         "architecture_path": current.get("architecture_path") or (latest or {}).get("architecture_path"),
         "summary": current.get("summary") or latest_summary,
-        "severity": (latest or {}).get("diagnosis", {}).get("severity", "info"),
+        "severity": "warning" if stale else (latest or {}).get("diagnosis", {}).get("severity", "info"),
         "latest_run_status": latest_status,
         "historical_failure": historical_failure,
         "findings": (latest or {}).get("diagnosis", {}).get("root_causes", []),
@@ -1117,7 +1187,20 @@ def build_investigation(
     domain_guidance = _domain_guidance_summary(root_path, state, config, current, run_dir)
     errors = [error for error in (config_error, campaign_state_error, run_status_error, stage_state_error) if error]
     errors.extend(domain_guidance.get("warnings", []))
+    meta_controller = _meta_controller_summary(state, campaign_id)
     alerts = _alerts(state, current, artifact_age, campaign_id=campaign_id)
+    if meta_controller["stale"]:
+        alerts.append(
+            {
+                "id": "meta-controller-stale",
+                "severity": "critical",
+                "type": "meta_controller_stale",
+                "condition": "The meta-controller is marked running, but its recorded scheduler process is no longer alive.",
+                "measurements": {"pid": meta_controller.get("pid"), "last_run_at": meta_controller.get("last_run_at")},
+                "recommended_action": "Start the meta-controller loop before relying on the next scheduled check.",
+                "automatic": True,
+            }
+        )
     failed_domain_constraints = [
         constraint
         for constraint in domain_guidance.get("constraints", [])
@@ -1185,6 +1268,7 @@ def build_investigation(
                 }
             )
     focused_graph = _focused_graph(state, hypothesis_id, evidence, candidates, level, relation_depth, filters or {})
+    live_watchdog = _live_watchdog_identity(state.get("controller_state", {}).get("watchdog", {}), campaign_state)
     histories = []
     for audit in state.get("audit_log", []):
         operation = audit.get("operation", {})
@@ -1250,12 +1334,12 @@ def build_investigation(
             "status": "critical" if any(alert["severity"] == "critical" for alert in alerts) else "warning" if alerts else "healthy",
             "process_live": process_running,
             "artifact_freshness": {"status": "fresh" if artifact_age is not None and artifact_age <= 7200 else "stale" if artifact_age is not None else "unknown", "age_seconds": artifact_age, "updated_at": current.get("artifact_updated_at")},
-            "controller_metadata": "stale" if state.get("controller_state", {}).get("safe_stop_reason") and process_running else "consistent",
+            "controller_metadata": "stale" if (meta_controller["stale"] or (state.get("controller_state", {}).get("safe_stop_reason") and process_running)) else "consistent",
             "protocol_skew": state.get("protocol_version") not in {None, "scientific-loop-v3"},
             "state_revision": state.get("state_revision"),
             "writer_protocol": state.get("writer_protocol"),
             "intervention_required": any(alert["severity"] == "critical" for alert in alerts),
-            "watchdog": state.get("controller_state", {}).get("watchdog", {}),
+            "watchdog": live_watchdog,
         },
         "controller": state.get("controller_state", {}),
         "protocol": {
@@ -1265,7 +1349,7 @@ def build_investigation(
             "evidence_classification": "legacy_single_seed" if str(state.get("protocol_version", "")).startswith("legacy") else "current_protocol",
             "split_hash": (current.get("split_manifest") or {}).get("hash") if isinstance(current.get("split_manifest"), dict) else None,
         },
-        "meta_controller": _meta_controller_summary(state, campaign_id),
+        "meta_controller": meta_controller,
         "graph": focused_graph,
         "diagnostics": {
             "errors": errors,

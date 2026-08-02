@@ -272,13 +272,20 @@ def load_state(path: str | Path = "state/scientific_state.yaml") -> dict[str, An
     target = Path(path)
     if not target.exists():
         return empty_state()
-    with state_lock(target):
+    # Dashboard and other observers only need a consistent snapshot. Shared
+    # locks let several readers inspect the state without blocking the
+    # controller writer behind unrelated slow reads.
+    with state_lock(target, shared=True):
         text = target.read_text(encoding="utf-8")
-        if yaml is not None:
-            payload = yaml.safe_load(text)
-        else:
-            payload = json.loads(text)
-        return validate_state(ensure_state(payload))
+    # State writers render to a temporary file and replace the target
+    # atomically, so the captured text remains a complete snapshot after the
+    # short read lock is released. YAML parsing and validation can be slow for
+    # a large campaign history and must not hold the scientific-state lock.
+    if yaml is not None:
+        payload = yaml.safe_load(text)
+    else:
+        payload = json.loads(text)
+    return validate_state(ensure_state(payload))
 
 
 def _state_writer_id() -> str:
@@ -290,8 +297,8 @@ def _lock_path(path: Path) -> Path:
 
 
 @contextmanager
-def state_lock(path: str | Path, *, timeout_seconds: float = 30.0) -> Iterator[None]:
-    """Serialize scientific-state reads and writes using an advisory lock."""
+def state_lock(path: str | Path, *, timeout_seconds: float = 30.0, shared: bool = False) -> Iterator[None]:
+    """Serialize scientific-state access using an advisory shared/exclusive lock."""
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -302,12 +309,14 @@ def state_lock(path: str | Path, *, timeout_seconds: float = 30.0) -> Iterator[N
     try:
         while time.monotonic() < deadline:
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+                fcntl.flock(handle.fileno(), lock_mode | fcntl.LOCK_NB)
                 acquired = True
-                handle.seek(0)
-                handle.truncate()
-                handle.write(json.dumps({"pid": os.getpid(), "writer": _state_writer_id()}))
-                handle.flush()
+                if not shared:
+                    handle.seek(0)
+                    handle.truncate()
+                    handle.write(json.dumps({"pid": os.getpid(), "writer": _state_writer_id()}))
+                    handle.flush()
                 yield
                 break
             except BlockingIOError:
