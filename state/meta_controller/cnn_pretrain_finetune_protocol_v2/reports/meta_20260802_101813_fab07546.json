@@ -1,0 +1,79 @@
+{
+  "actions": [
+    {
+      "campaign_action": "none",
+      "kind": "no_action",
+      "status": "recorded",
+      "summary": "Record diagnosis only; continue deterministic campaign execution and monitoring without repository or lifecycle changes."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-08-02T10:18:25+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "dashboard_user",
+    "last_run_at": "2026-08-02T10:18:25+00:00",
+    "last_run_id": "meta_20260802_101813_fab07546",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 3063049,
+    "run_now_supported": true,
+    "status": "completed",
+    "summary": "No deterministic operational fault is evidenced in the current bounded snapshot: campaign, scientific controller, meta-controller, and tracked process are all running, with safe_stop_reason cleared and recent deterministic observations present. Autonomous code repair or additional lifecycle intervention is not justified this cycle."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status=running",
+      "scientific_controller.status=running",
+      "scientific_controller.safe_stop_reason",
+      "process.running",
+      "meta_controller.status=running",
+      "observations",
+      "known_evidence_ids",
+      "recent_meta_reports",
+      "repository.status"
+    ],
+    "root_causes": [
+      "Current lifecycle signals are consistent in-snapshot (campaign/status/controller/process all running).",
+      "scientific_controller.safe_stop_reason is null, indicating no active deterministic halt reason at this time.",
+      "Recent reports show prior inconsistency was handled through deterministic reconciliation, and no new mismatch is evidenced in the present snapshot.",
+      "Observation records exist with recent deterministic outputs, so there is no current evidence of an observation-pipeline outage."
+    ],
+    "severity": "info",
+    "summary": "No deterministic operational fault is evidenced in the current bounded snapshot: campaign, scientific controller, meta-controller, and tracked process are all running, with safe_stop_reason cleared and recent deterministic observations present. Autonomous code repair or additional lifecycle intervention is not justified this cycle."
+  },
+  "evidence_references": [
+    "campaign.status=running",
+    "scientific_controller.status=running",
+    "scientific_controller.safe_stop_reason",
+    "process.running",
+    "meta_controller.status=running",
+    "observations",
+    "known_evidence_ids",
+    "recent_meta_reports",
+    "repository.status"
+  ],
+  "id": "meta_20260802_101813_fab07546",
+  "invocation_source": "dashboard_user",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "dashboard_user",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No changes applied; rollback not required.",
+  "started_at": "2026-08-02T10:18:13+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "Scientific-performance risk remains visible in observations with large generalisation gaps (for example obs_d9501c01600cb96c and obs_a32c527e6ddffa17), but this is not an operational reliability fault eligible for autonomous repair.",
+    "If state-revision contention recurs outside this snapshot, lifecycle inconsistency could reappear and should be handled via deterministic reconciliation controls."
+  ]
+}

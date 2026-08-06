@@ -58,7 +58,11 @@ h3 { margin-bottom: 8px; font-size: 17px; }
 .card-body { min-width: 0; }
 .hero-card, .meta-controller-card, .domain-guidance-card, .alert-card { border-top: 0; }
 .meta-controller-heading { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.meta-current-assessment { flex: 1 1 auto; min-width: 0; }
+.meta-status-line { display: flex; align-items: center; gap: 9px; }
+.meta-status-line .badge { margin-left: auto; }
 .meta-summary { max-width: 760px; margin: 9px 0 0; line-height: 1.45; }
+.meta-timestamp { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; }
 .metadata-inline-warning { display: inline-flex; margin-left: 8px; padding: 3px 7px; border-radius: 999px; background: color-mix(in srgb, var(--attention) 14%, var(--surface)); color: var(--attention); font-size: 10px; font-weight: 800; }
 .controller-buttons { text-align: right; }
 .controller-buttons > span { display: block; margin-bottom: 7px; }
@@ -75,6 +79,7 @@ button[data-tooltip]:hover::after, button[data-tooltip]:focus-visible::after { o
 .meta-controller-grid strong { display: block; font-size: 12px; overflow-wrap: anywhere; }
 .meta-section { border-top: 1px solid var(--border); padding-top: 13px; margin-top: 13px; }
 .meta-section p { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 5px 0; }
+.meta-previous-notification { border-top-color: color-mix(in srgb, var(--attention) 30%, var(--border)); }
 .meta-action { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding: 9px 0; font-size: 12px; }
 .meta-action:first-of-type { border-top: 0; }
 .risk-line { color: var(--warning) !important; }
@@ -130,6 +135,21 @@ button[data-tooltip]:hover::after, button[data-tooltip]:focus-visible::after { o
 .experiment-stat-grid strong { display: block; font-size: 17px; }
 .experiment-stat-grid small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
 .progress-track { margin-top: 8px; }
+.progress-indeterminate { position: relative; overflow: hidden; }
+.progress-indeterminate span { width: 34% !important; background: var(--blue); animation: progress-sweep 1.35s ease-in-out infinite; }
+@keyframes progress-sweep { 0% { transform: translateX(-115%); } 50% { transform: translateX(185%); } 100% { transform: translateX(300%); } }
+.experiment-startup { margin-top: 16px; padding: 14px 0 12px; border-top: 2px solid var(--blue); border-bottom: 1px solid var(--border); }
+.startup-heading { display: flex; align-items: flex-start; gap: 10px; }
+.startup-heading > div { flex: 1 1 auto; min-width: 0; }
+.startup-heading strong { display: block; color: var(--text); font-size: 13px; }
+.startup-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.startup-heading .badge { margin-left: auto; }
+.startup-pulse { width: 9px; height: 9px; flex: 0 0 auto; margin-top: 4px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 0 color-mix(in srgb, var(--blue) 35%, transparent); animation: startup-pulse 1.5s ease-out infinite; }
+@keyframes startup-pulse { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.startup-steps { display: flex; flex-wrap: wrap; gap: 7px 18px; margin: 12px 0 0 19px; color: var(--muted); font-size: 11px; }
+.startup-steps span::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--border); }
+.startup-steps .startup-step-done { color: var(--success); }
+.startup-steps .startup-step-done::before { background: var(--success); }
 .experiment-attention, .experiment-takeaway { margin-top: 20px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); }
 .experiment-attention.has-attention { border-color: color-mix(in srgb, var(--attention) 38%, var(--border)); background: color-mix(in srgb, var(--attention-bg) 45%, var(--surface)); }
 .experiment-attention.is-clear { color: var(--success); }
@@ -181,6 +201,7 @@ button[data-tooltip]:hover::after, button[data-tooltip]:focus-visible::after { o
 .plot-frame { overflow-x: auto; border-bottom: 1px solid var(--border); }
 .metric-chart { display: block; width: 100%; min-width: 560px; height: auto; margin-top: 7px; overflow: visible; }
 .plot-gridline { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
+.plot-gridline-vertical { opacity: .65; }
 .plot-axis { stroke: var(--muted); stroke-width: 1; }
 .plot-axis-text, .plot-axis-title { fill: var(--muted); font-size: 10px; }
 .plot-axis-title { font-weight: 700; }

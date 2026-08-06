@@ -1,0 +1,83 @@
+{
+  "actions": [
+    {
+      "campaign_action": "reconcile",
+      "kind": "campaign_control",
+      "result": {
+        "action": "reconcile",
+        "detail": "autonomous initialization recovery reason=launched candidate baseline_calibration_cnn_pretrain_finetune_protocol_v2\n[2026-08-02T11:17:36] autonomous campaign=cnn_pretrain_finetune_protocol_v2 trial=cnn_pretrain_finetune_protocol_v2_20260802_111729_4427d1 stage=10C controller=running_wait action=wait reason=process is running; waiting for the next artifact update\n",
+        "recovery_returncode": null,
+        "replacement_running": true,
+        "returncode": 0,
+        "stop_returncode": 0
+      },
+      "status": "recorded",
+      "summary": "Request deterministic campaign reconciliation to align campaign/scientific-controller state with actual runtime process state after autonomous safe-stop."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-08-02T10:17:36+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-08-02T10:17:36+00:00",
+    "last_run_id": "meta_20260802_101712_efdfbf34",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 3063049,
+    "run_now_supported": true,
+    "status": "completed",
+    "summary": "Deterministic lifecycle state is inconsistent and currently halted: the scientific controller is in autonomous safe-stop due to a stale scientific-state revision conflict, while campaign state still reports running and the tracked process is not running. A deterministic reconciliation request is warranted to restore state/runtime consistency before any further execution decisions."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "scientific_controller.status",
+      "scientific_controller.safe_stop_reason",
+      "campaign.status",
+      "campaign.trial_id",
+      "process.running",
+      "process.pid",
+      "recent_meta_reports"
+    ],
+    "root_causes": [
+      "The scientific controller reports autonomous_safe_stop with safe_stop_reason indicating StateRevisionConflictError on scientific state revision.",
+      "campaign.status remains 'running' while process.running is false, indicating control-plane/runtime divergence.",
+      "A prior reconciliation control attempt is recorded as failed in recent_meta_reports, so inconsistency may persist without another deterministic lifecycle intervention or manual follow-up."
+    ],
+    "severity": "warning",
+    "summary": "Deterministic lifecycle state is inconsistent and currently halted: the scientific controller is in autonomous safe-stop due to a stale scientific-state revision conflict, while campaign state still reports running and the tracked process is not running. A deterministic reconciliation request is warranted to restore state/runtime consistency before any further execution decisions."
+  },
+  "evidence_references": [
+    "scientific_controller.status",
+    "scientific_controller.safe_stop_reason",
+    "campaign.status",
+    "campaign.trial_id",
+    "process.running",
+    "process.pid",
+    "recent_meta_reports"
+  ],
+  "id": "meta_20260802_101712_efdfbf34",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No repository patch is applied. If reconciliation fails again or worsens state, perform deterministic safe stop via lifecycle controls and require operator review before resume.",
+  "started_at": "2026-08-02T10:17:12+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "If scientific-state revision churn continues, reconciliation may fail repeatedly until the underlying state-write contention is resolved.",
+    "The bounded snapshot does not include full audit/transaction logs, so the originating writer conflict remains unverified here.",
+    "Campaign state may remain stale if lifecycle control pathways are partially degraded."
+  ]
+}

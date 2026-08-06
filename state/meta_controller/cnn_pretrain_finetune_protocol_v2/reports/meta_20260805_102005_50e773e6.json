@@ -1,0 +1,85 @@
+{
+  "actions": [
+    {
+      "campaign_action": "reconcile",
+      "kind": "campaign_control",
+      "result": {
+        "action": "reconcile",
+        "detail": "autonomous initialization recovery reason=launched candidate baseline_calibration_cnn_pretrain_finetune_protocol_v2\n[2026-08-05T11:20:35] autonomous campaign=cnn_pretrain_finetune_protocol_v2 trial=cnn_pretrain_finetune_protocol_v2_20260805_112026_ae1e6f stage=10C controller=running_wait action=wait reason=process is running; waiting for the next artifact update\n",
+        "recovery_returncode": null,
+        "replacement_running": true,
+        "returncode": 0,
+        "stop_returncode": 0
+      },
+      "status": "recorded",
+      "summary": "Request deterministic campaign reconciliation to realign campaign/scientific-controller lifecycle state with actual runtime process state and refresh status channels."
+    }
+  ],
+  "architecture_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/system_architecture.md",
+  "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+  "campaign": "cnn_pretrain_finetune_protocol_v2",
+  "completed_at": "2026-08-05T10:20:35+00:00",
+  "controller_status": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "consecutive_failures": 0,
+    "invocation_source": "scheduled",
+    "last_run_at": "2026-08-05T10:20:35+00:00",
+    "last_run_id": "meta_20260805_102005_50e773e6",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "mode": "loop",
+    "next_run_at": null,
+    "pid": 3063049,
+    "run_now_supported": true,
+    "status": "completed",
+    "summary": "Deterministic lifecycle signals are inconsistent: campaign and scientific controller report running, but the tracked process is not running, and controller/observation freshness appears stale in this run. A deterministic reconciliation is warranted before further autonomous execution decisions."
+  },
+  "diagnosis": {
+    "evidence_references": [
+      "campaign.status=running",
+      "scientific_controller.status=running",
+      "scientific_controller.safe_stop_reason",
+      "process.running",
+      "process.pid",
+      "scientific_controller.last_poll_at",
+      "meta_controller.started_at",
+      "observations"
+    ],
+    "root_causes": [
+      "Control-plane/runtime divergence is present in-snapshot (running statuses while process.running is false).",
+      "Scientific-controller and observation timestamps are old relative to the current meta-controller run, indicating possible stalled execution or stale status propagation.",
+      "Recent history includes prior state/reconciliation instability, increasing likelihood that deterministic state alignment is needed again."
+    ],
+    "severity": "warning",
+    "summary": "Deterministic lifecycle signals are inconsistent: campaign and scientific controller report running, but the tracked process is not running, and controller/observation freshness appears stale in this run. A deterministic reconciliation is warranted before further autonomous execution decisions."
+  },
+  "evidence_references": [
+    "campaign.status=running",
+    "scientific_controller.status=running",
+    "scientific_controller.safe_stop_reason",
+    "process.running",
+    "process.pid",
+    "scientific_controller.last_poll_at",
+    "meta_controller.started_at",
+    "observations"
+  ],
+  "id": "meta_20260805_102005_50e773e6",
+  "invocation_source": "scheduled",
+  "mandate_path": "/run/media/fabrizio/06bb7271-2161-43a4-91f1-98f9b67e9ab2/home/fabrizio/code/ZebraFish/docs/meta_controller_mandate.md",
+  "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+  "proposal_only_changes": [],
+  "provenance": {
+    "architecture_version": "sha256:df7d595cd89102fd423229643b8138ff92200c681aa293a3951bb0e8bf313653",
+    "created_by": "meta_controller",
+    "invocation_source": "scheduled",
+    "mandate_version": "sha256:4926506def43958a24c15eecf172302e5d0afec4a754a2850c886fda458d5eea",
+    "snapshot": "compact"
+  },
+  "rollback_plan": "No repository patch is applied. If reconciliation does not restore consistent running/idle state, issue deterministic stop through lifecycle controls and require operator review before resume.",
+  "started_at": "2026-08-05T10:20:05+00:00",
+  "status": "completed",
+  "unresolved_risks": [
+    "The bounded snapshot does not include full scheduler/audit logs, so the direct cause of process absence cannot be confirmed here.",
+    "Repository has uncommitted source changes; this is treated as patch-safety context only, but it can constrain future auto-repair application if a code patch becomes necessary.",
+    "Without configured freshness thresholds in evidence, staleness can be detected qualitatively but not threshold-validated quantitatively in this run."
+  ]
+}

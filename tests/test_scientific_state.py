@@ -46,6 +46,22 @@ class ScientificStateTests(unittest.TestCase):
         merged = merge_nonconflicting_states(current, incoming)
         self.assertEqual(merged["controller_state"]["meta_controller"], {"status": "running", "pid": 222})
 
+    def test_campaign_merge_allows_reconciliation_of_stale_experiment_completion(self) -> None:
+        current = record_entity(
+            empty_state(),
+            "experiments",
+            "trial:10C",
+            {"stage": "10C", "status": "running_stale", "execution": {}},
+        )
+        incoming = record_entity(
+            empty_state(),
+            "experiments",
+            "trial:10C",
+            {"stage": "10C", "status": "completed", "execution": {"completed_at": "now"}},
+        )
+        merged = merge_nonconflicting_states(current, incoming)
+        self.assertEqual(merged["entities"]["experiments"]["trial:10C"]["status"], "completed")
+
     def test_update_requires_current_expected_value(self) -> None:
         state = record_entity(empty_state(), "hypotheses", "hyp_1", {"status": "active"})
         with self.assertRaises(OperationConflictError):

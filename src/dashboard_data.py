@@ -210,7 +210,14 @@ def _human_expectation(value: Any, *, falsification: bool = False) -> str:
     return statement + threshold + "."
 
 
-def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[str, Any]:
+def _meta_controller_summary(
+    state: dict[str, Any],
+    campaign_id: str,
+    *,
+    campaign_process_running: bool | None = None,
+    campaign_stage: str | None = None,
+    current_checked_at: str | None = None,
+) -> dict[str, Any]:
     controller = state.get("controller_state", {})
     current = controller.get("meta_controller", {})
     current = current if isinstance(current, dict) else {}
@@ -224,7 +231,8 @@ def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[st
     process_live = _pid_running(current.get("pid"))
     stale = status in {"running", "run_now_requested", "stopping"} and not process_live
     latest_status = str((latest or {}).get("status") or "not_started")
-    latest_summary = (latest or {}).get("diagnosis", {}).get("summary", "No meta-controller run recorded.")
+    previous_summary = (latest or {}).get("diagnosis", {}).get("summary", "No meta-controller run recorded.")
+    latest_summary = previous_summary
     next_run_at = current.get("next_run_at")
     if stale:
         status = "stale"
@@ -235,6 +243,32 @@ def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[st
     historical_failure = latest_status == "failed" and status not in {"running", "starting", "stopping"}
     if historical_failure:
         latest_summary = f"Historical last-run failure; meta-controller is currently {status}: {latest_summary}"
+    if campaign_process_running is True:
+        current_status = "running"
+        current_summary = f"The meta-controller is live and the {campaign_stage or 'campaign'} process is running."
+        current_severity = "info"
+    elif campaign_process_running is False:
+        current_status = "needs reconciliation"
+        current_summary = "The meta-controller is live, but no campaign process is currently detected."
+        current_severity = "warning"
+    elif process_live:
+        current_status = "running"
+        current_summary = "The meta-controller scheduler process is live; campaign execution status is not available in this snapshot."
+        current_severity = "info"
+    else:
+        current_status = "stale"
+        current_summary = "The meta-controller scheduler process is not live."
+        current_severity = "warning"
+    previous_notification = None
+    if latest:
+        previous_notification = {
+            "id": latest.get("id"),
+            "status": latest_status,
+            "severity": (latest.get("diagnosis") or {}).get("severity", "info"),
+            "summary": previous_summary,
+            "completed_at": latest.get("completed_at"),
+            "invocation_source": latest.get("invocation_source"),
+        }
     return {
         "status": status,
         "running": process_live and status in {"running", "starting", "stopping"},
@@ -250,7 +284,14 @@ def _meta_controller_summary(state: dict[str, Any], campaign_id: str) -> dict[st
         "mandate_version": current.get("mandate_version") or (latest or {}).get("mandate_version"),
         "architecture_version": current.get("architecture_version") or (latest or {}).get("architecture_version"),
         "architecture_path": current.get("architecture_path") or (latest or {}).get("architecture_path"),
-        "summary": current.get("summary") or latest_summary,
+        # Keep the old run visible as a notification, but never present its
+        # diagnosis as the current live assessment after a later reconciliation.
+        "summary": current_summary,
+        "current_status": current_status,
+        "current_summary": current_summary,
+        "current_severity": current_severity,
+        "current_checked_at": current_checked_at,
+        "previous_notification": previous_notification,
         "severity": "warning" if stale else (latest or {}).get("diagnosis", {}).get("severity", "info"),
         "latest_run_status": latest_status,
         "historical_failure": historical_failure,
@@ -1187,7 +1228,14 @@ def build_investigation(
     domain_guidance = _domain_guidance_summary(root_path, state, config, current, run_dir)
     errors = [error for error in (config_error, campaign_state_error, run_status_error, stage_state_error) if error]
     errors.extend(domain_guidance.get("warnings", []))
-    meta_controller = _meta_controller_summary(state, campaign_id)
+    live_watchdog = _live_watchdog_identity(state.get("controller_state", {}).get("watchdog", {}), campaign_state)
+    meta_controller = _meta_controller_summary(
+        state,
+        campaign_id,
+        campaign_process_running=process_running,
+        campaign_stage=stage,
+        current_checked_at=live_watchdog.get("live_identity_checked_at"),
+    )
     alerts = _alerts(state, current, artifact_age, campaign_id=campaign_id)
     if meta_controller["stale"]:
         alerts.append(
@@ -1268,7 +1316,6 @@ def build_investigation(
                 }
             )
     focused_graph = _focused_graph(state, hypothesis_id, evidence, candidates, level, relation_depth, filters or {})
-    live_watchdog = _live_watchdog_identity(state.get("controller_state", {}).get("watchdog", {}), campaign_state)
     histories = []
     for audit in state.get("audit_log", []):
         operation = audit.get("operation", {})

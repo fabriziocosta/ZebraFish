@@ -915,11 +915,12 @@ def _execute_campaign_control(root: Path, campaign_config: dict[str, Any], actio
         recovery_detail = ""
         recovery_running = bool(agent_campaign_loop.campaign_live_status(campaign_config).get("running"))
     elif action == "reconcile":
-        live_before = agent_campaign_loop.campaign_live_status(campaign_config).get("running")
         code = autonomous_campaign.run_autonomous_campaign(
             campaign_config,
             once=True,
-            new_trial=not live_before,
+            # Let autonomous reconciliation inspect completed predecessor
+            # artifacts before it considers starting a fresh trial.
+            new_trial=False,
             client=client,
             stream=output,
         )

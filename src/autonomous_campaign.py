@@ -57,6 +57,7 @@ from src.scientific_state import (
     update_launch_reservation,
     transactional_update,
     save_state,
+    validate_state,
     update_controller_state,
 )
 
@@ -638,7 +639,11 @@ def _record_stage(
     trial_id = str(legacy_state.get("current_trial_id"))
     stage = str(legacy_state.get("current_stage"))
     experiment_id = f"{trial_id}:{stage}"
-    if experiment_id in scientific_state["entities"]["experiments"]:
+    existing_record = scientific_state["entities"]["experiments"].get(experiment_id)
+    if existing_record is not None and not (
+        controller_status == "completed"
+        and str(existing_record.get("status")) in {"running", "running_stale", "launched", "starting"}
+    ):
         return scientific_state
     artifacts = stage_status.get("artifacts", {})
     run_dir = artifacts.get("run_dir")
@@ -749,7 +754,19 @@ def _record_stage(
                 {**split_manifest, "id": split_id, "status": "protected", "provenance": {"created_by": "deterministic_split_engine", "source": str(Path(str(run_dir)) / "split_manifest.yaml")}},
                 actor="deterministic_split_engine",
             )
-    scientific_state = record_entity(scientific_state, "experiments", experiment_id, record, actor="autonomous_controller")
+    if existing_record is not None:
+        # A process can finish after its campaign supervisor has died. The
+        # runner's completed status and final artifacts are authoritative for
+        # this deterministic reconciliation, so promote the nonterminal
+        # record instead of creating a duplicate experiment entity.
+        record["created_at"] = existing_record.get("created_at", record.get("created_at", _now()))
+        record["provenance"] = existing_record.get("provenance", record["provenance"])
+        record["reconciled_from_status"] = existing_record.get("status")
+        record["reconciled_at"] = _now()
+        scientific_state["entities"]["experiments"][experiment_id] = record
+        scientific_state = validate_state(scientific_state)
+    else:
+        scientific_state = record_entity(scientific_state, "experiments", experiment_id, record, actor="autonomous_controller")
     if domain_report is not None:
         domain_record = {
             **domain_report,
@@ -982,6 +999,87 @@ def _record_stage(
                 actor="observation_engine",
             )
     return scientific_state
+
+
+def _recover_completed_stage_handoff(
+    campaign_config: dict[str, Any],
+    loop_config: dict[str, Any],
+    scientific_state: dict[str, Any],
+    current_legacy_state: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], str] | None:
+    """Find and advance a completed predecessor left behind by a dead supervisor.
+
+    Stage runners publish completion in their run-status artifact. That signal
+    must remain recoverable even when the campaign JSON still says ``running``
+    or a later reconciliation has marked it ``terminated``.
+    """
+
+    stages = [str(stage) for stage in campaign_config.get("campaign", {}).get("stages", [])]
+    if len(stages) < 2:
+        return None
+    artifact_root = Path(str(campaign_config.get("artifacts", {}).get("root", "")))
+    if not artifact_root.exists():
+        return None
+    candidates: list[tuple[str, dict[str, Any], dict[str, Any], str]] = []
+    for manifest_path in artifact_root.glob("*/trial_manifest.json"):
+        manifest = legacy._read_json(manifest_path)
+        if not manifest:
+            continue
+        trial_dir = Path(str(manifest.get("trial_dir") or manifest_path.parent))
+        trial_id = str(manifest.get("trial_id") or trial_dir.name)
+        trial_configs = manifest.get("trial_configs", {})
+        if not isinstance(trial_configs, dict):
+            continue
+        for stage_index, stage in enumerate(stages[:-1]):
+            stage_state_path = trial_dir / "stage_state" / f"{stage}.json"
+            if not stage_state_path.exists():
+                continue
+            candidate_state = dict(manifest)
+            candidate_state.update(
+                {
+                    "status": "running",
+                    "phase": "running",
+                    "current_trial_id": trial_id,
+                    "current_trial_dir": str(trial_dir),
+                    "current_stage_index": stage_index,
+                    "current_stage": stage,
+                    "stage_state_path": str(stage_state_path),
+                    "trial_configs": trial_configs,
+                }
+            )
+            status, controller_status, reason = legacy._collect_stage_status(
+                campaign_config,
+                loop_config,
+                candidate_state,
+            )
+            if controller_status != "completed":
+                continue
+            # Do not replay a handoff for a trial whose next stage already has
+            # a recorded run. A missing campaign snapshot is the only case we
+            # are repairing here.
+            stage_runs = manifest.get("stage_runs", {})
+            if isinstance(stage_runs, dict) and stage_runs.get(stages[stage_index + 1]):
+                continue
+            completed_at = str(
+                status.get("run_status", {}).get("updated_at")
+                or status.get("run_status", {}).get("completed_at")
+                or candidate_state.get("updated_at")
+                or ""
+            )
+            candidates.append((completed_at, candidate_state, status, reason))
+    if not candidates:
+        return None
+    _, legacy_state, status, reason = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
+    stage = str(legacy_state["current_stage"])
+    scientific_state = _record_stage(scientific_state, campaign_config, legacy_state, status, "completed")
+    next_legacy, action = legacy._advance_stage_or_complete_trial(
+        campaign_config,
+        loop_config,
+        legacy_state,
+        status,
+        dry_run=False,
+    )
+    return scientific_state, next_legacy, f"reconciled completed {stage} ({reason}); {action}"
 
 
 def _observation_fingerprint(observation: dict[str, Any]) -> str:
@@ -2030,6 +2128,19 @@ def _run_autonomous_campaign_body(
             actor="autonomous_recovery",
         )
         transactional_update(scientific_path, lambda current: merge_nonconflicting_states(current, scientific_state))
+    if not dry_run and not new_trial:
+        recovered_handoff = _recover_completed_stage_handoff(
+            campaign_config,
+            loop_config,
+            scientific_state,
+            legacy_state or {},
+        )
+        if recovered_handoff is not None:
+            scientific_state, legacy_state, reason = recovered_handoff
+            transactional_update(scientific_path, lambda current: merge_nonconflicting_states(current, scientific_state))
+            print(f"autonomous completion recovery: {reason}", file=stream, flush=True)
+            if once:
+                return 0
     if new_trial or not legacy_state or legacy_state.get("status") in {"campaign_completed", "analysis_completed", "autonomous_safe_stop", "failed", "semantic_early_stopped", "terminated", "termination_race_stopped"}:
         if dry_run:
             return 0

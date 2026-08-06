@@ -544,7 +544,21 @@ def merge_nonconflicting_states(
             if entity_id not in destination:
                 destination[entity_id] = deepcopy(record)
             elif collection in IMMUTABLE_COLLECTIONS and destination[entity_id] != record:
-                raise StateRevisionConflictError(f"immutable scientific record conflict: {collection}.{entity_id}")
+                existing = destination[entity_id]
+                # A supervisor may die after a runner has written its final
+                # artifacts. Reconciliation is allowed to promote that same
+                # nonterminal experiment record to completed; it is not a
+                # second scientific result and must not strand the checkpoint.
+                if (
+                    collection == "experiments"
+                    and isinstance(existing, dict)
+                    and isinstance(record, dict)
+                    and str(existing.get("status")) in {"running", "running_stale", "launched", "starting"}
+                    and str(record.get("status")) == "completed"
+                ):
+                    destination[entity_id] = deepcopy(record)
+                else:
+                    raise StateRevisionConflictError(f"immutable scientific record conflict: {collection}.{entity_id}")
     existing_relations = {json.dumps(item, sort_keys=True, default=str) for item in base.get("relations", [])}
     for relation in proposed.get("relations", []):
         rendered = json.dumps(relation, sort_keys=True, default=str)
